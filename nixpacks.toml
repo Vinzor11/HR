@@ -12,8 +12,12 @@ nixPkgs = [
   "php82Extensions.xml",
   "php82Extensions.bcmath",
   "php82Extensions.intl",
-  "composer",
   "nodejs-20_x"
+]
+
+# Install Composer manually since the nixpkgs alias may be unavailable
+cmds = [
+  "curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer"
 ]
 
 [phases.install]
