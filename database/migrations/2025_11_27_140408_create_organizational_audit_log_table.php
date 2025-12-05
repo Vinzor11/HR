@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('organizational_audit_log', function (Blueprint $table) {
             $table->unsignedInteger('record_id')->autoIncrement()->primary();
-            $table->enum('unit_type', ['faculty', 'department', 'position']);
+            $table->enum('unit_type', ['faculty', 'department', 'position', 'office']);
             $table->unsignedBigInteger('unit_id');
             $table->string('reference_number', 50)->nullable();
             $table->enum('action_type', ['CREATE', 'UPDATE', 'DELETE']);

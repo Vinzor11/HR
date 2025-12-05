@@ -17,6 +17,12 @@ return new class extends Migration
             $table->string('name');
             $table->text('description')->nullable();
             $table->boolean('has_fulfillment')->default(false);
+            $table
+                ->foreignId('certificate_template_id')
+                ->nullable()
+                ->constrained('certificate_templates')
+                ->nullOnDelete();
+            $table->json('certificate_config')->nullable();
             $table->json('approval_steps')->nullable();
             $table->boolean('is_published')->default(false);
             $table->timestamp('published_at')->nullable();
@@ -49,6 +55,7 @@ return new class extends Migration
             $table->json('approval_state')->nullable();
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('fulfilled_at')->nullable();
+            $table->string('certificate_path')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -68,6 +75,7 @@ return new class extends Migration
             $table->unsignedInteger('step_index');
             $table->foreignId('approver_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('approver_role_id')->nullable()->constrained('roles')->nullOnDelete();
+            $table->foreignId('approver_position_id')->nullable()->constrained('positions')->nullOnDelete();
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->text('notes')->nullable();
             $table->timestamp('acted_at')->nullable();
@@ -80,6 +88,7 @@ return new class extends Migration
             $table->foreignId('submission_id')->unique()->constrained('request_submissions')->cascadeOnDelete();
             $table->foreignId('fulfilled_by')->nullable()->constrained('users')->nullOnDelete();
             $table->string('file_path')->nullable();
+            $table->string('original_filename')->nullable();
             $table->text('notes')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();

@@ -13,6 +13,12 @@ return new class extends Migration
     {
         Schema::create('certificate_templates', function (Blueprint $table) {
             $table->id();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->string('background_image_path')->nullable();
+            $table->integer('width')->default(1200);
+            $table->integer('height')->default(800);
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }
