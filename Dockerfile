@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzip-dev \
     libonig-dev \
     libxml2-dev \
+    libicu-dev \
     zip \
     unzip \
     && rm -rf /var/lib/apt/lists/*
@@ -32,8 +33,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install gd
 
-# Install other PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath zip intl opcache
+# Install PHP extensions (install intl separately as it needs ICU)
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath zip opcache
+
+# Install intl extension (requires ICU libraries)
+RUN docker-php-ext-configure intl && \
+    docker-php-ext-install intl
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
