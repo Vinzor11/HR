@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('organizational_audit_log')) {
+            return;
+        }
+
         Schema::create('organizational_audit_log', function (Blueprint $table) {
             $table->id('record_id');
             $table->enum('unit_type', ['faculty', 'department', 'position', 'office']);
