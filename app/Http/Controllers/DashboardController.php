@@ -120,9 +120,46 @@ class DashboardController extends Controller
 
         // Upcoming Birthdays
         if ($user->can('access-employees-module')) {
-            $upcomingBirthdays = Employee::where('status', 'active')
-                ->whereRaw('DAYOFYEAR(birth_date) BETWEEN DAYOFYEAR(NOW()) AND DAYOFYEAR(DATE_ADD(NOW(), INTERVAL 7 DAY))')
-                ->count();
+            $now = Carbon::now();
+            $sevenDaysLater = Carbon::now()->addDays(7);
+            
+            // Database-agnostic birthday query
+            $driver = DB::getDriverName();
+            
+            if ($driver === 'sqlite') {
+                // SQLite: Use a simpler approach - get employees and filter by comparing month/day
+                // This handles year boundaries correctly
+                $currentYear = $now->year;
+                $startDate = $now->copy();
+                $endDate = $sevenDaysLater->copy();
+                
+                // Get all active employees and filter in PHP for accuracy
+                $allEmployees = Employee::where('status', 'active')
+                    ->select('birth_date')
+                    ->get();
+                
+                $upcomingBirthdays = $allEmployees->filter(function ($employee) use ($startDate, $endDate, $currentYear) {
+                    $birthDate = Carbon::parse($employee->birth_date);
+                    // Create this year's birthday
+                    $thisYearBirthday = Carbon::create($currentYear, $birthDate->month, $birthDate->day);
+                    
+                    // Handle year wrap-around
+                    if ($endDate->dayOfYear < $startDate->dayOfYear) {
+                        // Year boundary crossed
+                        return $thisYearBirthday->dayOfYear >= $startDate->dayOfYear 
+                            || $thisYearBirthday->dayOfYear <= $endDate->dayOfYear;
+                    } else {
+                        return $thisYearBirthday->dayOfYear >= $startDate->dayOfYear 
+                            && $thisYearBirthday->dayOfYear <= $endDate->dayOfYear;
+                    }
+                })->count();
+            } else {
+                // MySQL/MariaDB: Use DAYOFYEAR
+                $upcomingBirthdays = Employee::where('status', 'active')
+                    ->whereRaw('DAYOFYEAR(birth_date) BETWEEN DAYOFYEAR(NOW()) AND DAYOFYEAR(DATE_ADD(NOW(), INTERVAL 7 DAY))')
+                    ->count();
+            }
+            
             $cards[] = [
                 'title' => 'Upcoming Birthdays',
                 'value' => $upcomingBirthdays,
@@ -334,8 +371,13 @@ class DashboardController extends Controller
 
         // Monthly HR Requests (last 6 months) - only for users with request module access
         if ($user->can('access-request-types-module')) {
+            $driver = DB::getDriverName();
+            $monthFormat = $driver === 'sqlite' 
+                ? DB::raw("strftime('%Y-%m', submitted_at) as month")
+                : DB::raw('DATE_FORMAT(submitted_at, "%Y-%m") as month');
+            
             $monthlyRequests = RequestSubmission::select(
-                DB::raw('DATE_FORMAT(submitted_at, "%Y-%m") as month'),
+                $monthFormat,
                 DB::raw('COUNT(*) as count')
             )
                 ->where('submitted_at', '>=', Carbon::now()->subMonths(5)->startOfMonth())
@@ -359,9 +401,14 @@ class DashboardController extends Controller
             $analytics['monthly_requests'] = $allMonths;
         } else {
             // For regular users, show only their own requests
+            $driver = DB::getDriverName();
+            $monthFormat = $driver === 'sqlite' 
+                ? DB::raw("strftime('%Y-%m', submitted_at) as month")
+                : DB::raw('DATE_FORMAT(submitted_at, "%Y-%m") as month');
+            
             $monthlyRequests = RequestSubmission::where('user_id', $user->id)
                 ->select(
-                    DB::raw('DATE_FORMAT(submitted_at, "%Y-%m") as month'),
+                    $monthFormat,
                     DB::raw('COUNT(*) as count')
                 )
                 ->where('submitted_at', '>=', Carbon::now()->subMonths(5)->startOfMonth())
@@ -401,8 +448,13 @@ class DashboardController extends Controller
 
         // Employee growth (last 5 years)
         if ($user->can('access-employees-module')) {
+            $driver = DB::getDriverName();
+            $yearFormat = $driver === 'sqlite' 
+                ? DB::raw("CAST(strftime('%Y', created_at) AS INTEGER) as year")
+                : DB::raw('YEAR(created_at) as year');
+            
             $employeeGrowth = Employee::select(
-                DB::raw('YEAR(created_at) as year'),
+                $yearFormat,
                 DB::raw('COUNT(*) as count')
             )
                 ->where('created_at', '>=', Carbon::now()->subYears(5))
