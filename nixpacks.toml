@@ -12,7 +12,8 @@ nixPkgs = [
   "php82Extensions.xml",
   "php82Extensions.bcmath",
   "php82Extensions.intl",
-  "nodejs-20_x"
+  # Use a widely available Node version in nixpkgs
+  "nodejs_18"
 ]
 
 # Install Composer manually since the nixpkgs alias may be unavailable
