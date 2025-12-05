@@ -1918,11 +1918,42 @@ export default function CreateEmployee({ employee, departments, positions, facul
     if (isView) return;
 
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      toast.error('Please select a file to upload.');
+      return;
+    }
+
+    // Validate file type
+    const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
+    const validExtensions = ['.xlsx', '.xls'];
+    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    
+    if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+      toast.error('Invalid file type. Please upload an Excel file (.xlsx or .xls).');
+      if (event.target) {
+        event.target.value = '';
+      }
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size exceeds 10MB limit. Please upload a smaller file.');
+      if (event.target) {
+        event.target.value = '';
+      }
+      return;
+    }
 
     setIsImporting(true);
 
-    router.post(route('employees.import.cs_form_212'), { pds_file: file }, {
+    // Ensure the route URL uses HTTPS
+    let importUrl = route('employees.import.cs_form_212');
+    if (typeof importUrl === 'string' && importUrl.startsWith('http://')) {
+      importUrl = importUrl.replace('http://', 'https://');
+    }
+
+    router.post(importUrl, { pds_file: file }, {
       forceFormData: true,
       onSuccess: (page) => {
         // Set pendingImport from the server response
@@ -1933,12 +1964,25 @@ export default function CreateEmployee({ employee, departments, positions, facul
           setPendingImport(importedData as Partial<FormState>);
           hasProcessedImportedData.current = true;
           toast.success('CS Form 212 file uploaded successfully. Please review the preview below.');
+        } else {
+          toast.warning('File uploaded but no data was extracted. Please check the file format.');
         }
       },
       onError: (uploadErrors) => {
+        console.error('CS Form 212 upload error:', uploadErrors);
         const uploadError = uploadErrors.pds_file ?? uploadErrors.error ?? 'Failed to import CS Form 212 file.';
         const message = Array.isArray(uploadError) ? uploadError[0] : uploadError;
-        toast.error(message);
+        
+        // Provide more helpful error messages
+        if (message.includes('403') || message.includes('Forbidden')) {
+          toast.error('You do not have permission to upload CS Form 212 files. Please contact an administrator.');
+        } else if (message.includes('mimes') || message.includes('file type')) {
+          toast.error('Invalid file type. Please upload an Excel file (.xlsx or .xls).');
+        } else if (message.includes('max') || message.includes('size')) {
+          toast.error('File size exceeds the limit. Please upload a file smaller than 10MB.');
+        } else {
+          toast.error(message || 'Failed to import CS Form 212 file. Please check the file format and try again.');
+        }
       },
       onFinish: () => {
         setIsImporting(false);
