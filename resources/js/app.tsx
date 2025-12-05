@@ -8,9 +8,67 @@ import { route as ziggyRoute } from 'ziggy-js';
 import { LayoutProvider } from './contexts/LayoutContext';
 import { initializeTheme } from './hooks/use-appearance';
 
-// Configure axios to always use current origin (HTTPS)
+// Force HTTPS for all HTTP requests (patches fetch and XMLHttpRequest)
 if (typeof window !== 'undefined') {
+    // Patch fetch to force HTTPS
+    const originalFetch = window.fetch;
+    window.fetch = function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+        if (typeof input === 'string' && input.startsWith('http://')) {
+            input = input.replace('http://', 'https://');
+        } else if (input instanceof Request && input.url.startsWith('http://')) {
+            input = new Request(input.url.replace('http://', 'https://'), input);
+        }
+        return originalFetch(input, init);
+    };
+    
+    // Patch XMLHttpRequest to force HTTPS
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: any[]) {
+        if (typeof url === 'string' && url.startsWith('http://')) {
+            url = url.replace('http://', 'https://');
+        }
+        return originalOpen.call(this, method, url, ...args);
+    };
+    
+    // Configure axios to always use current origin (HTTPS)
     axios.defaults.baseURL = window.location.origin;
+    
+    // Add interceptor to force HTTPS for all axios requests
+    axios.interceptors.request.use((config) => {
+        if (config.url && typeof config.url === 'string') {
+            if (config.url.startsWith('http://')) {
+                config.url = config.url.replace('http://', 'https://');
+            }
+        }
+        if (config.baseURL && typeof config.baseURL === 'string') {
+            if (config.baseURL.startsWith('http://')) {
+                config.baseURL = config.baseURL.replace('http://', 'https://');
+            }
+        }
+        return config;
+    });
+    
+    // Patch route helper immediately to force HTTPS
+    // This runs before Inertia initializes, so all route() calls will use HTTPS
+    const patchRouteHelper = () => {
+        if ((window as any).route) {
+            const originalRoute = (window as any).route;
+            (window as any).route = (name: string, params?: any, absolute?: boolean) => {
+                const url = originalRoute(name, params, absolute);
+                if (typeof url === 'string' && url.startsWith('http://')) {
+                    return url.replace('http://', 'https://');
+                }
+                return url;
+            };
+        }
+    };
+    
+    // Patch immediately if route exists, or wait for DOMContentLoaded
+    if ((window as any).route) {
+        patchRouteHelper();
+    } else {
+        window.addEventListener('DOMContentLoaded', patchRouteHelper);
+    }
 }
 
 const appName = import.meta.env.VITE_APP_NAME || 'ESSU HRMS';
