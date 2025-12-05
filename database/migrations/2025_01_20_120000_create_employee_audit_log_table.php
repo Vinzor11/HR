@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('employee_audit_log', function (Blueprint $table) {
-            $table->unsignedInteger('record_id')->autoIncrement()->primary();
+            $table->id('record_id');
             $table->string('employee_id', 15);
             $table->enum('action_type', ['CREATE', 'UPDATE', 'DELETE']);
             $table->string('field_changed', 100)->nullable();
