@@ -20,10 +20,20 @@ use App\Http\Controllers\CertificateTemplateController;
 
 // Simple test route to check if Laravel is working
 Route::get('/test', function () {
+    try {
+        DB::connection()->getPdo();
+        $database = 'connected';
+        $dbError = null;
+    } catch (\Throwable $e) {
+        $database = 'error';
+        $dbError = $e->getMessage();
+    }
+
     return response()->json([
         'status' => 'ok',
         'message' => 'Laravel is working',
-        'database' => DB::connection()->getPdo() ? 'connected' : 'not connected',
+        'database' => $database,
+        'db_error' => $dbError,
     ]);
 });
 
