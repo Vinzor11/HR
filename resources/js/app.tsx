@@ -22,27 +22,40 @@ createInertiaApp({
         const root = createRoot(el);
 
         // Patch Ziggy route helper to always use HTTPS
-        if (props.initialPage.props.ziggy) {
+        if (props.initialPage.props.ziggy && typeof window !== 'undefined') {
             const ziggy = props.initialPage.props.ziggy;
             
             // Force HTTPS for location and URL
-            if (ziggy.location && ziggy.location.startsWith('http://')) {
+            if (ziggy.location && typeof ziggy.location === 'string' && ziggy.location.startsWith('http://')) {
                 ziggy.location = ziggy.location.replace('http://', 'https://');
             }
-            if (ziggy.url && ziggy.url.startsWith('http://')) {
+            if (ziggy.url && typeof ziggy.url === 'string' && ziggy.url.startsWith('http://')) {
                 ziggy.url = ziggy.url.replace('http://', 'https://');
             }
             
-            // Override global route function to force HTTPS
-            // @ts-ignore
-            global.route = (name: string, params?: any, absolute?: boolean) => {
-                const url = ziggyRoute(name, params, absolute, ziggy);
-                // Ensure HTTPS
-                if (typeof url === 'string' && url.startsWith('http://')) {
-                    return url.replace('http://', 'https://');
-                }
-                return url;
-            };
+            // Override the route function to force HTTPS
+            // Ziggy's @routes directive sets up window.route, so we override it here
+            const originalRoute = (window as any).route;
+            if (originalRoute) {
+                (window as any).route = (name: string, params?: any, absolute?: boolean) => {
+                    const url = originalRoute(name, params, absolute);
+                    // Ensure HTTPS
+                    if (typeof url === 'string' && url.startsWith('http://')) {
+                        return url.replace('http://', 'https://');
+                    }
+                    return url;
+                };
+            } else {
+                // Fallback: create route function using ziggyRoute directly
+                (window as any).route = (name: string, params?: any, absolute?: boolean) => {
+                    const url = ziggyRoute(name, params, absolute, ziggy);
+                    // Ensure HTTPS
+                    if (typeof url === 'string' && url.startsWith('http://')) {
+                        return url.replace('http://', 'https://');
+                    }
+                    return url;
+                };
+            }
         }
 
         root.render(
