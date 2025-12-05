@@ -12,6 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Skip for SQLite - these operations are MySQL-specific
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Drop and recreate the level column as VARCHAR to accommodate any educational level
         // Also increase sizes for other columns that might be too small
         DB::statement("
@@ -50,6 +55,11 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // Skip for SQLite - these operations are MySQL-specific
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Revert back to original structure
         DB::statement("
             ALTER TABLE `employee_educational_backgrounds` 
