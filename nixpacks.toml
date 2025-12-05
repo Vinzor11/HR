@@ -1,6 +1,3 @@
-[providers]
-php = "nixpacks"
-
 [variables]
 PHP_VERSION = "8.2"
 
