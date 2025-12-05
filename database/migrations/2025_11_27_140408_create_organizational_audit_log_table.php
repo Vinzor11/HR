@@ -13,21 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasTable('organizational_audit_log')) {
-            if (\Illuminate\Support\Facades\DB::getDriverName() === 'mysql') {
-                // production DB is fine, skip re-creating
-                return;
-            }
-
-            // In SQLite builds, drop indexes and table before re-creating
-            try {
-                \Illuminate\Support\Facades\DB::statement('DROP INDEX IF EXISTS idx_unit_date');
-                \Illuminate\Support\Facades\DB::statement('DROP INDEX IF EXISTS idx_action_type');
-                \Illuminate\Support\Facades\DB::statement('DROP INDEX IF EXISTS idx_reference_number');
-            } catch (\Throwable $e) {
-                // ignore missing indexes
-            }
-
-            Schema::drop('organizational_audit_log');
+            Schema::dropIfExists('organizational_audit_log');
         }
 
         Schema::create('organizational_audit_log', function (Blueprint $table) {
