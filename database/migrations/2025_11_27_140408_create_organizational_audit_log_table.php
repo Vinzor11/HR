@@ -12,6 +12,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'sqlite') {
+            // Skip creating this table in SQLite builds to avoid duplicate index issues
+            Schema::dropIfExists('organizational_audit_log');
+            return;
+        }
+
         if (Schema::hasTable('organizational_audit_log')) {
             Schema::dropIfExists('organizational_audit_log');
         }
