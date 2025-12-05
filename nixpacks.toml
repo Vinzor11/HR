@@ -21,7 +21,7 @@ nixPkgs = [
 
 [phases.install]
 cmds = [
-  "composer install --optimize-autoloader --no-dev --no-interaction --ignore-platform-req=ext-gd || composer install --optimize-autoloader --no-dev --no-interaction",
+  "composer install --optimize-autoloader --no-dev --no-interaction",
   "npm ci --omit=dev"
 ]
 
@@ -35,4 +35,3 @@ cmds = [
 
 [start]
 cmd = "php artisan migrate --force && php artisan passport:keys && php artisan serve --host=0.0.0.0 --port=$PORT"
-

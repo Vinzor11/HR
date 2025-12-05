@@ -1,0 +1,53 @@
+# Alternative simpler Dockerfile if the main one fails
+# This uses a pre-built PHP image with common extensions
+
+FROM php:8.2-cli
+
+# Install only essential packages first
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions using a helper script
+RUN docker-php-ext-install pdo_mysql mbstring zip opcache bcmath
+
+# Install GD extension with dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpng-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install gd \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /var/www/html
+
+# Copy and install dependencies
+COPY composer.json composer.lock ./
+RUN composer install --optimize-autoloader --no-dev --no-interaction
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Copy app and build
+COPY . .
+RUN npm run build
+
+# Set permissions
+RUN chmod -R 755 storage bootstrap/cache
+
+EXPOSE 8000
+CMD php artisan migrate --force && php artisan passport:keys && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
+

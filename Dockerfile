@@ -1,20 +1,26 @@
-# Use PHP 8.2 with all required extensions
-FROM php:8.2-fpm
+# Use official PHP 8.2 image
+FROM php:8.2-cli
 
-# Install system dependencies and PHP extensions
-RUN apt-get update && apt-get install -y \
+# Set working directory
+WORKDIR /var/www/html
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    --no-install-recommends \
     git \
     curl \
     libpng-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libzip-dev \
     libonig-dev \
     libxml2-dev \
     zip \
     unzip \
-    libzip-dev \
-    libfreetype6-dev \
-    libjpeg62-turbo-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+    ca-certificates && \
+    docker-php-ext-configure gd --with-freetype --with-jpeg && \
+    docker-php-ext-install -j$(nproc) \
     pdo_mysql \
     mbstring \
     exif \
@@ -23,45 +29,38 @@ RUN apt-get update && apt-get install -y \
     gd \
     zip \
     intl \
-    opcache
+    opcache && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /var/www/html
-
-# Copy composer files
+# Copy dependency files
 COPY composer.json composer.lock ./
-
-# Install PHP dependencies
-RUN composer install --optimize-autoloader --no-dev --no-interaction
-
-# Copy package files
 COPY package.json package-lock.json ./
 
-# Install Node dependencies
-RUN npm ci --omit=dev
+# Install dependencies
+RUN composer install --optimize-autoloader --no-dev --no-interaction --no-scripts && \
+    npm ci --omit=dev
 
-# Copy application files
+# Copy application code
 COPY . .
 
 # Build assets
 RUN npm run build
 
 # Set permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
+RUN chmod -R 755 storage bootstrap/cache
 
-# Expose port (Railway will set PORT env variable)
+# Expose port
 EXPOSE 8000
 
-# Default start command (Railway will override with railway.json settings)
-# Railway automatically sets PORT environment variable
-CMD php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
-
+# Start command
+CMD php artisan migrate --force && php artisan passport:keys && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
