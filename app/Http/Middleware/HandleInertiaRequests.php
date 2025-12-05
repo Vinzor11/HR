@@ -74,10 +74,28 @@ class HandleInertiaRequests extends Middleware
                 'roles'       => $roles,
                 'permissions' => $permissions,
             ],
-            'ziggy' => fn(): array=> [
-                 ...(new Ziggy)->toArray(),
-                'location' => $request->url(),
-            ],
+            'ziggy' => function () use ($request): array {
+                $ziggy = new Ziggy();
+                $ziggyArray = $ziggy->toArray();
+                
+                // Force HTTPS for base URL from config
+                $baseUrl = config('app.url');
+                if ($baseUrl && str_starts_with($baseUrl, 'http://')) {
+                    $baseUrl = str_replace('http://', 'https://', $baseUrl);
+                }
+                
+                // Ensure location uses HTTPS (Ziggy uses this to generate full URLs)
+                $location = $request->url();
+                if (str_starts_with($location, 'http://')) {
+                    $location = str_replace('http://', 'https://', $location);
+                }
+                
+                return [
+                    ...$ziggyArray,
+                    'location' => $location,
+                    'url' => $baseUrl ?: $location,
+                ];
+            },
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error'   => $request->session()->get('error'),
