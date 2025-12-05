@@ -35,7 +35,7 @@ return new class extends Migration
         // Leave Balances Table
         Schema::create('leave_balances', function (Blueprint $table) {
             $table->id();
-            $table->string('employee_id');
+            $table->string('employee_id', 15);
             $table->foreignId('leave_type_id')->constrained()->cascadeOnDelete();
             $table->decimal('entitled', 8, 2)->default(0); // Total entitlement for the year
             $table->decimal('accrued', 8, 2)->default(0); // Accrued this period
@@ -55,7 +55,7 @@ return new class extends Migration
         Schema::create('leave_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('request_submission_id')->unique()->constrained('request_submissions')->cascadeOnDelete();
-            $table->string('employee_id');
+            $table->string('employee_id', 15);
             $table->foreignId('leave_type_id')->constrained()->cascadeOnDelete();
             $table->date('start_date');
             $table->date('end_date');
@@ -78,7 +78,7 @@ return new class extends Migration
         // Leave Accruals Table
         Schema::create('leave_accruals', function (Blueprint $table) {
             $table->id();
-            $table->string('employee_id');
+            $table->string('employee_id', 15);
             $table->foreignId('leave_type_id')->constrained()->cascadeOnDelete();
             $table->decimal('amount', 8, 2); // Days accrued
             $table->date('accrual_date');
