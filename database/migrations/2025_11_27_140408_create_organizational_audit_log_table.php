@@ -15,6 +15,14 @@ return new class extends Migration
         // For SQLite during build, drop and recreate if table exists to avoid index conflicts
         if (Schema::hasTable('organizational_audit_log')) {
             if (DB::getDriverName() === 'sqlite') {
+                // Drop indexes first, then table
+                try {
+                    DB::statement('DROP INDEX IF EXISTS idx_unit_date');
+                    DB::statement('DROP INDEX IF EXISTS idx_action_type');
+                    DB::statement('DROP INDEX IF EXISTS idx_reference_number');
+                } catch (\Exception $e) {
+                    // Ignore if indexes don't exist
+                }
                 Schema::dropIfExists('organizational_audit_log');
             } else {
                 return;
