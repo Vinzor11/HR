@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('organizational_audit_log', function (Blueprint $table) {
-            $table->unsignedInteger('record_id')->autoIncrement()->primary();
+            $table->id('record_id');
             $table->enum('unit_type', ['faculty', 'department', 'position', 'office']);
             $table->unsignedBigInteger('unit_id');
             $table->string('reference_number', 50)->nullable();
