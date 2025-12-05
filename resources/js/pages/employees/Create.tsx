@@ -1947,12 +1947,36 @@ export default function CreateEmployee({ employee, departments, positions, facul
 
     setIsImporting(true);
 
-    // Use relative URL to ensure HTTPS (uses current origin)
-    const importUrl = route('employees.import.cs_form_212', {}, false);
+    // Get the route URL and ensure it's HTTPS
+    let importUrl = route('employees.import.cs_form_212', {}, false);
+    
+    // If route helper returns a full URL, ensure it's HTTPS
+    if (typeof importUrl === 'string' && importUrl.startsWith('http://')) {
+      importUrl = importUrl.replace('http://', 'https://');
+    }
+    
+    // If it's still a full URL but not HTTPS, use current origin
+    if (typeof importUrl === 'string' && importUrl.startsWith('http')) {
+      importUrl = window.location.origin + importUrl.replace(/^https?:\/\/[^/]+/, '');
+    }
+    
+    // Fallback: use direct path if route helper fails
+    if (!importUrl || typeof importUrl !== 'string') {
+      importUrl = '/employees/import/cs-form-212';
+    }
+    
+    console.log('CS Form 212 upload URL:', importUrl);
+    console.log('File details:', { name: file.name, size: file.size, type: file.type });
 
     router.post(importUrl, { pds_file: file }, {
       forceFormData: true,
+      preserveState: true,
+      preserveScroll: true,
+      onBefore: () => {
+        console.log('Starting CS Form 212 upload...');
+      },
       onSuccess: (page) => {
+        console.log('CS Form 212 upload success:', page);
         // Set pendingImport from the server response
         const importedData = (page.props as any)?.importedData;
         if (importedData) {
@@ -1967,21 +1991,26 @@ export default function CreateEmployee({ employee, departments, positions, facul
       },
       onError: (uploadErrors) => {
         console.error('CS Form 212 upload error:', uploadErrors);
-        const uploadError = uploadErrors.pds_file ?? uploadErrors.error ?? 'Failed to import CS Form 212 file.';
+        console.error('Error details:', JSON.stringify(uploadErrors, null, 2));
+        
+        const uploadError = uploadErrors.pds_file ?? uploadErrors.error ?? uploadErrors.message ?? 'Failed to import CS Form 212 file.';
         const message = Array.isArray(uploadError) ? uploadError[0] : uploadError;
         
         // Provide more helpful error messages
-        if (message.includes('403') || message.includes('Forbidden')) {
+        if (message.includes('403') || message.includes('Forbidden') || message.includes('Unauthorized')) {
           toast.error('You do not have permission to upload CS Form 212 files. Please contact an administrator.');
-        } else if (message.includes('mimes') || message.includes('file type')) {
+        } else if (message.includes('mimes') || message.includes('file type') || message.includes('extension')) {
           toast.error('Invalid file type. Please upload an Excel file (.xlsx or .xls).');
-        } else if (message.includes('max') || message.includes('size')) {
+        } else if (message.includes('max') || message.includes('size') || message.includes('too large')) {
           toast.error('File size exceeds the limit. Please upload a file smaller than 10MB.');
+        } else if (message.includes('Network Error') || message.includes('Failed to fetch')) {
+          toast.error('Network error. Please check your connection and try again.');
         } else {
           toast.error(message || 'Failed to import CS Form 212 file. Please check the file format and try again.');
         }
       },
       onFinish: () => {
+        console.log('CS Form 212 upload finished');
         setIsImporting(false);
         if (event.target) {
           event.target.value = '';
