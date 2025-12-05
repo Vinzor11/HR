@@ -11,7 +11,8 @@ nixPkgs = [
   "php82Extensions.curl",
   "php82Extensions.xml",
   "php82Extensions.bcmath",
-  "php82Extensions.intl"
+  "php82Extensions.intl",
+  "nodejs"
 ]
 
 [phases.install]
