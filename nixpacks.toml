@@ -5,7 +5,7 @@ PHP_VERSION = "8.2"
 nixPkgs = [
   "php82",
   "php82Extensions.gd",
-  "php82Extensions.mysql",
+  "php82Extensions.pdo_mysql",
   "php82Extensions.zip",
   "php82Extensions.mbstring",
   "php82Extensions.curl",
