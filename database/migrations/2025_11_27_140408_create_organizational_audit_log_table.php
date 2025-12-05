@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -11,8 +12,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // For SQLite during build, drop and recreate if table exists to avoid index conflicts
         if (Schema::hasTable('organizational_audit_log')) {
-            return;
+            if (DB::getDriverName() === 'sqlite') {
+                Schema::dropIfExists('organizational_audit_log');
+            } else {
+                return;
+            }
         }
 
         Schema::create('organizational_audit_log', function (Blueprint $table) {
