@@ -1,0 +1,38 @@
+[providers]
+php = "nixpacks"
+
+[variables]
+PHP_VERSION = "8.2"
+
+[phases.setup]
+nixPkgs = [
+  "php82",
+  "php82Extensions.gd",
+  "php82Extensions.mysql",
+  "php82Extensions.zip",
+  "php82Extensions.mbstring",
+  "php82Extensions.curl",
+  "php82Extensions.xml",
+  "php82Extensions.bcmath",
+  "php82Extensions.intl",
+  "composer",
+  "nodejs-20_x"
+]
+
+[phases.install]
+cmds = [
+  "composer install --optimize-autoloader --no-dev --no-interaction --ignore-platform-req=ext-gd || composer install --optimize-autoloader --no-dev --no-interaction",
+  "npm ci --omit=dev"
+]
+
+[phases.build]
+cmds = [
+  "npm run build",
+  "php artisan config:cache || true",
+  "php artisan route:cache || true",
+  "php artisan view:cache || true"
+]
+
+[start]
+cmd = "php artisan migrate --force && php artisan passport:keys && php artisan serve --host=0.0.0.0 --port=$PORT"
+
