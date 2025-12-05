@@ -2,6 +2,7 @@
 
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\EmployeeController;
@@ -16,6 +17,15 @@ use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\OrganizationalLogController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\CertificateTemplateController;
+
+// Simple test route to check if Laravel is working
+Route::get('/test', function () {
+    return response()->json([
+        'status' => 'ok',
+        'message' => 'Laravel is working',
+        'database' => DB::connection()->getPdo() ? 'connected' : 'not connected',
+    ]);
+});
 
 Route::get('/', function () {
     return Inertia::render('welcome');
