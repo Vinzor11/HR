@@ -11,12 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Clean up any existing tables from failed runs (safe on fresh deployments)
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('leave_requests');
-        Schema::dropIfExists('leave_balances');
         Schema::dropIfExists('leave_accruals');
+        Schema::dropIfExists('leave_balances');
         Schema::dropIfExists('leave_types');
         Schema::dropIfExists('holidays');
+        Schema::enableForeignKeyConstraints();
 
         // Leave Types Table
         Schema::create('leave_types', function (Blueprint $table) {
