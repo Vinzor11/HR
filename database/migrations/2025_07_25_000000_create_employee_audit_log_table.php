@@ -11,6 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Skip if table already exists (created by earlier migration)
+        if (Schema::hasTable('employee_audit_log')) {
+            return;
+        }
+
         Schema::create('employee_audit_log', function (Blueprint $table) {
             $table->id('record_id');
             $table->string('reference_number', 50)->nullable();
