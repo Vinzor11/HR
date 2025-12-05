@@ -12,6 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            // SQLite doesn't support MODIFY COLUMN; skip because dev env uses sqlite
+            return;
+        }
+
         // Use raw SQL to change ENUM to VARCHAR since ->change() doesn't work well with ENUM
         DB::statement("ALTER TABLE `employee_educational_backgrounds` MODIFY COLUMN `level` VARCHAR(100) NOT NULL");
     }
@@ -21,6 +26,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Convert back to enum (but this might lose data if values don't match)
         DB::statement("ALTER TABLE `employee_educational_backgrounds` MODIFY COLUMN `level` ENUM('Elementary', 'Secondary', 'Vocational', 'College', 'Graduate Studies') NOT NULL");
     }
