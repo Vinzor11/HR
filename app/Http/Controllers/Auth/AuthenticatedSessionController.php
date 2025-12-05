@@ -39,7 +39,12 @@ class AuthenticatedSessionController extends Controller
             return redirect($oauthRedirect);
         }
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Ensure HTTPS for redirect URL
+        $dashboardUrl = route('dashboard', absolute: false);
+        if (str_starts_with($dashboardUrl, 'http://')) {
+            $dashboardUrl = str_replace('http://', 'https://', $dashboardUrl);
+        }
+        return redirect()->intended($dashboardUrl);
     }
 
     /**

@@ -1947,11 +1947,8 @@ export default function CreateEmployee({ employee, departments, positions, facul
 
     setIsImporting(true);
 
-    // Ensure the route URL uses HTTPS
-    let importUrl = route('employees.import.cs_form_212');
-    if (typeof importUrl === 'string' && importUrl.startsWith('http://')) {
-      importUrl = importUrl.replace('http://', 'https://');
-    }
+    // Use relative URL to ensure HTTPS (uses current origin)
+    const importUrl = route('employees.import.cs_form_212', {}, false);
 
     router.post(importUrl, { pds_file: file }, {
       forceFormData: true,
