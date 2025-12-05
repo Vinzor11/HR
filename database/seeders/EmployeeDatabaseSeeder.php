@@ -30,7 +30,10 @@ class EmployeeDatabaseSeeder extends Seeder
         foreach ($departments as $department) {
             DB::table('departments')->updateOrInsert(
                 ['faculty_code' => $department['faculty_code']],
-                $department
+                array_merge($department, [
+                    'code' => $department['faculty_code'],
+                    'name' => $department['faculty_name'],
+                ])
             );
         }
 

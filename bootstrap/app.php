@@ -28,6 +28,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
 
+        // Exclude OAuth token endpoint from CSRF protection
+        $middleware->validateCsrfTokens(except: [
+            'oauth/token',
+        ]);
+
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

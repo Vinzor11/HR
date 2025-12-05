@@ -7,8 +7,8 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
     const { position } = useLayout();
 
     return (
-        <header className="border-sidebar-border/50 flex h-16 shrink-0 items-center gap-2 border-b px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4">
-            <div className={`flex w-full items-center gap-2 ${position === 'right' ? 'justify-end' : 'justify-start'}`}>
+        <header className="border-sidebar-border/50 sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 border-b bg-sidebar px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 group-has-data-[collapsible=icon]/sidebar-wrapper:px-2 md:px-4 overflow-hidden md:rounded-t-xl">
+            <div className={`flex w-full items-center gap-2 min-w-0 ${position === 'right' ? 'justify-end' : 'justify-start'}`}>
                 {position === 'left' ? (
                     <>
                         <SidebarTrigger className="-ml-1" />

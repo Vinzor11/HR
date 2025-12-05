@@ -7,7 +7,7 @@ export const PermissionModalFormConfig = {
     addButton: {
         id: 'add-permission',
         label: 'Add Permission',
-        className: 'bg-indigo-700 text-white rounded-lg px-4 py-2 hover:bg-indigo-800 cursor-pointer',
+        className: 'bg-primary text-primary-foreground rounded-lg px-4 py-2 hover:bg-primary/90 cursor-pointer',
         icon: CirclePlus,
         type: 'button',
         variant: 'default',
@@ -24,8 +24,6 @@ export const PermissionModalFormConfig = {
             tabIndex: 1,
             autoFocus: true,
             options: [
-                { label: 'Categories', value: 'categories', key: 'categories'},
-                { label: 'Products', value: 'products', key: 'products'},
                 { label: 'Roles', value: 'roles', key: 'roles'},
                 { label: 'Users', value: 'users', key: 'users'},
                 { label: 'Permissions', value: 'permissions', key: 'permissions'},

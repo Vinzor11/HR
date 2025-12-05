@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Employee extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $primaryKey = 'id';
     public $incrementing = false;
@@ -20,9 +21,12 @@ class Employee extends Model
         'middle_name',
         'name_extension',
         'status',
+        'employment_status',
         'employee_type',
         'department_id',
         'position_id',
+        'date_hired',
+        'date_regularized',
         'birth_date',
         'birth_place',
         'sex',
@@ -70,6 +74,8 @@ class Employee extends Model
         'birth_date' => 'date',
         'id_date_issued' => 'date',
         'dual_citizenship' => 'boolean',
+        'date_hired' => 'date',
+        'date_regularized' => 'date',
     ];
 
     public function department()
@@ -80,6 +86,11 @@ class Employee extends Model
     public function position()
     {
         return $this->belongsTo(Position::class);
+    }
+
+    public function user()
+    {
+        return $this->hasOne(User::class, 'employee_id', 'id');
     }
 
     public function familyBackground()
@@ -130,5 +141,10 @@ class Employee extends Model
     public function references()
     {
         return $this->hasMany(Reference::class, 'employee_id', 'id');
+    }
+
+    public function auditLogs()
+    {
+        return $this->hasMany(EmployeeAuditLog::class, 'employee_id', 'id')->orderBy('action_date', 'desc');
     }
 }

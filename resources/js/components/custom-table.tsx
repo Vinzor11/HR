@@ -158,9 +158,8 @@ export const CustomTable = ({ columns, actions, data, from, onDelete, onView, on
                             
                         return (
                             <Badge 
-                                className='bg-indigo-100 text-indigo-700 px-3 py-0.5' 
+                                className='bg-primary/20 text-black border border-primary/30 dark:bg-primary/30 dark:text-black px-3 py-0.5' 
                                 key={item.id || Math.random()}
-                                variant="outline"
                             >
                                 {displayValue}
                             </Badge>
@@ -174,20 +173,20 @@ export const CustomTable = ({ columns, actions, data, from, onDelete, onView, on
     };
 
     return (
-        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
+        <div className="rounded-lg border bg-white shadow-sm w-full">
             <table className="w-full table-auto">
                 <thead>
                     <tr className="bg-gray-700 text-white">
-                        <th className="border p-4">#</th>
+                        <th className="sticky top-0 z-30 border p-4 bg-gray-700">#</th>
                         {columns.map((column) => (
-                            <th key={column.key} className={column.className}>
+                            <th key={column.key} className={`sticky top-0 z-30 bg-gray-700 ${column.className}`}>
                                 {column.label}
                             </th>
                         ))}
                     </tr>
                 </thead>
 
-                <tbody>
+                    <tbody>
                     {data.length > 0 ? (
                         data.map((row, index) => (
                             <tr key={index}>

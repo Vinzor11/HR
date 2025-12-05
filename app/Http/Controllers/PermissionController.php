@@ -5,17 +5,36 @@ use App\Http\Requests\PermissionRequest;
 use App\Models\Permission;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Illuminate\Http\Request;
 
 class PermissionController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $permissions = Permission::latest()->paginate(10);
+        $perPage = $request->integer('perPage', 10);
+        $search = (string) $request->input('search', '');
+
+        $permissions = Permission::when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('label', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%")
+                  ->orWhere('module', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        })
+        ->latest()
+        ->paginate($perPage)
+        ->withQueryString();
+        
         return Inertia::render('permissions/index', [
             'permissions' => $permissions,
+            'filters' => [
+                'search' => $search,
+                'perPage' => $perPage,
+            ],
         ]);
     }
 
@@ -32,6 +51,8 @@ class PermissionController extends Controller
      */
     public function store(PermissionRequest $request)
     {
+        abort_unless($request->user()->can('create-permission'), 403, 'Unauthorized action.');
+        
         $permission = Permission::create([
             'module'      => $request->module,
             'label'       => $request->label,
@@ -66,6 +87,8 @@ class PermissionController extends Controller
      */
     public function update(PermissionRequest $request, Permission $permission)
     {
+        abort_unless($request->user()->can('edit-permission'), 403, 'Unauthorized action.');
+        
         if ($permission) {
             $permission->module      = $request->module;
             $permission->label       = $request->label;
@@ -81,8 +104,10 @@ class PermissionController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Permission $permission)
+    public function destroy(Request $request, Permission $permission)
     {
+        abort_unless($request->user()->can('delete-permission'), 403, 'Unauthorized action.');
+        
         if ($permission) {
             $permission->delete();
             return redirect()->route('permissions.index')->with('success', 'Permission deleted successfully!');

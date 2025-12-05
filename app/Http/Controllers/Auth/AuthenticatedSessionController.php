@@ -33,6 +33,12 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        // Redirect to OAuth authorize if that's where they came from
+        if ($request->session()->has('oauth_redirect')) {
+            $oauthRedirect = $request->session()->pull('oauth_redirect');
+            return redirect($oauthRedirect);
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

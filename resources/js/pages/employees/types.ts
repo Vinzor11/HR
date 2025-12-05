@@ -72,9 +72,7 @@ export interface OtherInformation {
 }
 
 export interface Reference {
-  first_name: string;
-  middle_initial: string;
-  surname: string;
+  fullname: string;
   address: string;
   telephone_no: string;
 }
@@ -92,9 +90,13 @@ export interface FormData {
   middle_name: string;
   name_extension: string;
   status: string;
+  employment_status: string;
   employee_type: string;
+  faculty_id: string;
   department_id: string;
   position_id: string;
+  date_hired: string;
+  date_regularized: string;
   birth_date: string;
   birth_place: string;
   sex: string;
@@ -150,6 +152,7 @@ export interface FormData {
 
 export interface CreateEmployeeProps {
   employee?: Partial<FormData>;
-  departments: { id: number; faculty_name: string }[];
-  positions: { id: number; pos_name: string }[];
+  departments: { id: number; faculty_name: string; faculty_id?: number | null }[];
+  positions: { id: number; pos_name: string; department_id?: number | null; faculty_id?: number | null }[];
+  faculties: { id: number; name: string; code?: string | null }[];
 }

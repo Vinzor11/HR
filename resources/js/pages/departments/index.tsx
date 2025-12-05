@@ -1,22 +1,43 @@
 import { CustomModalForm } from '@/components/custom-modal-form';
-import { CustomTable } from '@/components/custom-table';
+import { EnterpriseEmployeeTable } from '@/components/EnterpriseEmployeeTable';
 import { CustomToast, toast } from '@/components/custom-toast';
-import { DepartmentModalFormConfig } from '@/config/forms/department-modal-form';
+import { TableToolbar } from '@/components/table-toolbar';
+import { DepartmentModalFormConfig, DEPARTMENT_TYPE_DESCRIPTIONS } from '@/config/forms/department-modal-form';
 import { DepartmentTableConfig } from '@/config/tables/department-table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { route } from 'ziggy-js';
+import { hasPermission } from '@/utils/authorization';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DetailDrawer } from '@/components/DetailDrawer';
 
 const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Manage Departments', href: '/departments' },
+  { title: 'Departments & Offices', href: '/departments' },
 ];
 
+type DepartmentType = 'academic' | 'administrative'
+
 interface Department {
-  department_id: number;
-  faculty_code: string;
-  faculty_name: string;
-  description?: string;
+  id?: number
+  department_id?: number
+  code?: string | null
+  name?: string | null
+  faculty_code?: string | null
+  faculty_name?: string | null
+  type?: DepartmentType | null
+  faculty_id?: number | null
+  faculty?: { id: number; name: string } | null
+  description?: string | null
+}
+
+interface FacultyOption {
+  id: number
+  name: string
 }
 
 interface LinkProps {
@@ -31,6 +52,15 @@ interface Pagination<T> {
   from: number;
   to: number;
   total: number;
+  meta?: {
+    current_page: number;
+    from: number;
+    to: number;
+    total: number;
+    last_page: number;
+    per_page: number;
+    path: string;
+  };
 }
 
 interface FlashProps extends Record<string, any> {
@@ -40,76 +70,293 @@ interface FlashProps extends Record<string, any> {
   };
 }
 
-interface IndexProps {
-  departments: Pagination<Department>;
+interface FilterProps {
+  search: string;
+  perPage: string;
+  type?: DepartmentType | '';
+  faculty_id?: string;
+  show_deleted?: boolean;
 }
 
-export default function DepartmentIndex({ departments }: IndexProps) {
-  const { flash } = usePage<{ flash?: { success?: string; error?: string } }>().props;
+interface IndexProps {
+  departments: Pagination<Department>;
+  faculties: FacultyOption[];
+  filters?: FilterProps;
+}
+
+export default function DepartmentIndex({ departments, faculties, filters }: IndexProps) {
+  const { flash, auth } = usePage<FlashProps & { auth?: { permissions?: string[] } }>().props;
+  const permissions = auth?.permissions || [];
   const flashMessage = flash?.success || flash?.error;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [mode, setMode] = useState<'create' | 'view' | 'edit'>('create');
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedDepartmentForView, setSelectedDepartmentForView] = useState<Department | null>(null);
+  const [sortKey, setSortKey] = useState<'name-asc' | 'name-desc' | 'date-asc' | 'date-desc'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('departments_sortKey');
+      if (saved && ['name-asc', 'name-desc', 'date-asc', 'date-desc'].includes(saved)) {
+        return saved as typeof sortKey;
+      }
+    }
+    return 'name-asc';
+  });
+  const [searchTerm, setSearchTerm] = useState(filters?.search ?? '');
+  const [perPage, setPerPage] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('departments_perPage');
+      if (saved && ['5', '10', '25', '50', '100'].includes(saved)) {
+        return saved;
+      }
+    }
+    return String(filters?.perPage ?? 10);
+  });
+  const [typeFilter, setTypeFilter] = useState<DepartmentType | ''>(filters?.type ?? '');
+  const [facultyFilter, setFacultyFilter] = useState(filters?.faculty_id ? String(filters?.faculty_id) : '');
+  const [showDeleted, setShowDeleted] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('departments_filter_show_deleted');
+      if (saved === 'true') return true;
+      if (saved === 'false') return false;
+    }
+    return filters?.show_deleted || false;
+  });
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const hasSyncedRef = useRef(false);
 
-  const { data, setData, errors, processing, reset, post } = useForm({
-    faculty_code: '',
-    faculty_name: '',
+  const { data, setData, errors, processing, reset, post, transform } = useForm({
+    code: '',
+    name: '',
+    type: 'academic' as DepartmentType,
+    faculty_id: '',
     description: '',
     _method: 'POST',
   });
 
-  const handleDelete = (routePath: string) => {
-    if (confirm('Are you sure you want to delete this department?')) {
-      router.delete(routePath, {
-        preserveScroll: true,
-        onSuccess: (res: { props: FlashProps }) => {
-          const successMessage = res.props.flash?.success;
-          if (successMessage) toast.success(successMessage);
-          closeModal();
-        },
-        onError: (err) => {
-          const errorMessage = err?.message || 'An error occurred.';
-          toast.error(errorMessage);
-        },
-      });
+  const handleFieldChange = (field: string, value: any) => {
+    if (field === 'faculty_id') {
+      setData(field, value ?? '');
+      return;
     }
+
+    if (field === 'type') {
+      setData(field, (value as DepartmentType) ?? 'academic');
+      return;
+    }
+
+    setData(field, value);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const method = mode === 'edit' ? 'PUT' : 'POST';
-    data._method = method;
+  const facultyOptions = faculties.map((faculty) => ({
+    key: String(faculty.id),
+    value: String(faculty.id),
+    label: faculty.name,
+  }));
 
-    const routePath =
-      mode === 'edit' && selectedDepartment
-        ? route('departments.update', selectedDepartment.department_id)
-        : route('departments.store');
+  // Flash messages
+  useEffect(() => {
+    if (flash?.success) toast.success(flash.success);
+    if (flash?.error) toast.error(flash.error);
+  }, [flash]);
 
-    post(routePath, {
-      onSuccess: (res: { props: FlashProps }) => {
-        const successMessage = res.props.flash?.success;
-        if (successMessage) toast.success(successMessage);
-        closeModal();
+  // Clear faculty_id when type changes to administrative
+  useEffect(() => {
+    if (data.type === 'administrative' && (data.faculty_id !== '' && data.faculty_id !== null && data.faculty_id !== undefined)) {
+      setData('faculty_id', '');
+    }
+  }, [data.type]);
+
+  const modalFields = DepartmentModalFormConfig.fields
+    .map((field) => {
+      if (field.name === 'type') {
+        return {
+          ...field,
+          description: data.type && DEPARTMENT_TYPE_DESCRIPTIONS[data.type]
+            ? DEPARTMENT_TYPE_DESCRIPTIONS[data.type]
+            : undefined,
+        };
+      }
+      if (field.name === 'faculty_id') {
+        return {
+          ...field,
+          options: facultyOptions,
+          label: data.type === 'academic' ? 'Faculty (Required for Academic Departments)' : 'Faculty',
+          required: data.type === 'academic',
+        };
+      }
+      if (field.name === 'code') {
+        return {
+          ...field,
+          label: data.type === 'administrative' ? 'Office Code' : 'Department Code',
+          placeholder: data.type === 'administrative' ? 'e.g. HR, IT, FIN' : 'e.g. CS, ENG, MATH',
+        };
+      }
+      if (field.name === 'name') {
+        return {
+          ...field,
+          label: data.type === 'administrative' ? 'Office Name' : 'Department Name',
+          placeholder: data.type === 'administrative' ? 'e.g. Human Resources Office' : 'e.g. Computer Science Department',
+        };
+      }
+      if (field.name === 'description') {
+        return {
+          ...field,
+          label: data.type === 'administrative' ? 'Office Description' : 'Department Description',
+          placeholder: data.type === 'administrative' ? 'Optional description for this office' : 'Optional description for this department',
+        };
+      }
+
+      return field;
+    })
+    .filter((field) => field.name !== 'faculty_id' || data.type === 'academic');
+
+  const refreshTable = () => {
+    triggerFetch();
+  };
+
+  const handleRestore = (id: string | number) => {
+    router.post(route('departments.restore', id), {}, {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast.success('Department restored successfully')
+        triggerFetch({})
       },
-      onError: (err: any) => {
-        toast.error(err?.message || 'Error occurred');
+      onError: () => toast.error('Failed to restore department'),
+    })
+  }
+
+  const handleForceDelete = (id: string | number) => {
+    router.delete(route('departments.force-delete', id), {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast.success('Department permanently deleted')
+        triggerFetch({})
+      },
+      onError: () => toast.error('Failed to permanently delete department'),
+    })
+  }
+
+  const handleDelete = (routePath: string) => {
+    router.delete(routePath, {
+      preserveScroll: true,
+      onSuccess: () => {
+        closeModal();
+        refreshTable();
+      },
+      onError: (error: Record<string, string | string[]>) => {
+        if (typeof error?.message === 'string') {
+          toast.error(error.message);
+        }
+        closeModal();
       },
     });
   };
 
-  const openModal = (mode: 'create' | 'view' | 'edit', department?: Department) => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const isEditMode = mode === 'edit' && selectedDepartment;
+    data._method = isEditMode ? 'PUT' : 'POST';
+
+    const departmentId = selectedDepartment?.id ?? selectedDepartment?.department_id;
+    const routePath =
+      isEditMode && departmentId
+        ? route('departments.update', { department: departmentId })
+        : route('departments.store');
+
+    transform((formData) => {
+      // Build the payload
+      const payload: any = {
+        code: formData.code,
+        name: formData.name,
+        type: formData.type,
+        description: formData.description || null,
+      };
+      
+      // Only include faculty_id for academic departments
+      if (formData.type === 'academic') {
+        payload.faculty_id = formData.faculty_id && formData.faculty_id !== '' 
+          ? Number(formData.faculty_id) 
+          : null;
+      } else {
+        // Explicitly exclude faculty_id for administrative offices
+        payload.faculty_id = null;
+      }
+      
+      return payload;
+    });
+
+    post(routePath, {
+      preserveState: true,
+      preserveScroll: true,
+      onSuccess: (response: { props: FlashProps }) => {
+        const successMessage = response.props.flash?.success;
+        if (successMessage) {
+          toast.success(successMessage);
+        }
+        closeModal();
+        refreshTable();
+      },
+      onError: (error: Record<string, string | string[]>) => {
+        if (typeof error?.message === 'string') {
+          toast.error(error.message);
+        }
+      },
+    });
+  };
+
+  // Handle view department
+  const handleViewDepartment = (row: any) => {
+    setSelectedDepartmentForView(row);
+    setDrawerOpen(true);
+  };
+
+  const openModal = (mode: 'create' | 'view' | 'edit', department?: Department | any) => {
+    // If view mode, use drawer instead
+    if (mode === 'view') {
+      handleViewDepartment(department);
+      return;
+    }
+
     setMode(mode);
     if (department) {
-      setSelectedDepartment(department);
+      // Ensure department_id is set - use id if department_id is missing
+      const deptWithId: Department = {
+        ...department,
+        department_id: department.department_id ?? department.id,
+      };
+      setSelectedDepartment(deptWithId);
+      const normalizedType = (department.type as DepartmentType) ?? 'academic';
+      const facultyValue =
+        normalizedType === 'academic'
+          ? String(
+              department.faculty_id ??
+                department.faculty?.id ??
+                ''
+            )
+          : '';
       setData({
-        faculty_code: department.faculty_code,
-        faculty_name: department.faculty_name,
+        code: department.code ?? department.faculty_code ?? '',
+        name: department.name ?? department.faculty_name ?? '',
+        type: normalizedType,
+        faculty_id: facultyValue,
         description: department.description || '',
         _method: 'PUT',
       });
     } else {
+      // Reset form for create mode - ensure faculty_id is empty
       reset();
+      // Explicitly set type to academic as default and clear faculty_id
+      setData({
+        code: '',
+        name: '',
+        type: 'academic' as DepartmentType,
+        faculty_id: '',
+        description: '',
+        _method: 'POST',
+      });
     }
     setModalOpen(true);
   };
@@ -122,54 +369,491 @@ export default function DepartmentIndex({ departments }: IndexProps) {
   };
 
   const handleModalToggle = (open: boolean) => {
-    if (!open) closeModal();
-    else setModalOpen(true);
+  setModalOpen(open);
+  if (!open) closeModal();
   };
+
+const handleTypeFilterChange = (value: string) => {
+  const normalized = value === 'all' ? '' : (value as DepartmentType);
+  setTypeFilter(normalized);
+  triggerFetch({ type: normalized, page: 1 });
+};
+
+const handleFacultyFilterChange = (value: string) => {
+  const normalized = value === 'all' ? '' : value;
+  setFacultyFilter(normalized);
+  triggerFetch({ faculty_id: normalized, page: 1 });
+};
+
+  // No client-side sorting - backend handles it
+  const tableData = departments.data.map((dept) => {
+    const id = dept.id ?? dept.department_id;
+    const isAdministrative = dept.type === 'administrative';
+    
+    // Only use faculty data for academic departments
+    // For administrative offices, faculty_name is just a copy of the name field
+    const normalizedFaculty = isAdministrative
+      ? null
+      : (dept.faculty ??
+        (dept.faculty_id && dept.faculty_name
+          ? {
+              id: dept.faculty_id,
+              name: dept.faculty_name,
+            }
+          : null));
+    
+    const typeLabel = dept.type
+      ? `${dept.type.charAt(0).toUpperCase()}${dept.type.slice(1)}`
+      : 'Academic';
+    
+    const facultyDisplay = isAdministrative
+      ? 'Not Applicable'
+      : (normalizedFaculty?.name ?? 'Unassigned');
+
+    return {
+      ...dept,
+      id,
+      code: dept.code ?? dept.faculty_code ?? '',
+      name: dept.name ?? dept.faculty_name ?? '',
+      faculty: normalizedFaculty,
+      faculty_display: facultyDisplay,
+      type_label: typeLabel,
+    };
+  });
+
+  // Convert sortKey to sort_by and sort_order
+  const getSortParams = (key: typeof sortKey) => {
+    const [field, order] = key.split('-');
+    const sortByMap: Record<string, string> = {
+      'name': 'name',
+      'date': 'created_at',
+    };
+    return {
+      sort_by: sortByMap[field] || 'name',
+      sort_order: order || 'asc',
+    };
+  };
+
+  const triggerFetch = (params: Record<string, any> = {}) => {
+    const sortParams = getSortParams(sortKey);
+    const requestParams = {
+      search: searchTerm,
+      perPage,
+      type: typeFilter,
+      faculty_id: facultyFilter,
+      show_deleted: params.show_deleted !== undefined ? params.show_deleted : showDeleted,
+      sort_by: params.sort_by !== undefined ? params.sort_by : sortParams.sort_by,
+      sort_order: params.sort_order !== undefined ? params.sort_order : sortParams.sort_order,
+      ...params,
+    };
+
+    router.get(route('departments.index'), requestParams, {
+      preserveState: true,
+      replace: true,
+      preserveScroll: false,
+      onStart: () => setIsSearching(true),
+      onFinish: () => setIsSearching(false),
+    });
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    searchTimeout.current = setTimeout(() => {
+      triggerFetch({ search: value });
+    }, 300);
+  };
+
+  const handlePerPageChange = (value: string) => {
+    setPerPage(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('departments_perPage', value);
+    }
+    triggerFetch({ perPage: value });
+  };
+
+  const handleSortKeyChange = (value: 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc') => {
+    setSortKey(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('departments_sortKey', value);
+    }
+    const sortParams = getSortParams(value);
+    triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
+  };
+
+  // Pagination data - use root level properties (Laravel paginator structure)
+  const from = departments?.from ?? 0;
+  const to = departments?.to ?? 0;
+  const total = departments?.total ?? 0;
+  const currentPage = departments?.meta?.current_page || (from > 0 ? Math.floor((from - 1) / (parseInt(perPage) || 10)) + 1 : 1);
+  const lastPage = departments?.meta?.last_page || (total > 0 ? Math.ceil(total / (parseInt(perPage) || 10)) : 1);
+
+  const handlePageChange = (page: number) => {
+    // Ensure page is a valid positive number
+    const validPage = Math.max(1, Math.min(page, lastPage || 1));
+    triggerFetch({ page: validPage });
+  };
+
+  useEffect(() => {
+    if (data.type === 'administrative' && data.faculty_id) {
+      setData('faculty_id', '');
+    }
+  }, [data.type, data.faculty_id, setData]);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current);
+      }
+    };
+  }, []);
+
+  // Sync localStorage values with backend on mount
+  useEffect(() => {
+    if (hasSyncedRef.current) return;
+    hasSyncedRef.current = true;
+    
+    const savedPerPage = typeof window !== 'undefined' ? localStorage.getItem('departments_perPage') : null;
+    const currentPerPage = String(filters?.perPage ?? 10);
+    
+    // If localStorage has a different perPage than what backend sent, sync it
+    if (savedPerPage && savedPerPage !== currentPerPage && ['5', '10', '25', '50', '100'].includes(savedPerPage)) {
+      triggerFetch({ search: searchTerm, perPage: savedPerPage });
+    }
+  }, []); // Only run on mount
+
+  // Disable page scrolling
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    
+    const originalHtmlOverflow = html.style.overflow;
+    const originalBodyOverflow = body.style.overflow;
+    
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    
+    return () => {
+      html.style.overflow = originalHtmlOverflow;
+      body.style.overflow = originalBodyOverflow;
+    };
+  }, []);
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Departments" />
+      <Head title="Departments & Offices" />
       <CustomToast />
 
-      <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-        {/* Modal Form */}
-        <div className="ml-auto">
-          <CustomModalForm
-            addButton={DepartmentModalFormConfig.addButton}
-            title={
-              mode === 'view'
-                ? 'View Department'
-                : mode === 'edit'
-                ? 'Update Department'
-                : DepartmentModalFormConfig.title
+      <div className="flex flex-col overflow-hidden bg-background rounded-xl" style={{ height: 'calc(100vh - 80px)' }}>
+        <div className="flex-shrink-0 border-b border-border bg-card px-4 py-2 shadow-sm">
+          <TableToolbar
+            searchValue={searchTerm}
+            onSearchChange={handleSearchChange}
+            perPage={perPage}
+            onPerPageChange={handlePerPageChange}
+            isSearching={isSearching}
+            actionSlot={
+              <div className="flex flex-row flex-wrap items-center gap-2">
+                {/* Sort by icon button */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 gap-2">
+                      <ArrowUpDown className="h-4 w-4" />
+                      <span className="hidden sm:inline">Sort</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>
+                      A → Z
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>
+                      Z → A
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>
+                      Oldest First
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSortKeyChange('date-desc')}>
+                      Newest First
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Rows selector */}
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Select value={perPage} onValueChange={handlePerPageChange}>
+                    <SelectTrigger className="h-9 w-[80px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['5', '10', '25', '50', '100'].map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Type filter - Departments vs Offices */}
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Select value={typeFilter || 'all'} onValueChange={handleTypeFilterChange}>
+                    <SelectTrigger className="h-9 w-[180px]">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All (Departments & Offices)</SelectItem>
+                      <SelectItem value="academic">Departments Only</SelectItem>
+                      <SelectItem value="administrative">Offices Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Faculty filter */}
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Select value={facultyFilter || 'all'} onValueChange={handleFacultyFilterChange}>
+                    <SelectTrigger className="h-9 w-[180px]">
+                      <SelectValue placeholder="All Faculties" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Faculties</SelectItem>
+                      {faculties.map((faculty) => (
+                        <SelectItem key={faculty.id} value={String(faculty.id)}>
+                          {faculty.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                    </Select>
+                  </div>
+
+                {/* Show Deleted Departments Toggle - Only show if user has restore or force delete permission */}
+                {(hasPermission(permissions, 'restore-department') || hasPermission(permissions, 'force-delete-department')) && (
+                  <Button
+                    variant={showDeleted ? "default" : "outline"}
+                    size="sm"
+                    className="gap-2 h-9"
+                    onClick={() => {
+                      const newValue = !showDeleted
+                      setShowDeleted(newValue)
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('departments_filter_show_deleted', String(newValue))
+                      }
+                      triggerFetch({ show_deleted: newValue, page: 1, perPage })
+                    }}
+                  >
+                    {showDeleted ? (
+                      <>
+                        <ArchiveRestore className="h-4 w-4" />
+                        Show Active
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="h-4 w-4" />
+                        Show Deleted
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                <div className="flex-shrink-0">
+                  <CustomModalForm
+                    addButtonWrapperClassName="flex mb-0"
+                  addButton={DepartmentModalFormConfig.addButton}
+                  title={
+                    mode === 'view'
+                      ? selectedDepartment?.type === 'administrative' ? 'View Office' : 'View Department'
+                      : mode === 'edit'
+                      ? selectedDepartment?.type === 'administrative' ? 'Update Office' : 'Update Department'
+                      : data.type === 'administrative' ? 'Create Office' : 'Create Department'
+                  }
+                  description={
+                    mode === 'view'
+                      ? selectedDepartment?.type === 'administrative' 
+                        ? 'View administrative office details.'
+                        : 'View academic department details.'
+                      : mode === 'edit'
+                      ? selectedDepartment?.type === 'administrative'
+                        ? 'Update the administrative office information below.'
+                        : 'Update the academic department information below.'
+                      : data.type === 'administrative'
+                        ? 'Create an administrative office (non-teaching unit like HR, Finance, IT).'
+                        : data.type === 'academic'
+                        ? 'Create an academic department (teaching unit within a faculty).'
+                        : DepartmentModalFormConfig.description
+                  }
+                  fields={modalFields}
+                  buttons={DepartmentModalFormConfig.buttons.map((btn) => 
+                    btn.key === 'submit' 
+                      ? { 
+                          ...btn, 
+                          label: mode === 'edit' 
+                            ? selectedDepartment?.type === 'administrative' ? 'Update Office' : 'Update Department'
+                            : data.type === 'administrative' ? 'Create Office' : 'Create Department'
+                        }
+                      : btn
+                  )}
+                  data={data}
+                  setData={handleFieldChange}
+                  errors={errors}
+                  processing={processing}
+                  handleSubmit={handleSubmit}
+                  open={modalOpen}
+                  onOpenChange={handleModalToggle}
+                  mode={mode}
+                />
+                </div>
+              </div>
             }
-            description={DepartmentModalFormConfig.description}
-            fields={DepartmentModalFormConfig.fields}
-            buttons={DepartmentModalFormConfig.buttons}
-            data={data}
-            setData={setData}
-            errors={errors}
-            processing={processing}
-            handleSubmit={handleSubmit}
-            open={modalOpen}
-            onOpenChange={handleModalToggle}
-            mode={mode}
           />
         </div>
 
-        {/* Table */}
-        <CustomTable
-          columns={DepartmentTableConfig.columns}
-          actions={DepartmentTableConfig.actions}
-          data={departments.data}
-          from={departments.from}
-          onDelete={handleDelete}
-          onView={(item) => openModal('view', item)}
-          onEdit={(item) => openModal('edit', item)}
-          isModal={true}
-          getRowKey={(row) => row.department_id} // ✅ use this in CustomTable to assign `key`
-        />
+        <div className="flex-1 min-h-0 bg-background p-4 overflow-y-auto">
+          <EnterpriseEmployeeTable
+            columns={DepartmentTableConfig.columns}
+            actions={DepartmentTableConfig.actions}
+            data={tableData}
+            from={departments.from}
+            onDelete={handleDelete}
+            onView={handleViewDepartment}
+            onEdit={(item) => openModal('edit', item)}
+            onRestore={handleRestore}
+            onForceDelete={handleForceDelete}
+            resourceType="department"
+            enableExpand={false}
+            viewMode="table"
+          />
+        </div>
+
+        {/* Pagination - Fixed at bottom of viewport */}
+        <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3">
+            {/* Results Info */}
+            <div className="text-sm text-muted-foreground">
+              Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
+              <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+              <span className="font-semibold text-foreground">{total || 0}</span> departments
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+
+              <div className="flex items-center gap-1">
+                {lastPage > 1 ? (
+                  <>
+                    {/* First Page */}
+                    {currentPage > 1 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(1)}
+                        className="h-9 min-w-[40px] hover:bg-muted"
+                      >
+                        1
+                      </Button>
+                    )}
+
+                    {/* Ellipsis before current pages */}
+                    {currentPage > 3 && (
+                      <span className="px-2 text-muted-foreground">...</span>
+                    )}
+
+                    {/* Current page range */}
+                    {Array.from({ length: Math.min(5, lastPage - 2) }, (_, i) => {
+                      const page =
+                        Math.max(2, Math.min(currentPage - 2, lastPage - 4)) + i;
+                      if (page >= 2 && page < lastPage) {
+                        return (
+                          <Button
+                            key={page}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(page)}
+                            className={`h-9 min-w-[40px] ${
+                              currentPage === page
+                                ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+                                : 'hover:bg-muted'
+                            }`}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })}
+
+                    {/* Ellipsis after current pages */}
+                    {currentPage < lastPage - 2 && (
+                      <span className="px-2 text-muted-foreground">...</span>
+                    )}
+
+                    {/* Last Page */}
+                    {lastPage > 1 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(lastPage)}
+                        className={`h-9 min-w-[40px] ${
+                          currentPage === lastPage
+                            ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+                            : 'hover:bg-muted'
+                        }`}
+                      >
+                        {lastPage}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    className="h-9 min-w-[40px] bg-primary text-primary-foreground border-primary"
+                  >
+                    1
+                  </Button>
+                )}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === lastPage || lastPage === 0}
+                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Department Detail Drawer */}
+      {selectedDepartmentForView && (
+        <DetailDrawer
+          item={selectedDepartmentForView}
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          fields={DepartmentModalFormConfig.fields}
+          titleKey="name"
+          subtitleKey="id"
+          subtitleLabel="Department ID"
+          extraData={{ faculties: faculties.map((f) => ({ id: f.id, name: f.name, label: f.name, value: f.id.toString() })) }}
+        />
+      )}
     </AppLayout>
   );
 }

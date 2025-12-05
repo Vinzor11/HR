@@ -4,6 +4,15 @@ import { LucideIcon } from 'lucide-react';
 export const getNestedValue = <T extends Record<string, any>>(obj: T, path: string): any =>
   path.split('.').reduce((acc, key) => acc?.[key], obj);
 
+const formatDateValue = (value: string | null | undefined): string => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 // Employee Table Configuration
 export const EmployeeTableConfig = {
   filterOptions: [
@@ -37,6 +46,9 @@ export const EmployeeTableConfig = {
     { label: 'Department', key: 'department.faculty_name', className: 'min-w-[200px] border p-4', group: 'employment', visible: true },
     { label: 'Status', key: 'status', className: 'min-w-[100px] capitalize border p-4', group: 'employment', visible: true },
     { label: 'Employee Type', key: 'employee_type', className: 'min-w-[120px] border p-4', group: 'employment', visible: true },
+    { label: 'Employment Status', key: 'employment_status', className: 'min-w-[150px] border p-4', group: 'employment', visible: true },
+    { label: 'Date Hired', key: 'date_hired', className: 'min-w-[140px] border p-4', group: 'employment', visible: true, format: formatDateValue },
+    { label: 'Date Regularized', key: 'date_regularized', className: 'min-w-[160px] border p-4', group: 'employment', visible: true, format: formatDateValue },
 
     // ========== Personal Details ==========
     { label: 'Birth Date', key: 'birth_date', className: 'min-w-[120px] border p-4', group: 'personal', visible: false },

@@ -38,14 +38,41 @@ class HandleInertiaRequests extends Middleware
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
+        $user = $request->user();
+        
+        // Load roles and permissions safely, ensuring relationships are loaded
+        $roles = [];
+        $permissions = [];
+        
+        if ($user) {
+            try {
+                // Ensure roles relationship is loaded
+                if (!$user->relationLoaded('roles')) {
+                    $user->load('roles');
+                }
+                $roles = $user->roles->pluck('name')->toArray();
+            } catch (\Exception $e) {
+                // If roles can't be loaded, default to empty array
+                $roles = [];
+            }
+            
+            try {
+                // Get permissions safely
+                $permissions = $user->getAllPermissions()->pluck('name')->toArray();
+            } catch (\Exception $e) {
+                // If permissions can't be loaded, default to empty array
+                $permissions = [];
+            }
+        }
+
         return [
              ...parent::share($request),
             'name'  => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth'  => [
-                'user'        => $request->user(),
-                'roles'       => fn() => $request->user()?->roles->pluck('name'),
-                'permissions' => fn() => $request->user()?->getAllPermissions()->pluck('name'),
+                'user'        => $user,
+                'roles'       => $roles,
+                'permissions' => $permissions,
             ],
             'ziggy' => fn(): array=> [
                  ...(new Ziggy)->toArray(),
@@ -54,7 +81,9 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error'   => $request->session()->get('error'),
+                'newClient' => $request->session()->get('newClient'),
             ],
+            'importedData' => fn () => $request->session()->pull('importedData'),
         ];
     }
 }

@@ -1,6 +1,4 @@
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { Link } from "@inertiajs/react"
-import { SelectValue } from "@radix-ui/react-select";
+import { Link } from '@inertiajs/react';
 
 interface LinkProps {
     active: boolean;
@@ -16,49 +14,27 @@ interface PaginationData {
 }
 
 interface PaginationProps {
-    products: PaginationData;
-    perPage: string;
-    onPerPageChange: (value: string) => void;
-    totalCount: number;
-    filteredCount: number;
-    search: string;
+    meta: PaginationData;
 }
 
-export const Pagination = ({ products, perPage, onPerPageChange, totalCount, filteredCount, search } : PaginationProps) => {
+export const TablePagination = ({ meta }: PaginationProps) => {
+    if (!meta.links?.length) {
+        return null;
+    }
+
     return (
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex flex-col gap-2 text-sm text-gray-700 md:flex-row md:items-center md:justify-between">
+            <p>
+                Showing <strong>{meta.from ?? 0}</strong> to <strong>{meta.to ?? 0}</strong> of{' '}
+                <strong>{meta.total ?? 0}</strong> entries
+            </p>
 
-            {/* Pagination information */}
-            {search ? (
-                <p>Showing <strong>{filteredCount}</strong> filtered result{filteredCount !== 1 && 's'} out of <strong>{totalCount}</strong> entr{totalCount !== 1 ? 'ies' : 'y'} </p>
-
-            ) : (
-                <p>Showing <strong>{products.from}</strong> to <strong>{products.to}</strong> out of <strong>{products.total}</strong> entr{totalCount !== 1 ? 'ies' : 'y'} </p>
-            )}
-
-            {/* Select Per Page */}
-            <div className="flex items-center gap-2">
-                <span className="text-sm"> Row per page:</span>
-                <Select onValueChange={onPerPageChange} value={perPage}>
-                    <SelectTrigger className="w-[90px]">
-                        <SelectValue placeholder="Row" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="5">5</SelectItem>
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="25">25</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
-                        <SelectItem value="100">100</SelectItem>
-                        <SelectItem value="-1">All</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Pagination Link */}
-            <div className="flex gap-2">
-                {products.links.map((link, index) => (
+            <div className="flex flex-wrap gap-2">
+                {meta.links.map((link, index) => (
                     <Link
-                        className={`px-3 py-2 border rounded ${link.active ? 'bg-gray-700 text-white' : ''}`}
+                        className={`min-w-[2.5rem] rounded border px-3 py-1 text-center transition ${
+                            link.active ? 'bg-gray-800 text-white' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                         href={link.url || '#'}
                         key={index}
                         dangerouslySetInnerHTML={{ __html: link.label }}
@@ -66,6 +42,5 @@ export const Pagination = ({ products, perPage, onPerPageChange, totalCount, fil
                 ))}
             </div>
         </div>
-    )
-
-}
+    );
+};

@@ -17,10 +17,11 @@ export interface NavGroup {
 
 export interface NavItem {
     title: string;
-    href: string;
+    href?: string;
     icon?: LucideIcon | null;
     isActive?: boolean;
     permission?: string;
+    children?: NavItem[];
 }
 
 export interface SharedData {
@@ -35,9 +36,20 @@ export interface User {
     id: number;
     name: string;
     email: string;
+    employee_id?: string | null;
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
     [key: string]: unknown; // This allows for additional properties...
+}
+
+export interface PageProps extends SharedData {
+    csrf: string;
+    errors: Record<string, string | string[]>;
+    flash?: {
+        success?: string;
+        error?: string;
+    };
+    importedData?: Record<string, unknown> | null;
 }

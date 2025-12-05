@@ -73,79 +73,203 @@
     ::before,
     ::backdrop,
     ::file-selector-button {
-        border-color: var(--color-gray-200, currentColor);
+        border-color: var(--color-border, currentColor);
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+    
+    /* Ensure dark mode background is applied */
+    html.dark {
+        background-color: var(--background);
+    }
+    
+    html {
+        background-color: var(--background);
     }
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    /* ============================================
+       MODERN HRIS LIGHT MODE PALETTE
+       Comprehensive, high-contrast, harmonious
+       ============================================ */
+    
+    /* Backgrounds - Soft off-white, warm gray */
+    --background: oklch(0.98 0 0);              /* #fafafa - Soft off-white */
+    --foreground: oklch(0.15 0 0);              /* #111827 - Near black for readability */
+    --card: oklch(1 0 0);                        /* #ffffff - Pure white for elevation */
+    --card-foreground: oklch(0.15 0 0);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
+    --popover-foreground: oklch(0.15 0 0);
+    
+    /* Primary Brand Colors - Fresh ESSU Green */
+    --primary: #118d0b;                          /* ESSU green for primary actions */
+    --primary-foreground: oklch(0.985 0 0);      /* White text on primary */
+    --primary-hover: #0f7a09;                    /* Slightly darker hover */
+    --primary-accent: #0b5c06;                   /* Deep accent tone */
+    --primary-pastel: #d9f7d6;                   /* Soft green highlight */
+    
+    /* Secondary - Muted Emerald Green */
+    --secondary: oklch(0.65 0.2 145);            /* #22c55e - Complementary to primary */
+    --secondary-foreground: oklch(0.15 0 0);
+    
+    /* Muted - Soft gray for subtle elements */
+    --muted: oklch(0.97 0 0);                    /* #f5f5f5 - Very light gray */
+    --muted-foreground: oklch(0.45 0 0);         /* #6b7280 - Medium gray text */
+    
+    /* Accent - Light gray for hover states */
     --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
+    --accent-foreground: oklch(0.15 0 0);
+    
+    /* Semantic Colors */
+    --success: oklch(0.65 0.2 145);              /* #22c55e */
+    --success-foreground: oklch(0.15 0 0);
+    --success-hover: oklch(0.58 0.2 145);        /* #16a34a */
+    --success-bg: oklch(0.95 0.05 145);          /* #dcfce7 */
+    
+    --warning: oklch(0.75 0.15 50);              /* #f59e0b */
+    --warning-foreground: oklch(0.15 0 0);
+    --warning-hover: oklch(0.70 0.15 50);        /* #d97706 */
+    --warning-bg: oklch(0.97 0.05 50);           /* #fef3c7 */
+    
+    --danger: oklch(0.577 0.245 27.325);         /* #ef4444 */
+    --danger-foreground: oklch(0.985 0 0);
+    --danger-hover: oklch(0.52 0.245 27.325);    /* #dc2626 */
+    --danger-bg: oklch(0.95 0.1 27.325);         /* #fee2e2 */
+    
+    --info: oklch(0.60 0.15 250);                /* #3b82f6 */
+    --info-foreground: oklch(0.985 0 0);
+    --info-hover: oklch(0.55 0.15 250);          /* #2563eb */
+    --info-bg: oklch(0.94 0.05 250);             /* #dbeafe */
+    
+    /* Destructive (alias for danger) */
+    --destructive: var(--danger);
+    --destructive-foreground: var(--danger-foreground);
+    
+    /* Borders - Subtle gray for separation */
+    --border: oklch(0.90 0 0);                   /* #e5e7eb - Soft border */
+    --border-subtle: oklch(0.95 0 0);            /* #f3f4f6 - Very light border */
+    --input: oklch(0.90 0 0);
+    --ring: #118d0b;                             /* Green focus ring */
+    
+    /* Table-Optimized Colors */
+    --table-row-hover: oklch(0.98 0 0);           /* #f9fafb - Subtle hover */
+    --table-row-selected: oklch(0.92 0.05 270);  /* #e0e7ff - Primary tint */
+    --table-row-stripe: oklch(0.98 0 0);         /* #fafafa - Zebra stripe */
+    --table-header-bg: oklch(0.98 0 0);          /* #f9fafb - Header background */
+    --table-gridline: oklch(0.95 0 0);           /* #f3f4f6 - Cell borders */
+    --table-expanded-bg: oklch(0.97 0 0);        /* #f5f5f5 - Expanded content */
+    
+    /* Chart colors - Harmonized palette */
+    --chart-1: oklch(0.55 0.15 270);             /* Primary blue */
+    --chart-2: oklch(0.65 0.2 145);              /* Secondary green */
+    --chart-3: oklch(0.6 0.15 50);               /* Amber/warning */
+    --chart-4: oklch(0.577 0.245 27.325);       /* Red/danger */
+    --chart-5: oklch(0.5 0.15 240);              /* Purple accent */
+    
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
+    
+    /* Sidebar - Clean white */
+    --sidebar: oklch(1 0 0);
+    --sidebar-foreground: oklch(0.15 0 0);
+    --sidebar-primary: #118d0b;
     --sidebar-primary-foreground: oklch(0.985 0 0);
     --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    --sidebar-accent-foreground: oklch(0.15 0 0);
+    --sidebar-border: oklch(0.90 0 0);
+    --sidebar-ring: #118d0b;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    /* ============================================
+       MODERN HRIS DARK MODE PALETTE
+       Deep slate backgrounds, vibrant accents
+       ============================================ */
+    
+    /* Backgrounds - Deep slate, not pure black */
+    --background: oklch(0.20 0 0);               /* #0f172a - Deep slate */
+    --foreground: oklch(0.95 0 0);               /* #f1f5f9 - Soft white */
+    --card: oklch(0.25 0 0);                     /* #1e293b - Elevated card */
+    --card-foreground: oklch(0.95 0 0);
+    --popover: oklch(0.25 0 0);
+    --popover-foreground: oklch(0.95 0 0);
+    
+    /* Primary Brand Colors - Lighter green for dark mode */
+    --primary: #4ade80;                          /* Vibrant green for contrast */
+    --primary-foreground: oklch(0.20 0 0);       /* Dark text on light primary */
+    --primary-hover: #22c55e;                    /* Slightly deeper hover */
+    --primary-accent: #16a34a;                   /* Bold accent */
+    --primary-pastel: #14532d;                   /* Deep highlight */
+    
+    /* Secondary - Lighter green for dark mode */
+    --secondary: oklch(0.75 0.2 145);            /* #4ade80 */
+    --secondary-foreground: oklch(0.20 0 0);
+    
+    /* Muted - Dark gray for subtle elements */
+    --muted: oklch(0.30 0 0);                    /* #334155 - Medium dark gray */
+    --muted-foreground: oklch(0.70 0 0);         /* #cbd5e1 - Light gray text */
+    
+    /* Accent - Medium dark gray for hover */
+    --accent: oklch(0.30 0 0);
+    --accent-foreground: oklch(0.95 0 0);
+    
+    /* Semantic Colors - Adjusted for dark mode */
+    --success: oklch(0.75 0.2 145);              /* #4ade80 */
+    --success-foreground: oklch(0.20 0 0);
+    --success-hover: oklch(0.82 0.2 145);        /* #86efac */
+    --success-bg: oklch(0.30 0.05 145);          /* #14532d with 30% opacity */
+    
+    --warning: oklch(0.80 0.15 50);              /* #fbbf24 */
+    --warning-foreground: oklch(0.20 0 0);
+    --warning-hover: oklch(0.85 0.15 50);       /* #fcd34d */
+    --warning-bg: oklch(0.35 0.05 50);          /* #78350f with 30% opacity */
+    
+    --danger: oklch(0.70 0.2 25);                /* #f87171 */
+    --danger-foreground: oklch(0.95 0 0);
+    --danger-hover: oklch(0.78 0.2 25);          /* #fca5a5 */
+    --danger-bg: oklch(0.30 0.1 25);             /* #7f1d1d with 30% opacity */
+    
+    --info: oklch(0.72 0.15 250);                /* #60a5fa */
+    --info-foreground: oklch(0.20 0 0);
+    --info-hover: oklch(0.78 0.15 250);          /* #93c5fd */
+    --info-bg: oklch(0.30 0.05 250);             /* #1e3a8a with 30% opacity */
+    
+    /* Destructive (alias for danger) */
+    --destructive: var(--danger);
+    --destructive-foreground: var(--danger-foreground);
+    
+    /* Borders - Visible but not harsh */
+    --border: oklch(0.40 0 0);                   /* #475569 - Medium gray border */
+    --border-subtle: oklch(0.30 0 0);            /* #334155 - Subtle border */
+    --input: oklch(0.40 0 0);
+    --ring: #4ade80;                             /* Green focus ring */
+    
+    /* Table-Optimized Colors */
+    --table-row-hover: oklch(0.30 0 0);          /* #334155 - Noticeable hover */
+    --table-row-selected: oklch(0.35 0.1 270);  /* #312e81 - Primary dark tint */
+    --table-row-stripe: oklch(0.25 0 0);         /* #1e293b - Same as card */
+    --table-header-bg: oklch(0.25 0 0);         /* #1e293b - Elevated dark */
+    --table-gridline: oklch(0.30 0 0);           /* #334155 - Subtle dark */
+    --table-expanded-bg: oklch(0.30 0 0);        /* #334155 - Elevated dark */
+    
+    /* Chart colors - Adjusted for dark mode */
+    --chart-1: oklch(0.70 0.15 270);             /* Primary blue */
+    --chart-2: oklch(0.75 0.2 145);              /* Secondary green */
+    --chart-3: oklch(0.75 0.15 50);              /* Amber/warning */
+    --chart-4: oklch(0.70 0.2 25);               /* Red/danger */
+    --chart-5: oklch(0.65 0.15 240);             /* Purple accent */
+    
+    /* Sidebar - Elevated dark */
+    --sidebar: oklch(0.25 0 0);                  /* #1e293b */
+    --sidebar-foreground: oklch(0.95 0 0);
+    --sidebar-primary: #4ade80;
+    --sidebar-primary-foreground: oklch(0.20 0 0);
+    --sidebar-accent: oklch(0.30 0 0);
+    --sidebar-accent-foreground: oklch(0.95 0 0);
+    --sidebar-border: oklch(0.40 0 0);
+    --sidebar-ring: #4ade80;
 }
 
 @layer base {
@@ -156,4 +280,87 @@
     body {
         @apply bg-background text-foreground;
     }
+}
+
+/* Targeted styles for sidebar container, header, and footer - enhanced green background with gradient */
+/* Apply green background to parent div with padding (for inset variant) - this removes the white padding area */
+[data-slot="sidebar"] > div.fixed {
+    background: linear-gradient(180deg, #0f7a09 0%, #118d0b 50%, #0d6d08 100%) !important;
+}
+
+/* Alternative: target by position (second child div) */
+[data-slot="sidebar"] > div:nth-child(2) {
+    background: linear-gradient(180deg, #0f7a09 0%, #118d0b 50%, #0d6d08 100%) !important;
+}
+
+[data-sidebar="sidebar"] {
+    background: linear-gradient(180deg, #0f7a09 0%, #118d0b 50%, #0d6d08 100%) !important;
+    color: oklch(0.98 0 0) !important; /* White text for visibility */
+    border: none !important; /* Remove sidebar border */
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1) !important; /* Subtle inner shadow for depth */
+}
+
+/* Header and footer also get green gradient background with white text */
+[data-sidebar="sidebar"] [data-sidebar="header"],
+[data-sidebar="sidebar"] [data-sidebar="footer"] {
+    background: linear-gradient(180deg, #0f7a09 0%, #118d0b 50%, #0d6d08 100%) !important;
+    color: oklch(0.98 0 0) !important; /* White text for visibility */
+}
+
+/* Text colors for menu items in sidebar content area */
+[data-sidebar="sidebar"] [data-sidebar="menu-button"],
+[data-sidebar="sidebar"] [data-sidebar="menu-sub-button"],
+[data-sidebar="sidebar"] [data-sidebar="group-label"],
+[data-sidebar="sidebar"] [data-sidebar="menu-badge"] {
+    color: oklch(0.98 0 0) !important; /* White text for menu items */
+    transition: all 0.2s ease-in-out !important; /* Smooth transitions */
+}
+
+/* Enhanced hover states with smooth transitions and subtle glow */
+[data-sidebar="sidebar"] [data-sidebar="menu-button"]:hover,
+[data-sidebar="sidebar"] [data-sidebar="menu-sub-button"]:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%) !important;
+    color: oklch(1 0 0) !important; /* Pure white on hover */
+    transform: translateX(2px) !important; /* Slight slide effect */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important; /* Subtle shadow on hover */
+    border-radius: 6px !important;
+}
+
+/* Enhanced active state with left border indicator and glow */
+[data-sidebar="sidebar"] [data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="sidebar"] [data-sidebar="menu-sub-button"][data-active="true"] {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%) !important;
+    color: oklch(1 0 0) !important; /* Pure white for active */
+    border-left: 3px solid oklch(0.95 0 0) !important; /* White left border indicator */
+    box-shadow: 0 2px 12px rgba(255, 255, 255, 0.1), inset 0 0 10px rgba(255, 255, 255, 0.05) !important;
+    font-weight: 500 !important;
+    border-radius: 6px !important;
+}
+
+/* Enhanced separator with gradient */
+[data-sidebar="sidebar"] [data-sidebar="separator"] {
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 50%, transparent 100%) !important;
+    height: 1px !important;
+    opacity: 0.5 !important;
+}
+
+/* Enhanced submenu border with subtle glow */
+[data-sidebar="sidebar"] [data-sidebar="menu-sub"] {
+    border-color: rgba(255, 255, 255, 0.15) !important; /* Subtle white border for submenu */
+    border-left-width: 2px !important;
+}
+
+/* Group label styling */
+[data-sidebar="sidebar"] [data-sidebar="group-label"] {
+    opacity: 0.85 !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px !important;
+    text-transform: uppercase !important;
+    font-size: 0.7rem !important;
+}
+
+/* Smooth transitions for all interactive elements */
+[data-sidebar="sidebar"] [data-sidebar="menu-button"],
+[data-sidebar="sidebar"] [data-sidebar="menu-sub-button"] {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }

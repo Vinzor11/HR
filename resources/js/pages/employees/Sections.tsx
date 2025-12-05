@@ -1495,17 +1495,17 @@ export const TrainingPrograms = React.memo(({ data, setData, errors }: SectionPr
                   />
                 </td>
                 <td className="border border-black p-1">
-                  <div className="grid grid-cols-2 gap-1">
-                    <input
-                      id=`prog_date_from_${idx}`
-                      type="date"
-                      value={prog.date_from}
+                    <div className="grid grid-cols-2 gap-1">
+                      <input
+                        id={`prog_date_from_${idx}`}
+                        type="date"
+                        value={prog.date_from}
                       onChange={(e) => updateSection('training_programs', idx, 'date_from', e.target.value, data, setData)}
                       className={`w-full border-none ${errors[`training_programs[${idx}].date_from`] ? 'border-red-500' : ''}`}
                       aria-label={`Training Date From ${idx + 1}`}
                     />
                     <input
-                      id=`prog_date_to_${idx}`
+                      id={`prog_date_to_${idx}`}
                       type="date"
                       value={prog.date_to}
                       onChange={(e) => updateSection('training_programs', idx, 'date_to', e.target.value, data, setData)}
@@ -1516,7 +1516,7 @@ export const TrainingPrograms = React.memo(({ data, setData, errors }: SectionPr
                 </td>
                 <td className="border border-black p-1">
                   <input
-                    id=`prog_hours_${idx}`
+                    id={`prog_hours_${idx}`}
                     type="number"
                     value={prog.hours}
                     onChange={(e) => updateSection('training_programs', idx, 'hours', e.target.value, data, setData)}
@@ -1526,20 +1526,20 @@ export const TrainingPrograms = React.memo(({ data, setData, errors }: SectionPr
                 </td>
                 <td className="border border-black p-1">
                   <input
-                    id=`prog_type_${idx}`
+                    id={`prog_type_${idx}`}
                     value={prog.type}
                     onChange={(e) => updateSection('training_programs', idx, 'type', e.target.value, data, setData)}
                     className={`w-full border-none ${errors[`training_programs[${idx}].type`] ? 'border-red-500' : ''}`}
-                    aria-label=`Training Type ${idx + 1}`
+                      aria-label={`Training Type ${idx + 1}`}
                   />
                 </td>
                 <td className="border border-black p-1">
                   <input
-                    id=`prog_conducted_by_${idx}`
+                    id={`prog_conducted_by_${idx}`}
                     value={prog.conducted_by}
                     onChange={(e) => updateSection('training_programs', idx, 'conducted_by', e.target.value, data, setData)}
                     className={`w-full border-none ${errors[`training_programs[${idx}].conducted_by`] ? 'border-red-500' : ''}`}
-                    aria-label=`Conducted By ${idx + 1}`
+                    aria-label={`Conducted By ${idx + 1}`}
                   />
                 </td>
                 <td className="border border-black p-1">
@@ -1923,20 +1923,20 @@ export const AdditionalInformation = React.memo(({ data, setData, errors }: Sect
                   </td>
                   <td className="border border-black p-1">
                     <input
-                      id=`ref_address_${idx}`
+                      id={`ref_address_${idx}`}
                       value={ref.address}
                       onChange={(e) => updateSection('references', idx, 'address', e.target.value, data, setData)}
                       className={`w-full border-none ${errors[`references[${idx}].address`] ? 'border-red-500' : ''}`}
-                      aria-label=`Reference Address ${idx + 1}`
+                      aria-label={`Reference Address ${idx + 1}`}
                     />
                   </td>
                   <td className="border border-black p-1">
                     <input
-                      id=`ref_telephone_no_${idx}`
+                      id={`ref_telephone_no_${idx}`}
                       value={ref.telephone_no}
                       onChange={(e) => updateSection('references', idx, 'telephone_no', e.target.value, data, setData)}
                       className={`w-full border-none ${errors[`references[${idx}].telephone_no`] ? 'border-red-500' : ''}`}
-                      aria-label=`Reference Telephone No ${idx + 1}`
+                      aria-label={`Reference Telephone No ${idx + 1}`}
                     />
                   </td>
                   <td className="border border-black p-1">

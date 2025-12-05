@@ -7,7 +7,7 @@ export const UsersModalFormConfig = {
     addButton: {
         id: 'add-user',
         label: 'Add User',
-        className: 'bg-indigo-700 text-white rounded-lg px-4 py-2 hover:bg-indigo-800 cursor-pointer',
+        className: 'bg-primary text-primary-foreground rounded-lg px-4 py-2 hover:bg-primary/90 cursor-pointer',
         icon: CirclePlus,
         type: 'button',
         variant: 'default',
@@ -35,6 +35,16 @@ export const UsersModalFormConfig = {
             tabIndex: 2,
         },
         {
+            id: 'employee',
+            key: 'employee_id',
+            name: 'employee_id',
+            label: 'Employee ID',
+            type: 'text',
+            placeholder: 'Enter employee ID',
+            autocomplete: 'off',
+            tabIndex: 3,
+        },
+        {
             id: 'password',
             key: 'password',
             name: 'password',
@@ -42,7 +52,7 @@ export const UsersModalFormConfig = {
             type: 'password',
             placeholder: 'Enter password',
             autocomplete: 'new-password',
-            tabIndex: 3,
+            tabIndex: 4,
         },
         {
             id: 'confirm-password',
@@ -52,7 +62,7 @@ export const UsersModalFormConfig = {
             type: 'password',
             placeholder: 'Confirm password',
             autocomplete: 'new-password',
-            tabIndex: 4,
+            tabIndex: 5,
         },
         {
             id: 'roles',
