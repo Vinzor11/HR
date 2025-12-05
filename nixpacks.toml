@@ -14,13 +14,10 @@ nixPkgs = [
   "php82Extensions.intl"
 ]
 
-# Install Composer manually since the nixpkgs alias may be unavailable
-cmds = [
-  "curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer"
-]
-
 [phases.install]
 cmds = [
+  # Ensure Composer is available before running install
+  "curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer",
   "composer install --optimize-autoloader --no-dev --no-interaction",
   "npm ci --omit=dev"
 ]
