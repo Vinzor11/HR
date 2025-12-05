@@ -4,6 +4,55 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
+        {{-- Inline script to force HTTPS for ALL requests - MUST run first! --}}
+        <script>
+            (function() {
+                'use strict';
+                
+                // Force HTTPS for all fetch requests
+                const originalFetch = window.fetch;
+                window.fetch = function(input, init) {
+                    if (typeof input === 'string' && input.startsWith('http://')) {
+                        input = input.replace('http://', 'https://');
+                    } else if (input instanceof Request && input.url.startsWith('http://')) {
+                        input = new Request(input.url.replace('http://', 'https://'), input);
+                    }
+                    return originalFetch.call(this, input, init);
+                };
+                
+                // Force HTTPS for all XMLHttpRequest
+                const originalOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                    if (typeof url === 'string' && url.startsWith('http://')) {
+                        url = url.replace('http://', 'https://');
+                    }
+                    return originalOpen.call(this, method, url, ...args);
+                };
+                
+                // Patch route helper as soon as Ziggy loads it
+                const patchRoute = function() {
+                    if (window.route && typeof window.route === 'function') {
+                        const originalRoute = window.route;
+                        window.route = function(name, params, absolute) {
+                            const url = originalRoute(name, params, absolute);
+                            if (typeof url === 'string' && url.startsWith('http://')) {
+                                return url.replace('http://', 'https://');
+                            }
+                            return url;
+                        };
+                    }
+                };
+                
+                // Try to patch immediately, then on DOMContentLoaded, then with a small delay
+                patchRoute();
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', patchRoute);
+                }
+                setTimeout(patchRoute, 100);
+                setTimeout(patchRoute, 500);
+            })();
+        </script>
+
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
             (function() {

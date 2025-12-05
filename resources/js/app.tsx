@@ -21,13 +21,26 @@ if (typeof window !== 'undefined') {
         return originalFetch(input, init);
     };
     
-    // Patch XMLHttpRequest to force HTTPS
+    // Patch XMLHttpRequest to force HTTPS (more comprehensive)
     const originalOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: any[]) {
         if (typeof url === 'string' && url.startsWith('http://')) {
             url = url.replace('http://', 'https://');
+        } else if (url instanceof URL && url.protocol === 'http:') {
+            url = new URL(url.href.replace('http://', 'https://'));
         }
         return originalOpen.call(this, method, url, ...args);
+    };
+    
+    // Also patch send to catch any URLs set after open
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body?: any) {
+        // Double-check the URL one more time before sending
+        if (this.responseURL && this.responseURL.startsWith('http://')) {
+            // Can't change responseURL, but we can log it
+            console.warn('XHR request to HTTP URL detected:', this.responseURL);
+        }
+        return originalSend.call(this, body);
     };
     
     // Configure axios to always use current origin (HTTPS)
