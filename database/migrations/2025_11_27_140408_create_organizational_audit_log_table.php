@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -13,12 +14,20 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasTable('organizational_audit_log')) {
-            // On MySQL (production) assume table is valid; skip re-creating
             if (DB::getDriverName() === 'mysql') {
+                // production DB is fine, skip re-creating
                 return;
             }
 
-            // On SQLite (build), drop the table to avoid duplicate index errors
+            // In SQLite builds, drop indexes and table before re-creating
+            try {
+                DB::statement('DROP INDEX IF EXISTS idx_unit_date');
+                DB::statement('DROP INDEX IF EXISTS idx_action_type');
+                DB::statement('DROP INDEX IF EXISTS idx_reference_number');
+            } catch (\Throwable $e) {
+                // ignore missing indexes
+            }
+
             Schema::drop('organizational_audit_log');
         }
 
