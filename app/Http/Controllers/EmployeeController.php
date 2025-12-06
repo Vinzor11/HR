@@ -472,17 +472,53 @@ class EmployeeController extends Controller
                 mkdir($tempStorageDir, 0755, true);
             }
             
-            // Verify original file is readable before copying
-            $originalContent = file_get_contents($path);
-            if ($originalContent === false || strlen($originalContent) === 0) {
-                throw new \RuntimeException('Original uploaded file cannot be read or is empty.');
+            // Read file content into memory using stream to avoid memory issues
+            $originalHandle = fopen($path, 'rb');
+            if (!$originalHandle) {
+                throw new \RuntimeException('Cannot open uploaded file for reading.');
             }
             
-            // Copy the uploaded file to temp storage using file_put_contents for better reliability
-            $copyResult = file_put_contents($tempStoragePath, $originalContent);
-            if ($copyResult === false || $copyResult !== $fileSize) {
-                @unlink($tempStoragePath); // Clean up
-                throw new \RuntimeException('Failed to copy uploaded file to temporary storage. Expected ' . $fileSize . ' bytes, got ' . ($copyResult ?: 0) . ' bytes.');
+            // Read file in chunks and write to temp location
+            $tempHandle = fopen($tempStoragePath, 'wb');
+            if (!$tempHandle) {
+                fclose($originalHandle);
+                throw new \RuntimeException('Cannot create temporary file for writing.');
+            }
+            
+            // Copy file in chunks (8KB at a time) to handle large files
+            $bytesCopied = 0;
+            while (!feof($originalHandle)) {
+                $chunk = fread($originalHandle, 8192);
+                if ($chunk === false) {
+                    fclose($originalHandle);
+                    fclose($tempHandle);
+                    @unlink($tempStoragePath);
+                    throw new \RuntimeException('Error reading from uploaded file.');
+                }
+                $written = fwrite($tempHandle, $chunk);
+                if ($written === false) {
+                    fclose($originalHandle);
+                    fclose($tempHandle);
+                    @unlink($tempStoragePath);
+                    throw new \RuntimeException('Error writing to temporary file.');
+                }
+                $bytesCopied += $written;
+            }
+            
+            // Close handles and ensure data is written to disk
+            fclose($originalHandle);
+            fflush($tempHandle); // Flush any buffered data
+            fclose($tempHandle);
+            
+            // Verify the copied file
+            if (!file_exists($tempStoragePath) || filesize($tempStoragePath) === 0) {
+                @unlink($tempStoragePath);
+                throw new \RuntimeException('Copied file is invalid or empty. Expected ' . $fileSize . ' bytes, got ' . filesize($tempStoragePath) . ' bytes.');
+            }
+            
+            if ($bytesCopied !== $fileSize) {
+                @unlink($tempStoragePath);
+                throw new \RuntimeException('File size mismatch. Expected ' . $fileSize . ' bytes, copied ' . $bytesCopied . ' bytes.');
             }
             
             Log::info('CS Form 212 file copied to temp storage', [
@@ -490,37 +526,37 @@ class EmployeeController extends Controller
                 'original_size' => $fileSize,
                 'temp_path' => $tempStoragePath,
                 'temp_size' => filesize($tempStoragePath),
-                'copy_bytes' => $copyResult,
+                'bytes_copied' => $bytesCopied,
                 'file_mime' => $file->getMimeType(),
             ]);
             
-            // Verify the copied file is valid
-            if (!file_exists($tempStoragePath) || filesize($tempStoragePath) === 0) {
-                @unlink($tempStoragePath); // Clean up
-                throw new \RuntimeException('Copied file is invalid or empty.');
+            // Small delay to ensure file system has fully written the file
+            usleep(100000); // 100ms delay
+            
+            // Verify file is readable
+            if (!is_readable($tempStoragePath)) {
+                @unlink($tempStoragePath);
+                throw new \RuntimeException('Temporary file is not readable.');
             }
             
             // Verify file integrity - check first few bytes for Excel signature
-            $fileHandle = fopen($tempStoragePath, 'rb');
-            if (!$fileHandle) {
+            $verifyHandle = fopen($tempStoragePath, 'rb');
+            if (!$verifyHandle) {
                 @unlink($tempStoragePath);
                 throw new \RuntimeException('Cannot open copied file for verification.');
             }
             
-            $firstBytes = fread($fileHandle, 8);
-            fclose($fileHandle);
+            $firstBytes = fread($verifyHandle, 8);
+            fclose($verifyHandle);
             
             // Excel files start with specific signatures
             // XLSX: PK (ZIP signature) - 50 4B 03 04
             // XLS: D0 CF 11 E0 (OLE2 signature)
-            $isValidExcel = false;
             if (substr($firstBytes, 0, 2) === 'PK') {
                 // XLSX file (ZIP archive)
-                $isValidExcel = true;
                 Log::info('File signature check: XLSX format detected (ZIP signature)');
             } elseif (substr($firstBytes, 0, 4) === "\xD0\xCF\x11\xE0") {
                 // XLS file (OLE2 format)
-                $isValidExcel = true;
                 Log::info('File signature check: XLS format detected (OLE2 signature)');
             } else {
                 Log::warning('File signature check: Unknown format', [
@@ -529,9 +565,8 @@ class EmployeeController extends Controller
             }
             
             try {
-                // Try to load from the copied file
-                // Use error suppression and catch exceptions for better error messages
-                $spreadsheet = @\PhpOffice\PhpSpreadsheet\IOFactory::load($tempStoragePath);
+                // Try to load from the copied file - use the path directly
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempStoragePath);
                 $sheetNames = [];
                 foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
                     $sheetNames[] = $worksheet->getTitle();
