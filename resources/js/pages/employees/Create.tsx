@@ -1947,23 +1947,9 @@ export default function CreateEmployee({ employee, departments, positions, facul
 
     setIsImporting(true);
 
-    // Get the route URL and ensure it's HTTPS
-    let importUrl = route('employees.import.cs_form_212', {}, false);
-    
-    // If route helper returns a full URL, ensure it's HTTPS
-    if (typeof importUrl === 'string' && importUrl.startsWith('http://')) {
-      importUrl = importUrl.replace('http://', 'https://');
-    }
-    
-    // If it's still a full URL but not HTTPS, use current origin
-    if (typeof importUrl === 'string' && importUrl.startsWith('http')) {
-      importUrl = window.location.origin + importUrl.replace(/^https?:\/\/[^/]+/, '');
-    }
-    
-    // Fallback: use direct path if route helper fails
-    if (!importUrl || typeof importUrl !== 'string') {
-      importUrl = '/employees/import/cs-form-212';
-    }
+    // Always use relative URL to ensure HTTPS (browser will use same protocol as page)
+    // This prevents mixed content errors
+    const importUrl = '/employees/import/cs-form-212';
     
     console.log('CS Form 212 upload URL:', importUrl);
     console.log('File details:', { name: file.name, size: file.size, type: file.type });
