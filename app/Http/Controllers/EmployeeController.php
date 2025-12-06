@@ -297,14 +297,17 @@ class EmployeeController extends Controller
     public function importCsForm212(Request $request, CsForm212Importer $importer)
     {
         // Debug logging
+        $file = $request->file('pds_file');
         Log::info('CS Form 212 upload attempt', [
             'has_file' => $request->hasFile('pds_file'),
-            'file_name' => $request->file('pds_file')?->getClientOriginalName(),
-            'file_size' => $request->file('pds_file')?->getSize(),
-            'file_mime' => $request->file('pds_file')?->getMimeType(),
+            'file_name' => $file?->getClientOriginalName(),
+            'file_size' => $file?->getSize(),
+            'file_mime' => $file?->getMimeType(),
+            'file_extension' => $file?->getClientOriginalExtension(),
+            'file_is_valid' => $file?->isValid(),
+            'file_error' => $file?->getError(),
             'expects_json' => $request->expectsJson(),
             'is_ajax' => $request->ajax(),
-            'all_input' => $request->all(),
         ]);
 
         try {
@@ -325,13 +328,32 @@ class EmployeeController extends Controller
             
             // Additional validation: check file extension manually
             $file = $request->file('pds_file');
+            
+            // Check if file is valid
+            if (!$file || !$file->isValid()) {
+                $errorMessage = 'The uploaded file is invalid or corrupted.';
+                if ($file && $file->getError()) {
+                    $errorMessage = 'File upload error: ' . $file->getErrorMessage();
+                }
+                
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'message' => 'Validation failed',
+                        'errors' => [
+                            'pds_file' => [$errorMessage]
+                        ],
+                    ], 422);
+                }
+                return back()->withErrors(['pds_file' => $errorMessage]);
+            }
+            
             $extension = strtolower($file->getClientOriginalExtension());
             if (!in_array($extension, ['xlsx', 'xls'])) {
                 if ($request->expectsJson() || $request->ajax()) {
                     return response()->json([
                         'message' => 'Validation failed',
                         'errors' => [
-                            'pds_file' => ['The file must be an Excel file (.xlsx or .xls).']
+                            'pds_file' => ['The file must be an Excel file (.xlsx or .xls). Received: ' . $extension]
                         ],
                     ], 422);
                 }

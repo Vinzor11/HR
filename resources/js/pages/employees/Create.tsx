@@ -2030,16 +2030,19 @@ export default function CreateEmployee({ employee, departments, positions, facul
       // Provide more helpful error messages
       if (message.includes('403') || message.includes('Forbidden') || message.includes('Unauthorized')) {
         toast.error('You do not have permission to upload CS Form 212 files. Please contact an administrator.');
-      } else if (message.includes('mimes') || message.includes('file type') || message.includes('extension') || message.includes('mime')) {
+      } else if (message.includes('mimes') || message.includes('file type') || message.includes('extension') || message.includes('mime') || message.includes('Excel file')) {
         toast.error('Invalid file type. Please upload an Excel file (.xlsx or .xls).');
       } else if (message.includes('max') || message.includes('size') || message.includes('too large')) {
         toast.error('File size exceeds the limit. Please upload a file smaller than 10MB.');
       } else if (message.includes('required') || message.includes('The pds file field is required')) {
         toast.error('Please select a file to upload.');
+      } else if (message.includes('invalid') || message.includes('corrupted') || message.includes('upload error')) {
+        toast.error('The file appears to be invalid or corrupted. Please try a different file or re-save the file in Excel.');
       } else if (message.includes('Network Error') || message.includes('Failed to fetch') || message.includes('Network')) {
         toast.error('Network error. Please check your connection and try again.');
       } else {
-        toast.error(message);
+        // Show the actual error message from the server
+        toast.error(message || 'Failed to upload file. Please check the file and try again.');
       }
     })
     .finally(() => {
