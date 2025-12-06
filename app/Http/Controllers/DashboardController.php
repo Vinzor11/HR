@@ -20,7 +20,7 @@ class DashboardController extends Controller
 {
     public function index(Request $request): Response
     {
-        $user = $request->user();
+        $user = $request->user()->load('roles'); // Eager load roles to prevent N+1 queries
         
         // Ensure user is authenticated
         if (!$user) {
@@ -66,7 +66,7 @@ class DashboardController extends Controller
     {
         $cards = [];
 
-        // Total Employees
+        // Total Employees - Optimized with select
         if ($user->can('access-employees-module')) {
             $totalEmployees = Employee::where('status', 'active')->count();
             $newThisWeek = Employee::where('status', 'active')
@@ -183,18 +183,23 @@ class DashboardController extends Controller
             'link' => route('trainings.index'),
         ];
 
-        // Pending Approvals (for current user)
-        $roleIds = $user->roles->pluck('id');
-        $myPendingApprovals = RequestSubmission::whereHas('approvalActions', function ($query) use ($user, $roleIds) {
-            $query->where('status', 'pending')
-                ->whereColumn('request_approval_actions.step_index', 'request_submissions.current_step_index')
-                ->where(function ($q) use ($user, $roleIds) {
-                    $q->where('approver_id', $user->id);
-                    if ($roleIds->isNotEmpty()) {
-                        $q->orWhereIn('approver_role_id', $roleIds);
-                    }
-                });
-        })->count();
+        // Pending Approvals (for current user) - Optimized query
+        $roleIds = $user->roles->pluck('id')->toArray();
+        
+        // Use a more efficient query with joins instead of whereHas
+        $myPendingApprovals = RequestSubmission::join('request_approval_actions', function ($join) use ($user, $roleIds) {
+            $join->on('request_submissions.id', '=', 'request_approval_actions.submission_id')
+                 ->where('request_approval_actions.status', 'pending')
+                 ->whereColumn('request_approval_actions.step_index', 'request_submissions.current_step_index')
+                 ->where(function ($q) use ($user, $roleIds) {
+                     $q->where('request_approval_actions.approver_id', $user->id);
+                     if (!empty($roleIds)) {
+                         $q->orWhereIn('request_approval_actions.approver_role_id', $roleIds);
+                     }
+                 });
+        })
+        ->distinct()
+        ->count('request_submissions.id');
 
         $cards[] = [
             'title' => 'Pending Approvals',
@@ -210,7 +215,16 @@ class DashboardController extends Controller
 
     private function getRecentRequests($user): array
     {
-        $query = RequestSubmission::with(['requestType', 'user.employee'])
+        // Optimize: only select needed columns and eager load relationships
+        $query = RequestSubmission::select([
+                'id', 'request_type_id', 'user_id', 'reference_code', 
+                'status', 'submitted_at', 'created_at'
+            ])
+            ->with([
+                'requestType:id,name,has_fulfillment',
+                'user:id,name,email,employee_id',
+                'user.employee:id,first_name,middle_name,surname'
+            ])
             ->orderByDesc('submitted_at')
             ->limit(5);
 
