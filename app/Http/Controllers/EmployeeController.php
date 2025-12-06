@@ -487,7 +487,30 @@ class EmployeeController extends Controller
                 'file_exists' => file_exists($path),
                 'is_readable' => is_readable($path),
                 'file_size_from_object' => $file->getSize(),
+                'file_mime' => $file->getMimeType(),
+                'file_extension' => $file->getClientOriginalExtension(),
             ]);
+            
+            // Double-check file is still valid right before extraction
+            if (!file_exists($path)) {
+                throw new \RuntimeException('File was deleted before extraction. Path: ' . $path);
+            }
+            
+            if (!is_readable($path)) {
+                throw new \RuntimeException('File became unreadable before extraction. Path: ' . $path);
+            }
+            
+            $currentFileSize = filesize($path);
+            if ($currentFileSize === 0) {
+                throw new \RuntimeException('File became empty before extraction. Path: ' . $path);
+            }
+            
+            if ($currentFileSize !== $fileSize) {
+                Log::warning('File size changed before extraction', [
+                    'original_size' => $fileSize,
+                    'current_size' => $currentFileSize,
+                ]);
+            }
             
             // Verify file is not empty
             if ($fileSize === 0) {
