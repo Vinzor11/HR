@@ -449,10 +449,49 @@ class EmployeeController extends Controller
                 'file_size' => $fileSize,
                 'file_exists' => file_exists($path),
                 'is_readable' => is_readable($path),
+                'file_size_from_object' => $file->getSize(),
             ]);
             
+            // Verify file is not empty
+            if ($fileSize === 0) {
+                throw new \RuntimeException('Uploaded file is empty.');
+            }
+            
+            // Check if file size matches what was uploaded
+            if ($file->getSize() !== $fileSize) {
+                Log::warning('File size mismatch', [
+                    'uploaded_size' => $file->getSize(),
+                    'actual_size' => $fileSize,
+                ]);
+            }
+            
+            // Copy file to a more permanent location to avoid temp file issues
+            $tempStoragePath = storage_path('app/temp/' . uniqid('cs_form_212_', true) . '_' . $file->getClientOriginalName());
+            $tempStorageDir = dirname($tempStoragePath);
+            if (!is_dir($tempStorageDir)) {
+                mkdir($tempStorageDir, 0755, true);
+            }
+            
+            // Copy the uploaded file to temp storage
+            if (!copy($path, $tempStoragePath)) {
+                throw new \RuntimeException('Failed to copy uploaded file to temporary storage.');
+            }
+            
+            Log::info('CS Form 212 file copied to temp storage', [
+                'original_path' => $path,
+                'temp_path' => $tempStoragePath,
+                'temp_size' => filesize($tempStoragePath),
+            ]);
+            
+            // Verify the copied file is valid
+            if (!file_exists($tempStoragePath) || filesize($tempStoragePath) === 0) {
+                @unlink($tempStoragePath); // Clean up
+                throw new \RuntimeException('Copied file is invalid or empty.');
+            }
+            
             try {
-                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+                // Try to load from the copied file
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempStoragePath);
                 $sheetNames = [];
                 foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
                     $sheetNames[] = $worksheet->getTitle();
@@ -464,38 +503,35 @@ class EmployeeController extends Controller
                     'expected_sheets' => ['C1', 'C2', 'C3', 'C4'],
                 ]);
             } catch (\Throwable $e) {
+                @unlink($tempStoragePath); // Clean up
                 Log::warning('Could not inspect file sheets before extraction', [
                     'error' => $e->getMessage(),
                     'exception_class' => get_class($e),
                 ]);
+                throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format: ' . $e->getMessage());
             }
             
             // Try extraction with detailed error handling
             try {
-                // Double-check file is still accessible before extraction
-                if (!file_exists($path)) {
-                    throw new \RuntimeException('File was deleted before extraction could complete.');
-                }
-                if (!is_readable($path)) {
-                    throw new \RuntimeException('File is not readable. Check file permissions.');
-                }
-                
-                // Verify file is not empty
-                if ($fileSize === 0) {
-                    throw new \RuntimeException('Uploaded file is empty.');
-                }
-                
-                $data = $importer->extract($validated['pds_file']);
+                // Use the copied file for extraction
+                $data = $importer->extract($tempStoragePath);
                 
                 Log::info('CS Form 212 extraction successful', [
                     'file_name' => $file->getClientOriginalName(),
                     'fields_extracted' => count($data),
                 ]);
+                
+                // Clean up temp file after successful extraction
+                @unlink($tempStoragePath);
             } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $extractError) {
+                // Clean up temp file on error
+                @unlink($tempStoragePath);
+                
                 // PhpSpreadsheet specific errors (corrupted file, unsupported format, etc.)
                 Log::error('CS Form 212 extraction failed (PhpSpreadsheet error)', [
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
+                    'temp_path' => $tempStoragePath,
                     'file_size' => $fileSize,
                     'error' => $extractError->getMessage(),
                     'exception_class' => get_class($extractError),
@@ -503,10 +539,14 @@ class EmployeeController extends Controller
                 ]);
                 throw $extractError;
             } catch (\RuntimeException $extractError) {
+                // Clean up temp file on error
+                @unlink($tempStoragePath);
+                
                 // Runtime errors from the importer
                 Log::error('CS Form 212 extraction failed (Runtime error)', [
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
+                    'temp_path' => $tempStoragePath,
                     'file_size' => $fileSize,
                     'file_exists' => file_exists($path),
                     'is_readable' => is_readable($path),
@@ -516,10 +556,14 @@ class EmployeeController extends Controller
                 ]);
                 throw $extractError;
             } catch (\Throwable $extractError) {
+                // Clean up temp file on error
+                @unlink($tempStoragePath);
+                
                 // Any other errors
                 Log::error('CS Form 212 extraction failed (General error)', [
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
+                    'temp_path' => $tempStoragePath,
                     'file_size' => $fileSize,
                     'error' => $extractError->getMessage(),
                     'exception_class' => get_class($extractError),
