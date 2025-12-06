@@ -308,14 +308,35 @@ class EmployeeController extends Controller
         ]);
 
         try {
+            // More flexible validation - check extension and MIME type
             $validated = $request->validate([
-                'pds_file' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240'],
+                'pds_file' => [
+                    'required', 
+                    'file', 
+                    'mimes:xlsx,xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
+                    'max:10240'
+                ],
             ], [
                 'pds_file.required' => 'Please select a file to upload.',
                 'pds_file.file' => 'The uploaded file is not valid.',
                 'pds_file.mimes' => 'The file must be an Excel file (.xlsx or .xls).',
                 'pds_file.max' => 'The file size must not exceed 10MB.',
             ]);
+            
+            // Additional validation: check file extension manually
+            $file = $request->file('pds_file');
+            $extension = strtolower($file->getClientOriginalExtension());
+            if (!in_array($extension, ['xlsx', 'xls'])) {
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'message' => 'Validation failed',
+                        'errors' => [
+                            'pds_file' => ['The file must be an Excel file (.xlsx or .xls).']
+                        ],
+                    ], 422);
+                }
+                return back()->withErrors(['pds_file' => 'The file must be an Excel file (.xlsx or .xls).']);
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('CS Form 212 validation failed', [
                 'errors' => $e->errors(),
