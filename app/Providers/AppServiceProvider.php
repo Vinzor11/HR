@@ -7,6 +7,7 @@ use App\Models\RequestSubmission;
 use App\Observers\LeaveRequestObserver;
 use App\Observers\CertificateGenerationObserver;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
 use Laravel\Passport\Contracts\AuthorizationViewResponse;
 use Laravel\Passport\Passport;
 
@@ -25,6 +26,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Force HTTPS URLs in production or when request is secure
+        if (config('app.env') === 'production' || request()->secure()) {
+            URL::forceScheme('https');
+            
+            // Ensure APP_URL uses HTTPS for Vite asset generation
+            $appUrl = config('app.url');
+            if ($appUrl && str_starts_with($appUrl, 'http://')) {
+                config(['app.url' => str_replace('http://', 'https://', $appUrl)]);
+            }
+        }
+        
         // Register Leave Request Observer
         RequestSubmission::observe(LeaveRequestObserver::class);
         
