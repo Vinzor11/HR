@@ -2,6 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/custom-toast';
+import axios from 'axios';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { FloatingInput } from '@/components/ui/floating-input';
@@ -1954,54 +1955,70 @@ export default function CreateEmployee({ employee, departments, positions, facul
     console.log('CS Form 212 upload URL:', importUrl);
     console.log('File details:', { name: file.name, size: file.size, type: file.type });
 
-    router.post(importUrl, { pds_file: file }, {
-      forceFormData: true,
-      preserveState: true,
-      preserveScroll: true,
-      onBefore: () => {
-        console.log('Starting CS Form 212 upload...');
+    // Use axios directly for file uploads (more reliable than Inertia router.post)
+    const formData = new FormData();
+    formData.append('pds_file', file);
+
+    // Get CSRF token from meta tag
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    
+    axios.post(importUrl, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'X-CSRF-TOKEN': csrfToken || '',
+        'X-Requested-With': 'XMLHttpRequest',
       },
-      onSuccess: (page) => {
-        console.log('CS Form 212 upload success:', page);
-        // Set pendingImport from the server response
-        const importedData = (page.props as any)?.importedData;
-        if (importedData) {
-          // Reset the processed flag to allow new import
-          hasProcessedImportedData.current = false;
-          setPendingImport(importedData as Partial<FormState>);
-          hasProcessedImportedData.current = true;
-          toast.success('CS Form 212 file uploaded successfully. Please review the preview below.');
-        } else {
-          toast.warning('File uploaded but no data was extracted. Please check the file format.');
-        }
-      },
-      onError: (uploadErrors) => {
-        console.error('CS Form 212 upload error:', uploadErrors);
-        console.error('Error details:', JSON.stringify(uploadErrors, null, 2));
-        
-        const uploadError = uploadErrors.pds_file ?? uploadErrors.error ?? uploadErrors.message ?? 'Failed to import CS Form 212 file.';
-        const message = Array.isArray(uploadError) ? uploadError[0] : uploadError;
-        
-        // Provide more helpful error messages
-        if (message.includes('403') || message.includes('Forbidden') || message.includes('Unauthorized')) {
-          toast.error('You do not have permission to upload CS Form 212 files. Please contact an administrator.');
-        } else if (message.includes('mimes') || message.includes('file type') || message.includes('extension')) {
-          toast.error('Invalid file type. Please upload an Excel file (.xlsx or .xls).');
-        } else if (message.includes('max') || message.includes('size') || message.includes('too large')) {
-          toast.error('File size exceeds the limit. Please upload a file smaller than 10MB.');
-        } else if (message.includes('Network Error') || message.includes('Failed to fetch')) {
-          toast.error('Network error. Please check your connection and try again.');
-        } else {
-          toast.error(message || 'Failed to import CS Form 212 file. Please check the file format and try again.');
-        }
-      },
-      onFinish: () => {
-        console.log('CS Form 212 upload finished');
-        setIsImporting(false);
-        if (event.target) {
-          event.target.value = '';
-        }
-      },
+      withCredentials: true,
+    })
+    .then((response) => {
+      console.log('CS Form 212 upload success:', response);
+      
+      // Get importedData from response
+      const importedData = response.data?.importedData || response.data?.data?.importedData;
+      
+      if (importedData) {
+        // Reset the processed flag to allow new import
+        hasProcessedImportedData.current = false;
+        setPendingImport(importedData as Partial<FormState>);
+        hasProcessedImportedData.current = true;
+        toast.success(response.data?.message || 'CS Form 212 file uploaded successfully. Please review the preview below.');
+      } else {
+        toast.warning('File uploaded but no data was extracted. Please check the file format.');
+      }
+    })
+    .catch((error) => {
+      console.error('CS Form 212 upload error:', error);
+      console.error('Error response:', error.response);
+      
+      let message = 'Failed to import CS Form 212 file. Please check the file format and try again.';
+      
+      if (error.response) {
+        const errors = error.response.data?.errors || error.response.data;
+        const uploadError = errors?.pds_file ?? errors?.error ?? error.response.data?.message;
+        message = Array.isArray(uploadError) ? uploadError[0] : uploadError || message;
+      } else if (error.message) {
+        message = error.message;
+      }
+      
+      // Provide more helpful error messages
+      if (message.includes('403') || message.includes('Forbidden') || message.includes('Unauthorized')) {
+        toast.error('You do not have permission to upload CS Form 212 files. Please contact an administrator.');
+      } else if (message.includes('mimes') || message.includes('file type') || message.includes('extension')) {
+        toast.error('Invalid file type. Please upload an Excel file (.xlsx or .xls).');
+      } else if (message.includes('max') || message.includes('size') || message.includes('too large')) {
+        toast.error('File size exceeds the limit. Please upload a file smaller than 10MB.');
+      } else if (message.includes('Network Error') || message.includes('Failed to fetch') || message.includes('Network')) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error(message);
+      }
+    })
+    .finally(() => {
+      console.log('CS Form 212 upload finished');
+      setIsImporting(false);
+      if (event.target) {
+        event.target.value = '';
+      }
     });
   };
 

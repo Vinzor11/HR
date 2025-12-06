@@ -308,7 +308,24 @@ class EmployeeController extends Controller
                 'error' => $exception->getMessage(),
             ]);
 
+            // Return JSON for AJAX requests, otherwise redirect back
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'error' => 'Unable to read the CS Form 212 file. Please ensure it follows the configured template.',
+                    'message' => 'Unable to read the CS Form 212 file. Please ensure it follows the configured template.',
+                ], 422);
+            }
+
             return back()->with('error', 'Unable to read the CS Form 212 file. Please ensure it follows the configured template.');
+        }
+
+        // Return JSON for AJAX requests, otherwise redirect back
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'importedData' => $data,
+                'success' => 'CS Form 212 data extracted successfully. Review the auto-filled form before saving.',
+                'message' => 'CS Form 212 data extracted successfully. Review the auto-filled form before saving.',
+            ]);
         }
 
         return back()
