@@ -615,32 +615,27 @@ class EmployeeController extends Controller
                     'expected_sheets' => ['C1', 'C2', 'C3', 'C4'],
                 ]);
             } catch (\Throwable $e) {
-                @unlink($path); // Clean up stored file
                 Log::error('Could not inspect file sheets before extraction', [
                     'error' => $e->getMessage(),
                     'exception_class' => get_class($e),
                     'file_path' => $path,
                     'file_size' => filesize($path),
+                    'file_exists' => file_exists($path),
+                    'is_readable' => is_readable($path),
                 ]);
                 throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format: ' . $e->getMessage());
             }
             
             // Try extraction with detailed error handling
             try {
-                // Use the stored file for extraction
+                // Use the file directly for extraction
                 $data = $importer->extract($path);
                 
                 Log::info('CS Form 212 extraction successful', [
                     'file_name' => $file->getClientOriginalName(),
                     'fields_extracted' => count($data),
                 ]);
-                
-                // Clean up stored file after successful extraction
-                @unlink($path);
             } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $extractError) {
-                // Clean up stored file on error
-                @unlink($path);
-                
                 // PhpSpreadsheet specific errors (corrupted file, unsupported format, etc.)
                 Log::error('CS Form 212 extraction failed (PhpSpreadsheet error)', [
                     'file_name' => $file->getClientOriginalName(),
@@ -652,9 +647,6 @@ class EmployeeController extends Controller
                 ]);
                 throw $extractError;
             } catch (\RuntimeException $extractError) {
-                // Clean up stored file on error
-                @unlink($path);
-                
                 // Runtime errors from the importer
                 Log::error('CS Form 212 extraction failed (Runtime error)', [
                     'file_name' => $file->getClientOriginalName(),
@@ -668,9 +660,6 @@ class EmployeeController extends Controller
                 ]);
                 throw $extractError;
             } catch (\Throwable $extractError) {
-                // Clean up stored file on error
-                @unlink($path);
-                
                 // Any other errors
                 Log::error('CS Form 212 extraction failed (General error)', [
                     'file_name' => $file->getClientOriginalName(),
