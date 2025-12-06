@@ -79,11 +79,50 @@ class CsForm212Importer
         }
 
         try {
-            // Try to load the spreadsheet
-            $spreadsheet = IOFactory::load($path);
+            // Try to determine file type and use appropriate reader
+            $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+            
+            // Log file details before attempting to load
+            \Log::info('Attempting to load Excel file', [
+                'path' => $path,
+                'extension' => $extension,
+                'file_size' => filesize($path),
+                'is_readable' => is_readable($path),
+            ]);
+            
+            // Try to load with explicit reader for better error messages
+            if ($extension === 'xlsx') {
+                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
+                // Set reader options to handle potential issues
+                $reader->setReadDataOnly(false);
+                $reader->setReadEmptyCells(true);
+                $spreadsheet = $reader->load($path);
+            } elseif ($extension === 'xls') {
+                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xls');
+                $reader->setReadDataOnly(false);
+                $reader->setReadEmptyCells(true);
+                $spreadsheet = $reader->load($path);
+            } else {
+                // Fallback to auto-detect
+                $spreadsheet = IOFactory::load($path);
+            }
         } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
+            \Log::error('PhpSpreadsheet Reader Exception in loadSheets', [
+                'path' => $path,
+                'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
+                'file_size' => filesize($path),
+                'trace' => $e->getTraceAsString(),
+            ]);
             throw new RuntimeException('Unable to read the Excel file. It may be corrupted, password-protected, or in an unsupported format: ' . $e->getMessage());
         } catch (\Throwable $e) {
+            \Log::error('General Exception in loadSheets', [
+                'path' => $path,
+                'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
+                'file_size' => filesize($path),
+                'trace' => $e->getTraceAsString(),
+            ]);
             throw new RuntimeException('An error occurred while reading the file: ' . $e->getMessage());
         }
 
