@@ -432,34 +432,54 @@ class EmployeeController extends Controller
         }
 
         try {
-            // Use Laravel's store method to save the file properly
             $file = $validated['pds_file'];
+            $originalPath = $file->getRealPath();
             
-            // Store the file using Laravel's filesystem (more reliable than manual copy)
-            $storedPath = $file->store('temp/cs_form_212', 'local');
-            $fullStoredPath = storage_path('app/' . $storedPath);
-            
-            // Verify the stored file
-            if (!file_exists($fullStoredPath)) {
-                throw new \RuntimeException('File was not stored correctly.');
+            // Verify original file exists and is readable
+            if (!$originalPath || !file_exists($originalPath)) {
+                throw new \RuntimeException('Uploaded file path is invalid or file does not exist.');
             }
             
-            $fileSize = filesize($fullStoredPath);
+            $fileSize = filesize($originalPath);
             if ($fileSize === 0) {
-                @unlink($fullStoredPath);
-                throw new \RuntimeException('Stored file is empty.');
+                throw new \RuntimeException('Uploaded file is empty.');
             }
             
-            Log::info('CS Form 212 file stored', [
+            Log::info('CS Form 212 file details', [
                 'file_name' => $file->getClientOriginalName(),
-                'stored_path' => $fullStoredPath,
+                'original_path' => $originalPath,
                 'file_size' => $fileSize,
-                'file_exists' => file_exists($fullStoredPath),
-                'is_readable' => is_readable($fullStoredPath),
+                'file_exists' => file_exists($originalPath),
+                'is_readable' => is_readable($originalPath),
+                'is_valid' => $file->isValid(),
             ]);
             
-            // Use the stored file path for all operations
-            $path = $fullStoredPath;
+            // Try to use the original file path directly first
+            // If that doesn't work, we'll use store() as fallback
+            $path = $originalPath;
+            
+            // Verify we can read from the original path
+            if (!is_readable($path)) {
+                // Fallback: Use store() method
+                try {
+                    $storedPath = $file->store('temp/cs_form_212', 'local');
+                    $path = storage_path('app/' . $storedPath);
+                    
+                    if (!file_exists($path) || filesize($path) === 0) {
+                        throw new \RuntimeException('File was not stored correctly via store() method.');
+                    }
+                    
+                    Log::info('CS Form 212 file stored using store() method', [
+                        'stored_path' => $path,
+                        'file_size' => filesize($path),
+                    ]);
+                } catch (\Throwable $storeError) {
+                    Log::error('Failed to store file using store() method', [
+                        'error' => $storeError->getMessage(),
+                    ]);
+                    throw new \RuntimeException('Failed to store uploaded file: ' . $storeError->getMessage());
+                }
+            }
             Log::info('CS Form 212 file details before extraction', [
                 'file_name' => $file->getClientOriginalName(),
                 'file_path' => $path,
