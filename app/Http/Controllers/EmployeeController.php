@@ -432,17 +432,34 @@ class EmployeeController extends Controller
         }
 
         try {
-            // First, try to load the file and check what sheets it has
+            // Use Laravel's store method to save the file properly
             $file = $validated['pds_file'];
-            $path = $file->getRealPath();
             
-            // Verify file exists and is readable
-            if (!$path || !file_exists($path)) {
-                throw new \RuntimeException('Uploaded file path is invalid or file does not exist.');
+            // Store the file using Laravel's filesystem (more reliable than manual copy)
+            $storedPath = $file->store('temp/cs_form_212', 'local');
+            $fullStoredPath = storage_path('app/' . $storedPath);
+            
+            // Verify the stored file
+            if (!file_exists($fullStoredPath)) {
+                throw new \RuntimeException('File was not stored correctly.');
             }
             
-            // Check file size
-            $fileSize = filesize($path);
+            $fileSize = filesize($fullStoredPath);
+            if ($fileSize === 0) {
+                @unlink($fullStoredPath);
+                throw new \RuntimeException('Stored file is empty.');
+            }
+            
+            Log::info('CS Form 212 file stored', [
+                'file_name' => $file->getClientOriginalName(),
+                'stored_path' => $fullStoredPath,
+                'file_size' => $fileSize,
+                'file_exists' => file_exists($fullStoredPath),
+                'is_readable' => is_readable($fullStoredPath),
+            ]);
+            
+            // Use the stored file path for all operations
+            $path = $fullStoredPath;
             Log::info('CS Form 212 file details before extraction', [
                 'file_name' => $file->getClientOriginalName(),
                 'file_path' => $path,
@@ -578,35 +595,36 @@ class EmployeeController extends Controller
                     'expected_sheets' => ['C1', 'C2', 'C3', 'C4'],
                 ]);
             } catch (\Throwable $e) {
-                @unlink($tempStoragePath); // Clean up
-                Log::warning('Could not inspect file sheets before extraction', [
+                @unlink($path); // Clean up stored file
+                Log::error('Could not inspect file sheets before extraction', [
                     'error' => $e->getMessage(),
                     'exception_class' => get_class($e),
+                    'file_path' => $path,
+                    'file_size' => filesize($path),
                 ]);
                 throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format: ' . $e->getMessage());
             }
             
             // Try extraction with detailed error handling
             try {
-                // Use the copied file for extraction
-                $data = $importer->extract($tempStoragePath);
+                // Use the stored file for extraction
+                $data = $importer->extract($path);
                 
                 Log::info('CS Form 212 extraction successful', [
                     'file_name' => $file->getClientOriginalName(),
                     'fields_extracted' => count($data),
                 ]);
                 
-                // Clean up temp file after successful extraction
-                @unlink($tempStoragePath);
+                // Clean up stored file after successful extraction
+                @unlink($path);
             } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $extractError) {
-                // Clean up temp file on error
-                @unlink($tempStoragePath);
+                // Clean up stored file on error
+                @unlink($path);
                 
                 // PhpSpreadsheet specific errors (corrupted file, unsupported format, etc.)
                 Log::error('CS Form 212 extraction failed (PhpSpreadsheet error)', [
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
-                    'temp_path' => $tempStoragePath,
                     'file_size' => $fileSize,
                     'error' => $extractError->getMessage(),
                     'exception_class' => get_class($extractError),
@@ -614,14 +632,13 @@ class EmployeeController extends Controller
                 ]);
                 throw $extractError;
             } catch (\RuntimeException $extractError) {
-                // Clean up temp file on error
-                @unlink($tempStoragePath);
+                // Clean up stored file on error
+                @unlink($path);
                 
                 // Runtime errors from the importer
                 Log::error('CS Form 212 extraction failed (Runtime error)', [
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
-                    'temp_path' => $tempStoragePath,
                     'file_size' => $fileSize,
                     'file_exists' => file_exists($path),
                     'is_readable' => is_readable($path),
@@ -631,14 +648,13 @@ class EmployeeController extends Controller
                 ]);
                 throw $extractError;
             } catch (\Throwable $extractError) {
-                // Clean up temp file on error
-                @unlink($tempStoragePath);
+                // Clean up stored file on error
+                @unlink($path);
                 
                 // Any other errors
                 Log::error('CS Form 212 extraction failed (General error)', [
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
-                    'temp_path' => $tempStoragePath,
                     'file_size' => $fileSize,
                     'error' => $extractError->getMessage(),
                     'exception_class' => get_class($extractError),
