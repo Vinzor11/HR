@@ -296,9 +296,19 @@ class EmployeeController extends Controller
 
     public function importCsForm212(Request $request, CsForm212Importer $importer)
     {
-        // Debug logging
+        // Debug logging - check request details BEFORE accessing file
+        Log::info('CS Form 212 upload attempt - Request details', [
+            'content_length' => $request->header('Content-Length'),
+            'content_type' => $request->header('Content-Type'),
+            'has_file' => $request->hasFile('pds_file'),
+            'all_input_keys' => array_keys($request->all()),
+            'expects_json' => $request->expectsJson(),
+            'is_ajax' => $request->ajax(),
+            'method' => $request->method(),
+        ]);
+        
         $file = $request->file('pds_file');
-        Log::info('CS Form 212 upload attempt', [
+        Log::info('CS Form 212 upload attempt - File details', [
             'has_file' => $request->hasFile('pds_file'),
             'file_name' => $file?->getClientOriginalName(),
             'file_size' => $file?->getSize(),
@@ -306,9 +316,52 @@ class EmployeeController extends Controller
             'file_extension' => $file?->getClientOriginalExtension(),
             'file_is_valid' => $file?->isValid(),
             'file_error' => $file?->getError(),
-            'expects_json' => $request->expectsJson(),
-            'is_ajax' => $request->ajax(),
+            'file_error_message' => $file?->getErrorMessage(),
+            'file_path' => $file?->getRealPath(),
+            'file_path_exists' => $file ? file_exists($file->getRealPath()) : false,
         ]);
+        
+        // Check if file is missing or invalid BEFORE validation
+        if (!$request->hasFile('pds_file')) {
+            Log::error('CS Form 212 upload - No file in request', [
+                'content_length' => $request->header('Content-Length'),
+                'content_type' => $request->header('Content-Type'),
+                'all_input' => $request->all(),
+            ]);
+            
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => [
+                        'pds_file' => ['No file was uploaded. Please select a file and try again.']
+                    ],
+                ], 422);
+            }
+            return back()->withErrors(['pds_file' => 'No file was uploaded. Please select a file and try again.']);
+        }
+        
+        if (!$file || !$file->isValid()) {
+            $errorMessage = 'The uploaded file is invalid or corrupted.';
+            if ($file && $file->getError()) {
+                $errorMessage = 'File upload error: ' . $file->getErrorMessage() . ' (Error code: ' . $file->getError() . ')';
+            }
+            
+            Log::error('CS Form 212 upload - Invalid file', [
+                'file_error' => $file?->getError(),
+                'file_error_message' => $file?->getErrorMessage(),
+                'file_name' => $file?->getClientOriginalName(),
+            ]);
+            
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => [
+                        'pds_file' => [$errorMessage]
+                    ],
+                ], 422);
+            }
+            return back()->withErrors(['pds_file' => $errorMessage]);
+        }
 
         try {
             // More flexible validation - check extension and MIME type
