@@ -1959,8 +1959,15 @@ export default function CreateEmployee({ employee, departments, positions, facul
     const formData = new FormData();
     formData.append('pds_file', file);
 
+    // Debug: Log FormData contents
+    console.log('FormData entries:');
+    for (const pair of formData.entries()) {
+      console.log(pair[0] + ': ', pair[1]);
+    }
+
     // Get CSRF token from meta tag
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    console.log('CSRF Token:', csrfToken ? 'Found' : 'Missing');
     
     axios.post(importUrl, formData, {
       headers: {

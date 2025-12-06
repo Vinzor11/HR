@@ -296,11 +296,35 @@ class EmployeeController extends Controller
 
     public function importCsForm212(Request $request, CsForm212Importer $importer)
     {
+        // Debug logging
+        Log::info('CS Form 212 upload attempt', [
+            'has_file' => $request->hasFile('pds_file'),
+            'file_name' => $request->file('pds_file')?->getClientOriginalName(),
+            'file_size' => $request->file('pds_file')?->getSize(),
+            'file_mime' => $request->file('pds_file')?->getMimeType(),
+            'expects_json' => $request->expectsJson(),
+            'is_ajax' => $request->ajax(),
+            'all_input' => $request->all(),
+        ]);
+
         try {
             $validated = $request->validate([
                 'pds_file' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240'],
+            ], [
+                'pds_file.required' => 'Please select a file to upload.',
+                'pds_file.file' => 'The uploaded file is not valid.',
+                'pds_file.mimes' => 'The file must be an Excel file (.xlsx or .xls).',
+                'pds_file.max' => 'The file size must not exceed 10MB.',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('CS Form 212 validation failed', [
+                'errors' => $e->errors(),
+                'file_info' => [
+                    'has_file' => $request->hasFile('pds_file'),
+                    'file_name' => $request->file('pds_file')?->getClientOriginalName(),
+                ],
+            ]);
+            
             // Return JSON validation errors for AJAX requests
             if ($request->expectsJson() || $request->ajax()) {
                 return response()->json([
