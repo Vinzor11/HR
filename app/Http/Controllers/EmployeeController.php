@@ -379,6 +379,28 @@ class EmployeeController extends Controller
         }
 
         try {
+            // First, try to load the file and check what sheets it has
+            $file = $validated['pds_file'];
+            $path = $file->getRealPath();
+            
+            try {
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+                $sheetNames = [];
+                foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
+                    $sheetNames[] = $worksheet->getTitle();
+                }
+                
+                Log::info('CS Form 212 file sheets detected', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'sheets_found' => $sheetNames,
+                    'expected_sheets' => ['C1', 'C2', 'C3', 'C4'],
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('Could not inspect file sheets before extraction', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            
             $data = $importer->extract($validated['pds_file']);
         } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
             // PhpSpreadsheet couldn't read the file
@@ -425,18 +447,64 @@ class EmployeeController extends Controller
             return back()->with('error', $errorMessage);
         } catch (\Throwable $exception) {
             // Catch any other exceptions
+            $exceptionMessage = $exception->getMessage();
+            $exceptionClass = get_class($exception);
+            
+            // Try to get sheet information for better error message
+            $sheetInfo = null;
+            try {
+                $file = $validated['pds_file'] ?? $request->file('pds_file');
+                if ($file) {
+                    $path = $file->getRealPath();
+                    $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+                    $sheetNames = [];
+                    foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
+                        $sheetNames[] = $worksheet->getTitle();
+                    }
+                    $sheetInfo = [
+                        'sheets_found' => $sheetNames,
+                        'expected_sheets' => ['C1', 'C2', 'C3', 'C4'],
+                        'has_c1' => in_array('C1', $sheetNames),
+                        'has_c2' => in_array('C2', $sheetNames),
+                        'has_c3' => in_array('C3', $sheetNames),
+                        'has_c4' => in_array('C4', $sheetNames),
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // Ignore errors when trying to get sheet info
+            }
+            
             Log::error('Failed to import CS Form 212 (Unexpected error)', [
                 'file_name' => $request->file('pds_file')?->getClientOriginalName(),
-                'error' => $exception->getMessage(),
-                'exception_class' => get_class($exception),
+                'error' => $exceptionMessage,
+                'exception_class' => $exceptionClass,
+                'sheet_info' => $sheetInfo,
                 'trace' => $exception->getTraceAsString(),
             ]);
 
             $errorMessage = 'Unable to process the CS Form 212 file. The file may not match the expected template format.';
+            $details = 'Please ensure the file follows the configured CS Form 212 template. If the file worked before, it may have been modified or saved in a different format.';
             
-            // Provide more specific error if available
-            if (str_contains($exception->getMessage(), 'sheet') || str_contains($exception->getMessage(), 'cell')) {
+            // Provide more specific error based on exception message
+            if (str_contains($exceptionMessage, 'sheet') || str_contains($exceptionMessage, 'cell')) {
                 $errorMessage = 'The file structure does not match the expected CS Form 212 template. Please use the official template.';
+            }
+            
+            // If we have sheet info, provide more specific guidance
+            if ($sheetInfo) {
+                $missingSheets = [];
+                if (!$sheetInfo['has_c1']) $missingSheets[] = 'C1';
+                if (!$sheetInfo['has_c2']) $missingSheets[] = 'C2';
+                if (!$sheetInfo['has_c3']) $missingSheets[] = 'C3';
+                if (!$sheetInfo['has_c4']) $missingSheets[] = 'C4';
+                
+                if (!empty($missingSheets)) {
+                    $errorMessage = 'The file is missing required sheets: ' . implode(', ', $missingSheets) . '. Please use the official CS Form 212 template.';
+                    $details = 'Found sheets: ' . implode(', ', $sheetInfo['sheets_found']) . '. Expected sheets: C1, C2, C3, C4.';
+                } elseif (count($sheetInfo['sheets_found']) > 4) {
+                    $errorMessage = 'The file has extra sheets or different sheet names than expected.';
+                    $details = 'Found sheets: ' . implode(', ', $sheetInfo['sheets_found']) . '. Expected sheets: C1, C2, C3, C4.';
+                }
             }
 
             // Return JSON for AJAX requests, otherwise redirect back
@@ -444,7 +512,8 @@ class EmployeeController extends Controller
                 return response()->json([
                     'error' => $errorMessage,
                     'message' => $errorMessage,
-                    'details' => 'Please ensure the file follows the configured CS Form 212 template. If the file worked before, it may have been modified or saved in a different format.',
+                    'details' => $details,
+                    'sheet_info' => $sheetInfo,
                 ], 422);
             }
 
