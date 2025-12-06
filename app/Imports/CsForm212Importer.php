@@ -68,12 +68,34 @@ class CsForm212Importer
             throw new RuntimeException('Unable to read the uploaded CS Form 212 file.');
         }
 
-        $spreadsheet = IOFactory::load($path);
+        // Verify file is readable and not empty
+        if (!is_readable($path)) {
+            throw new RuntimeException('The uploaded file is not readable. Please check file permissions.');
+        }
+
+        $fileSize = filesize($path);
+        if ($fileSize === 0) {
+            throw new RuntimeException('The uploaded file is empty.');
+        }
+
+        try {
+            // Try to load the spreadsheet
+            $spreadsheet = IOFactory::load($path);
+        } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
+            throw new RuntimeException('Unable to read the Excel file. It may be corrupted, password-protected, or in an unsupported format: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            throw new RuntimeException('An error occurred while reading the file: ' . $e->getMessage());
+        }
+
         $sheets = [];
 
-        foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
-            $rows = $worksheet->toArray(null, true, true, true);
-            $sheets[$worksheet->getTitle()] = $this->indexSheet($rows);
+        try {
+            foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
+                $rows = $worksheet->toArray(null, true, true, true);
+                $sheets[$worksheet->getTitle()] = $this->indexSheet($rows);
+            }
+        } catch (\Throwable $e) {
+            throw new RuntimeException('An error occurred while processing the worksheet data: ' . $e->getMessage());
         }
 
         if (empty($sheets)) {
