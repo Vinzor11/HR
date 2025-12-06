@@ -59,27 +59,17 @@ export default defineConfig({
         // Enable code splitting and chunk optimization
         rollupOptions: {
             output: {
-                // Manual chunk splitting for better caching and parallel loading
+                // Simplified chunking strategy - let Vite handle React dependencies automatically
+                // Only split out the largest library (lucide-react) to reduce initial bundle size
                 manualChunks: (id) => {
-                    // Split node_modules into separate chunks
                     if (id.includes('node_modules')) {
-                        // CRITICAL: React must be in its own chunk and load FIRST
-                        // All other chunks depend on React, so it must be available before they load
-                        if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
-                            return 'react-vendor';
-                        }
-                        // Large libraries get their own chunks (but they depend on React)
+                        // Only split out lucide-react as it's the largest single dependency (763KB)
+                        // Let Vite automatically handle React and other dependencies to ensure proper loading order
                         if (id.includes('lucide-react')) {
                             return 'lucide-icons';
                         }
-                        if (id.includes('@radix-ui') || id.includes('@headlessui')) {
-                            return 'ui-vendor';
-                        }
-                        if (id.includes('axios') || id.includes('@inertiajs')) {
-                            return 'http-vendor';
-                        }
-                        // Other node_modules
-                        return 'vendor';
+                        // Let Vite handle all other chunking automatically to ensure proper dependency order
+                        // This prevents "useLayoutEffect" errors by ensuring React loads before dependent chunks
                     }
                 },
                 // Optimize chunk file names for better caching
@@ -88,20 +78,16 @@ export default defineConfig({
                 assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
             },
         },
-        // Increase chunk size warning limit (we're intentionally creating larger chunks for better caching)
+        // Increase chunk size warning limit
         chunkSizeWarningLimit: 1000,
         // Enable minification
         minify: 'esbuild',
-        // Enable source maps in production for debugging (optional, can disable for smaller files)
+        // Disable source maps for smaller files
         sourcemap: false,
         // Optimize CSS
         cssCodeSplit: true,
         // Target modern browsers for smaller bundles
         target: 'es2015',
-        // Common chunk strategy to ensure React is shared properly
-        commonjsOptions: {
-            include: [/node_modules/],
-        },
     },
     esbuild: {
         jsx: 'automatic',
