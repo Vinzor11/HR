@@ -20,9 +20,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Plus, Key, Copy, CheckCircle2 } from 'lucide-react';
+import { Plus, Key, Copy, CheckCircle2, Eye, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { router } from '@inertiajs/react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Client {
     id: string;
@@ -44,6 +55,10 @@ export default function Clients({ clients }: ClientsProps) {
         redirect_uri?: string;
     } | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+    const [viewDialogOpen, setViewDialogOpen] = useState(false);
+    const [viewingClient, setViewingClient] = useState<Client | null>(null);
 
     useEffect(() => {
         if (flash?.newClient) {
@@ -76,6 +91,31 @@ export default function Clients({ clients }: ClientsProps) {
         setCopied(type);
         toast.success('Copied to clipboard!');
         setTimeout(() => setCopied(null), 2000);
+    };
+
+    const handleDelete = (client: Client) => {
+        setClientToDelete(client);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (clientToDelete) {
+            router.delete(`/oauth/clients/${clientToDelete.id}`, {
+                onSuccess: () => {
+                    toast.success('OAuth client deleted successfully');
+                    setDeleteDialogOpen(false);
+                    setClientToDelete(null);
+                },
+                onError: () => {
+                    toast.error('Failed to delete OAuth client');
+                },
+            });
+        }
+    };
+
+    const handleView = (client: Client) => {
+        setViewingClient(client);
+        setViewDialogOpen(true);
     };
 
     return (
@@ -243,16 +283,53 @@ export default function Clients({ clients }: ClientsProps) {
                         clients.map((client) => (
                             <Card key={client.id}>
                                 <CardHeader>
-                                    <CardTitle>{client.name}</CardTitle>
-                                    <CardDescription>
-                                        Created {new Date(client.created_at).toLocaleDateString()}
-                                    </CardDescription>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle>{client.name}</CardTitle>
+                                            <CardDescription>
+                                                Created {new Date(client.created_at).toLocaleDateString()}
+                                            </CardDescription>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => handleView(client)}
+                                                title="View Details"
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => handleDelete(client)}
+                                                title="Delete Client"
+                                                className="text-destructive hover:text-destructive"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-2">
                                         <div>
                                             <Label className="text-xs text-muted-foreground">Client ID</Label>
-                                            <p className="font-mono text-sm">{client.id}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-mono text-sm">{client.id}</p>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => copyToClipboard(client.id, `client_id_${client.id}`)}
+                                                >
+                                                    {copied === `client_id_${client.id}` ? (
+                                                        <CheckCircle2 className="h-3 w-3" />
+                                                    ) : (
+                                                        <Copy className="h-3 w-3" />
+                                                    )}
+                                                </Button>
+                                            </div>
                                         </div>
                                         <div>
                                             <Label className="text-xs text-muted-foreground">Redirect URI</Label>
@@ -265,6 +342,88 @@ export default function Clients({ clients }: ClientsProps) {
                     )}
                 </div>
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete OAuth Client</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete "{clientToDelete?.name}"? This action cannot be undone.
+                            Any applications using this client will no longer be able to authenticate.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDelete}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* View Client Dialog */}
+            <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>OAuth Client Details</DialogTitle>
+                        <DialogDescription>
+                            View details for {viewingClient?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {viewingClient && (
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label>Client ID</Label>
+                                <div className="flex gap-2">
+                                    <Input value={viewingClient.id} readOnly className="font-mono" />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => copyToClipboard(viewingClient.id, 'view_client_id')}
+                                    >
+                                        {copied === 'view_client_id' ? (
+                                            <CheckCircle2 className="h-4 w-4" />
+                                        ) : (
+                                            <Copy className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Application Name</Label>
+                                <Input value={viewingClient.name} readOnly />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Redirect URI</Label>
+                                <Input value={viewingClient.redirect} readOnly className="break-all" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Created At</Label>
+                                <Input
+                                    value={new Date(viewingClient.created_at).toLocaleString()}
+                                    readOnly
+                                />
+                            </div>
+                            <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950 p-3 border border-yellow-200 dark:border-yellow-800">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                    <strong>Note:</strong> The client secret cannot be retrieved after creation.
+                                    If you need a new secret, delete and recreate this client.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

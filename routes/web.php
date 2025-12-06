@@ -126,6 +126,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'store'])
         ->name('oauth.clients.store')
         ->middleware('permission:access-users-module');
+    Route::get('oauth/clients/{id}', [App\Http\Controllers\OAuth\ClientController::class, 'show'])
+        ->name('oauth.clients.show')
+        ->middleware('permission:access-users-module');
+    Route::delete('oauth/clients/{id}', [App\Http\Controllers\OAuth\ClientController::class, 'destroy'])
+        ->name('oauth.clients.destroy')
+        ->middleware('permission:access-users-module');
 
 });
 
