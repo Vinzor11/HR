@@ -1964,7 +1964,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
     
     axios.post(importUrl, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        // Don't set Content-Type manually - let axios set it with boundary for FormData
         'Accept': 'application/json',
         'X-CSRF-TOKEN': csrfToken || '',
         'X-Requested-With': 'XMLHttpRequest',
@@ -1990,13 +1990,32 @@ export default function CreateEmployee({ employee, departments, positions, facul
     .catch((error) => {
       console.error('CS Form 212 upload error:', error);
       console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
       
       let message = 'Failed to import CS Form 212 file. Please check the file format and try again.';
       
       if (error.response) {
-        const errors = error.response.data?.errors || error.response.data;
-        const uploadError = errors?.pds_file ?? errors?.error ?? error.response.data?.message;
-        message = Array.isArray(uploadError) ? uploadError[0] : uploadError || message;
+        const responseData = error.response.data;
+        
+        // Check for Laravel validation errors
+        if (responseData?.errors) {
+          const errors = responseData.errors;
+          // Get the first error message
+          const firstError = Object.values(errors).flat()[0];
+          message = firstError || message;
+        } else if (responseData?.message) {
+          message = responseData.message;
+        } else if (responseData?.error) {
+          message = responseData.error;
+        }
+        
+        // Check specifically for pds_file validation errors
+        if (responseData?.errors?.pds_file) {
+          const fileError = Array.isArray(responseData.errors.pds_file) 
+            ? responseData.errors.pds_file[0] 
+            : responseData.errors.pds_file;
+          message = fileError || message;
+        }
       } else if (error.message) {
         message = error.message;
       }
@@ -2004,10 +2023,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
       // Provide more helpful error messages
       if (message.includes('403') || message.includes('Forbidden') || message.includes('Unauthorized')) {
         toast.error('You do not have permission to upload CS Form 212 files. Please contact an administrator.');
-      } else if (message.includes('mimes') || message.includes('file type') || message.includes('extension')) {
+      } else if (message.includes('mimes') || message.includes('file type') || message.includes('extension') || message.includes('mime')) {
         toast.error('Invalid file type. Please upload an Excel file (.xlsx or .xls).');
       } else if (message.includes('max') || message.includes('size') || message.includes('too large')) {
         toast.error('File size exceeds the limit. Please upload a file smaller than 10MB.');
+      } else if (message.includes('required') || message.includes('The pds file field is required')) {
+        toast.error('Please select a file to upload.');
       } else if (message.includes('Network Error') || message.includes('Failed to fetch') || message.includes('Network')) {
         toast.error('Network error. Please check your connection and try again.');
       } else {

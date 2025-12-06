@@ -296,9 +296,20 @@ class EmployeeController extends Controller
 
     public function importCsForm212(Request $request, CsForm212Importer $importer)
     {
-        $validated = $request->validate([
-            'pds_file' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240'],
-        ]);
+        try {
+            $validated = $request->validate([
+                'pds_file' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240'],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Return JSON validation errors for AJAX requests
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors(),
+                ], 422);
+            }
+            throw $e;
+        }
 
         try {
             $data = $importer->extract($validated['pds_file']);
