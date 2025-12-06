@@ -3,6 +3,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
 
@@ -40,27 +41,45 @@ class HandleInertiaRequests extends Middleware
 
         $user = $request->user();
         
-        // Load roles and permissions safely, ensuring relationships are loaded
+        // Load roles and permissions efficiently with caching
         $roles = [];
         $permissions = [];
         
         if ($user) {
             try {
-                // Ensure roles relationship is loaded
+                // Load roles with eager loading to prevent N+1
                 if (!$user->relationLoaded('roles')) {
-                    $user->load('roles');
+                    $user->load('roles.permissions'); // Eager load roles and their permissions
                 }
                 $roles = $user->roles->pluck('name')->toArray();
             } catch (\Exception $e) {
-                // If roles can't be loaded, default to empty array
                 $roles = [];
             }
             
             try {
-                // Get permissions safely
-                $permissions = $user->getAllPermissions()->pluck('name')->toArray();
+                // Cache permissions per user for 5 minutes to avoid expensive queries on every request
+                // Cache key includes user ID and updated_at timestamp to invalidate when user changes
+                $cacheKey = "user_permissions_{$user->id}_{$user->updated_at->timestamp}";
+                
+                $permissions = Cache::remember($cacheKey, 300, function () use ($user) {
+                    // Use a more efficient method: get permissions from roles and direct permissions
+                    // This avoids the expensive getAllPermissions() method
+                    $rolePermissions = $user->roles()
+                        ->with('permissions:id,name')
+                        ->get()
+                        ->pluck('permissions')
+                        ->flatten()
+                        ->pluck('name')
+                        ->unique()
+                        ->toArray();
+                    
+                    $directPermissions = $user->permissions()
+                        ->pluck('name')
+                        ->toArray();
+                    
+                    return array_unique(array_merge($rolePermissions, $directPermissions));
+                });
             } catch (\Exception $e) {
-                // If permissions can't be loaded, default to empty array
                 $permissions = [];
             }
         }
@@ -70,13 +89,24 @@ class HandleInertiaRequests extends Middleware
             'name'  => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth'  => [
-                'user'        => $user,
+                'user'        => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'employee_id' => $user->employee_id,
+                    'avatar' => $user->avatar ?? null, // Include avatar if exists
+                ] : null,
                 'roles'       => $roles,
                 'permissions' => $permissions,
             ],
             'ziggy' => function () use ($request): array {
-                $ziggy = new Ziggy();
-                $ziggyArray = $ziggy->toArray();
+                // Cache Ziggy routes for 1 hour since they don't change often
+                $cacheKey = 'ziggy_routes';
+                
+                $ziggyArray = Cache::remember($cacheKey, 3600, function () {
+                    $ziggy = new Ziggy();
+                    return $ziggy->toArray();
+                });
                 
                 // Force HTTPS for base URL from config
                 $baseUrl = config('app.url');
