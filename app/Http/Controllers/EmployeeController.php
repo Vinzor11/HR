@@ -383,6 +383,21 @@ class EmployeeController extends Controller
             $file = $validated['pds_file'];
             $path = $file->getRealPath();
             
+            // Verify file exists and is readable
+            if (!$path || !file_exists($path)) {
+                throw new \RuntimeException('Uploaded file path is invalid or file does not exist.');
+            }
+            
+            // Check file size
+            $fileSize = filesize($path);
+            Log::info('CS Form 212 file details before extraction', [
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'file_size' => $fileSize,
+                'file_exists' => file_exists($path),
+                'is_readable' => is_readable($path),
+            ]);
+            
             try {
                 $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
                 $sheetNames = [];
@@ -398,10 +413,25 @@ class EmployeeController extends Controller
             } catch (\Throwable $e) {
                 Log::warning('Could not inspect file sheets before extraction', [
                     'error' => $e->getMessage(),
+                    'exception_class' => get_class($e),
                 ]);
             }
             
-            $data = $importer->extract($validated['pds_file']);
+            // Try extraction with detailed error handling
+            try {
+                $data = $importer->extract($validated['pds_file']);
+            } catch (\Throwable $extractError) {
+                // Log detailed extraction error
+                Log::error('CS Form 212 extraction failed', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_size' => $fileSize,
+                    'error' => $extractError->getMessage(),
+                    'exception_class' => get_class($extractError),
+                    'trace' => $extractError->getTraceAsString(),
+                ]);
+                throw $extractError;
+            }
         } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
             // PhpSpreadsheet couldn't read the file
             Log::error('Failed to read CS Form 212 file (PhpSpreadsheet error)', [
