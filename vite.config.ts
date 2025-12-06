@@ -63,11 +63,12 @@ export default defineConfig({
                 manualChunks: (id) => {
                     // Split node_modules into separate chunks
                     if (id.includes('node_modules')) {
-                        // CRITICAL: Keep React and React-DOM together to prevent "useLayoutEffect" errors
+                        // CRITICAL: React must be in its own chunk and load FIRST
+                        // All other chunks depend on React, so it must be available before they load
                         if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
                             return 'react-vendor';
                         }
-                        // Large libraries get their own chunks
+                        // Large libraries get their own chunks (but they depend on React)
                         if (id.includes('lucide-react')) {
                             return 'lucide-icons';
                         }
