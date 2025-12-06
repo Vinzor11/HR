@@ -82,31 +82,64 @@ class CsForm212Importer
             // Try to determine file type and use appropriate reader
             $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
             
+            // Verify file before attempting to load
+            if (!file_exists($path)) {
+                throw new RuntimeException('File does not exist at path: ' . $path);
+            }
+            
+            if (!is_readable($path)) {
+                throw new RuntimeException('File is not readable at path: ' . $path);
+            }
+            
+            $actualFileSize = filesize($path);
+            if ($actualFileSize === 0) {
+                throw new RuntimeException('File is empty (0 bytes) at path: ' . $path);
+            }
+            
             // Log file details before attempting to load
             \Log::info('Attempting to load Excel file', [
                 'path' => $path,
                 'extension' => $extension,
-                'file_size' => filesize($path),
+                'file_size' => $actualFileSize,
                 'is_readable' => is_readable($path),
+                'file_exists' => file_exists($path),
             ]);
             
             // Try to load with explicit reader for better error messages
-            if ($extension === 'xlsx') {
-                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
-                // Set reader options to handle potential issues
-                $reader->setReadDataOnly(false);
-                $reader->setReadEmptyCells(true);
-                $spreadsheet = $reader->load($path);
-            } elseif ($extension === 'xls') {
-                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xls');
-                $reader->setReadDataOnly(false);
-                $reader->setReadEmptyCells(true);
-                $spreadsheet = $reader->load($path);
-            } else {
-                // Fallback to auto-detect
-                $spreadsheet = IOFactory::load($path);
+            try {
+                if ($extension === 'xlsx') {
+                    $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
+                    // Set reader options to handle potential issues
+                    $reader->setReadDataOnly(false);
+                    $reader->setReadEmptyCells(true);
+                    $spreadsheet = $reader->load($path);
+                } elseif ($extension === 'xls') {
+                    $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xls');
+                    $reader->setReadDataOnly(false);
+                    $reader->setReadEmptyCells(true);
+                    $spreadsheet = $reader->load($path);
+                } else {
+                    // Fallback to auto-detect
+                    $spreadsheet = IOFactory::load($path);
+                }
+            } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $readerException) {
+                // Log the actual PhpSpreadsheet error with full details
+                \Log::error('PhpSpreadsheet Reader Exception (detailed)', [
+                    'path' => $path,
+                    'error' => $readerException->getMessage(),
+                    'exception_class' => get_class($readerException),
+                    'file_size' => $actualFileSize,
+                    'file_exists' => file_exists($path),
+                    'is_readable' => is_readable($path),
+                    'previous_exception' => $readerException->getPrevious() ? get_class($readerException->getPrevious()) . ': ' . $readerException->getPrevious()->getMessage() : null,
+                    'trace' => $readerException->getTraceAsString(),
+                ]);
+                
+                // Re-throw with the original message for more specific error handling
+                throw $readerException;
             }
         } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
+            // This catches the re-thrown exception from above
             \Log::error('PhpSpreadsheet Reader Exception in loadSheets', [
                 'path' => $path,
                 'error' => $e->getMessage(),
@@ -114,7 +147,18 @@ class CsForm212Importer
                 'file_size' => filesize($path),
                 'trace' => $e->getTraceAsString(),
             ]);
-            throw new RuntimeException('Unable to read the Excel file. It may be corrupted, password-protected, or in an unsupported format: ' . $e->getMessage());
+            
+            // Provide more specific error message based on the exception
+            $errorMessage = $e->getMessage();
+            if (str_contains($errorMessage, 'simplexml_load_string') || str_contains($errorMessage, 'Document is empty')) {
+                $errorMessage = 'The Excel file appears to be corrupted or incomplete. Please try re-saving the file in Excel and upload again.';
+            } elseif (str_contains($errorMessage, 'password') || str_contains($errorMessage, 'encrypted')) {
+                $errorMessage = 'The Excel file is password-protected. Please remove the password and try again.';
+            } elseif (str_contains($errorMessage, 'zip') || str_contains($errorMessage, 'archive')) {
+                $errorMessage = 'The Excel file structure is invalid. Please ensure it is a valid .xlsx or .xls file.';
+            }
+            
+            throw new RuntimeException('Unable to read the Excel file: ' . $errorMessage);
         } catch (\Throwable $e) {
             \Log::error('General Exception in loadSheets', [
                 'path' => $path,
