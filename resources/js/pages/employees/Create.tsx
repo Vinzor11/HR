@@ -1965,6 +1965,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
     axios.post(importUrl, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
+        'Accept': 'application/json',
         'X-CSRF-TOKEN': csrfToken || '',
         'X-Requested-With': 'XMLHttpRequest',
       },
