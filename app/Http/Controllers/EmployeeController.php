@@ -317,7 +317,7 @@ class EmployeeController extends Controller
                     'required', 
                     'file', 
                     'mimes:xlsx,xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
-                    'max:10240'
+                    'max:10240' // This is in KB, so 10240 KB = 10 MB
                 ],
             ], [
                 'pds_file.required' => 'Please select a file to upload.',
@@ -419,10 +419,52 @@ class EmployeeController extends Controller
             
             // Try extraction with detailed error handling
             try {
+                // Double-check file is still accessible before extraction
+                if (!file_exists($path)) {
+                    throw new \RuntimeException('File was deleted before extraction could complete.');
+                }
+                if (!is_readable($path)) {
+                    throw new \RuntimeException('File is not readable. Check file permissions.');
+                }
+                
+                // Verify file is not empty
+                if ($fileSize === 0) {
+                    throw new \RuntimeException('Uploaded file is empty.');
+                }
+                
                 $data = $importer->extract($validated['pds_file']);
+                
+                Log::info('CS Form 212 extraction successful', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'fields_extracted' => count($data),
+                ]);
+            } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $extractError) {
+                // PhpSpreadsheet specific errors (corrupted file, unsupported format, etc.)
+                Log::error('CS Form 212 extraction failed (PhpSpreadsheet error)', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_size' => $fileSize,
+                    'error' => $extractError->getMessage(),
+                    'exception_class' => get_class($extractError),
+                    'trace' => $extractError->getTraceAsString(),
+                ]);
+                throw $extractError;
+            } catch (\RuntimeException $extractError) {
+                // Runtime errors from the importer
+                Log::error('CS Form 212 extraction failed (Runtime error)', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_size' => $fileSize,
+                    'file_exists' => file_exists($path),
+                    'is_readable' => is_readable($path),
+                    'error' => $extractError->getMessage(),
+                    'exception_class' => get_class($extractError),
+                    'trace' => $extractError->getTraceAsString(),
+                ]);
+                throw $extractError;
             } catch (\Throwable $extractError) {
-                // Log detailed extraction error
-                Log::error('CS Form 212 extraction failed', [
+                // Any other errors
+                Log::error('CS Form 212 extraction failed (General error)', [
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
                     'file_size' => $fileSize,
