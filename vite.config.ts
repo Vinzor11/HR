@@ -55,12 +55,60 @@ export default defineConfig({
             usePolling: false,
         },
     },
+    build: {
+        // Enable code splitting and chunk optimization
+        rollupOptions: {
+            output: {
+                // Manual chunk splitting for better caching and parallel loading
+                manualChunks: (id) => {
+                    // Split node_modules into separate chunks
+                    if (id.includes('node_modules')) {
+                        // Large libraries get their own chunks
+                        if (id.includes('lucide-react')) {
+                            return 'lucide-icons';
+                        }
+                        if (id.includes('react') || id.includes('react-dom')) {
+                            return 'react-vendor';
+                        }
+                        if (id.includes('@radix-ui') || id.includes('@headlessui')) {
+                            return 'ui-vendor';
+                        }
+                        if (id.includes('axios') || id.includes('@inertiajs')) {
+                            return 'http-vendor';
+                        }
+                        // Other node_modules
+                        return 'vendor';
+                    }
+                },
+                // Optimize chunk file names for better caching
+                chunkFileNames: 'assets/js/[name]-[hash].js',
+                entryFileNames: 'assets/js/[name]-[hash].js',
+                assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+            },
+        },
+        // Increase chunk size warning limit (we're intentionally creating larger chunks for better caching)
+        chunkSizeWarningLimit: 1000,
+        // Enable minification
+        minify: 'esbuild',
+        // Enable source maps in production for debugging (optional, can disable for smaller files)
+        sourcemap: false,
+        // Optimize CSS
+        cssCodeSplit: true,
+        // Target modern browsers for smaller bundles
+        target: 'es2015',
+    },
     esbuild: {
         jsx: 'automatic',
+        // Drop console and debugger in production
+        drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
     },
     resolve: {
         alias: {
             'ziggy-js': resolve(__dirname, 'vendor/tightenco/ziggy'),
         },
+    },
+    // Optimize dependencies
+    optimizeDeps: {
+        include: ['react', 'react-dom', '@inertiajs/react'],
     },
 });
