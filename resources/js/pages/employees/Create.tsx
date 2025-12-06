@@ -1998,30 +1998,50 @@ export default function CreateEmployee({ employee, departments, positions, facul
       console.error('CS Form 212 upload error:', error);
       console.error('Error response:', error.response);
       console.error('Error response data:', error.response?.data);
+      console.error('Error response status:', error.response?.status);
+      console.error('Full error object:', JSON.stringify(error.response?.data, null, 2));
       
       let message = 'Failed to import CS Form 212 file. Please check the file format and try again.';
       
       if (error.response) {
         const responseData = error.response.data;
         
+        // Log all error details for debugging
+        console.log('Response data structure:', {
+          hasErrors: !!responseData?.errors,
+          hasMessage: !!responseData?.message,
+          hasError: !!responseData?.error,
+          errorsKeys: responseData?.errors ? Object.keys(responseData.errors) : [],
+          fullResponse: responseData,
+        });
+        
         // Check for Laravel validation errors
         if (responseData?.errors) {
           const errors = responseData.errors;
-          // Get the first error message
-          const firstError = Object.values(errors).flat()[0];
-          message = firstError || message;
+          console.log('Validation errors found:', errors);
+          
+          // Get the first error message from any field
+          const allErrors = Object.values(errors).flat();
+          if (allErrors.length > 0) {
+            message = allErrors[0];
+          }
+          
+          // Check specifically for pds_file validation errors (highest priority)
+          if (responseData.errors.pds_file) {
+            const fileError = Array.isArray(responseData.errors.pds_file) 
+              ? responseData.errors.pds_file[0] 
+              : responseData.errors.pds_file;
+            message = fileError || message;
+            console.log('File-specific error:', fileError);
+          }
         } else if (responseData?.message) {
           message = responseData.message;
         } else if (responseData?.error) {
           message = responseData.error;
-        }
-        
-        // Check specifically for pds_file validation errors
-        if (responseData?.errors?.pds_file) {
-          const fileError = Array.isArray(responseData.errors.pds_file) 
-            ? responseData.errors.pds_file[0] 
-            : responseData.errors.pds_file;
-          message = fileError || message;
+        } else {
+          // If no structured error, log the entire response
+          console.warn('Unexpected error response format:', responseData);
+          message = JSON.stringify(responseData) || message;
         }
       } else if (error.message) {
         message = error.message;
