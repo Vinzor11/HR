@@ -9,6 +9,44 @@
             (function() {
                 'use strict';
                 
+                // Fix HTTP asset URLs in the HTML before they're loaded
+                if (window.location.protocol === 'https:') {
+                    // Fix stylesheet links
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const links = document.querySelectorAll('link[rel="stylesheet"]');
+                        links.forEach(function(link) {
+                            if (link.href && link.href.startsWith('http://')) {
+                                link.href = link.href.replace('http://', 'https://');
+                            }
+                        });
+                        
+                        // Fix script tags
+                        const scripts = document.querySelectorAll('script[src]');
+                        scripts.forEach(function(script) {
+                            if (script.src && script.src.startsWith('http://')) {
+                                script.src = script.src.replace('http://', 'https://');
+                            }
+                        });
+                    });
+                    
+                    // Also fix any that are already in the DOM
+                    const observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            mutation.addedNodes.forEach(function(node) {
+                                if (node.nodeType === 1) { // Element node
+                                    if (node.tagName === 'LINK' && node.href && node.href.startsWith('http://')) {
+                                        node.href = node.href.replace('http://', 'https://');
+                                    }
+                                    if (node.tagName === 'SCRIPT' && node.src && node.src.startsWith('http://')) {
+                                        node.src = node.src.replace('http://', 'https://');
+                                    }
+                                }
+                            });
+                        });
+                    });
+                    observer.observe(document.head, { childList: true, subtree: true });
+                }
+                
                 // Force HTTPS for all fetch requests
                 const originalFetch = window.fetch;
                 window.fetch = function(input, init) {
