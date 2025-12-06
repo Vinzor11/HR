@@ -380,21 +380,75 @@ class EmployeeController extends Controller
 
         try {
             $data = $importer->extract($validated['pds_file']);
+        } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
+            // PhpSpreadsheet couldn't read the file
+            Log::error('Failed to read CS Form 212 file (PhpSpreadsheet error)', [
+                'file_name' => $request->file('pds_file')?->getClientOriginalName(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $errorMessage = 'The file could not be read. It may be corrupted or in an unsupported format.';
+            
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'error' => $errorMessage,
+                    'message' => $errorMessage,
+                    'details' => 'Please ensure the file is a valid Excel file (.xlsx or .xls) and try again.',
+                ], 422);
+            }
+
+            return back()->with('error', $errorMessage);
+        } catch (\RuntimeException $e) {
+            // Runtime errors from the importer (e.g., no sheets, can't read file)
+            Log::error('Failed to import CS Form 212 (Runtime error)', [
+                'file_name' => $request->file('pds_file')?->getClientOriginalName(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $errorMessage = $e->getMessage();
+            if (str_contains($errorMessage, 'readable sheets')) {
+                $errorMessage = 'The file does not contain any readable sheets. Please check the file format.';
+            } elseif (str_contains($errorMessage, 'Unable to read')) {
+                $errorMessage = 'Unable to read the file. It may be corrupted or password-protected.';
+            }
+            
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'error' => $errorMessage,
+                    'message' => $errorMessage,
+                    'details' => 'Please ensure the file follows the CS Form 212 template format.',
+                ], 422);
+            }
+
+            return back()->with('error', $errorMessage);
         } catch (\Throwable $exception) {
-            Log::error('Failed to import CS Form 212', [
+            // Catch any other exceptions
+            Log::error('Failed to import CS Form 212 (Unexpected error)', [
                 'file_name' => $request->file('pds_file')?->getClientOriginalName(),
                 'error' => $exception->getMessage(),
+                'exception_class' => get_class($exception),
+                'trace' => $exception->getTraceAsString(),
             ]);
+
+            $errorMessage = 'Unable to process the CS Form 212 file. The file may not match the expected template format.';
+            
+            // Provide more specific error if available
+            if (str_contains($exception->getMessage(), 'sheet') || str_contains($exception->getMessage(), 'cell')) {
+                $errorMessage = 'The file structure does not match the expected CS Form 212 template. Please use the official template.';
+            }
 
             // Return JSON for AJAX requests, otherwise redirect back
             if ($request->expectsJson() || $request->ajax()) {
                 return response()->json([
-                    'error' => 'Unable to read the CS Form 212 file. Please ensure it follows the configured template.',
-                    'message' => 'Unable to read the CS Form 212 file. Please ensure it follows the configured template.',
+                    'error' => $errorMessage,
+                    'message' => $errorMessage,
+                    'details' => 'Please ensure the file follows the configured CS Form 212 template. If the file worked before, it may have been modified or saved in a different format.',
                 ], 422);
             }
 
-            return back()->with('error', 'Unable to read the CS Form 212 file. Please ensure it follows the configured template.');
+            return back()->with('error', $errorMessage);
         }
 
         // Return JSON for AJAX requests, otherwise redirect back
