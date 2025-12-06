@@ -365,7 +365,7 @@ class EmployeeController extends Controller
 
         try {
             // More flexible validation - check extension and MIME type
-            $validated = $request->validate([
+        $validated = $request->validate([
                 'pds_file' => [
                     'required', 
                     'file', 
@@ -472,15 +472,26 @@ class EmployeeController extends Controller
                 mkdir($tempStorageDir, 0755, true);
             }
             
-            // Copy the uploaded file to temp storage
-            if (!copy($path, $tempStoragePath)) {
-                throw new \RuntimeException('Failed to copy uploaded file to temporary storage.');
+            // Verify original file is readable before copying
+            $originalContent = file_get_contents($path);
+            if ($originalContent === false || strlen($originalContent) === 0) {
+                throw new \RuntimeException('Original uploaded file cannot be read or is empty.');
+            }
+            
+            // Copy the uploaded file to temp storage using file_put_contents for better reliability
+            $copyResult = file_put_contents($tempStoragePath, $originalContent);
+            if ($copyResult === false || $copyResult !== $fileSize) {
+                @unlink($tempStoragePath); // Clean up
+                throw new \RuntimeException('Failed to copy uploaded file to temporary storage. Expected ' . $fileSize . ' bytes, got ' . ($copyResult ?: 0) . ' bytes.');
             }
             
             Log::info('CS Form 212 file copied to temp storage', [
                 'original_path' => $path,
+                'original_size' => $fileSize,
                 'temp_path' => $tempStoragePath,
                 'temp_size' => filesize($tempStoragePath),
+                'copy_bytes' => $copyResult,
+                'file_mime' => $file->getMimeType(),
             ]);
             
             // Verify the copied file is valid
@@ -489,9 +500,38 @@ class EmployeeController extends Controller
                 throw new \RuntimeException('Copied file is invalid or empty.');
             }
             
+            // Verify file integrity - check first few bytes for Excel signature
+            $fileHandle = fopen($tempStoragePath, 'rb');
+            if (!$fileHandle) {
+                @unlink($tempStoragePath);
+                throw new \RuntimeException('Cannot open copied file for verification.');
+            }
+            
+            $firstBytes = fread($fileHandle, 8);
+            fclose($fileHandle);
+            
+            // Excel files start with specific signatures
+            // XLSX: PK (ZIP signature) - 50 4B 03 04
+            // XLS: D0 CF 11 E0 (OLE2 signature)
+            $isValidExcel = false;
+            if (substr($firstBytes, 0, 2) === 'PK') {
+                // XLSX file (ZIP archive)
+                $isValidExcel = true;
+                Log::info('File signature check: XLSX format detected (ZIP signature)');
+            } elseif (substr($firstBytes, 0, 4) === "\xD0\xCF\x11\xE0") {
+                // XLS file (OLE2 format)
+                $isValidExcel = true;
+                Log::info('File signature check: XLS format detected (OLE2 signature)');
+            } else {
+                Log::warning('File signature check: Unknown format', [
+                    'first_bytes_hex' => bin2hex($firstBytes),
+                ]);
+            }
+            
             try {
                 // Try to load from the copied file
-                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempStoragePath);
+                // Use error suppression and catch exceptions for better error messages
+                $spreadsheet = @\PhpOffice\PhpSpreadsheet\IOFactory::load($tempStoragePath);
                 $sheetNames = [];
                 foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
                     $sheetNames[] = $worksheet->getTitle();
