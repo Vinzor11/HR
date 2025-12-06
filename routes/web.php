@@ -44,6 +44,7 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
 
+    // IMPORTANT: Define specific routes BEFORE resource routes to avoid conflicts
     Route::get('/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
     Route::get('/employees/{employee}/profile', [EmployeeController::class, 'profile'])->name('employees.profile');
     Route::get('/my-profile', [EmployeeController::class, 'myProfile'])->name('employees.my-profile');
