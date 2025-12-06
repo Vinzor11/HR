@@ -63,12 +63,13 @@ export default defineConfig({
                 manualChunks: (id) => {
                     // Split node_modules into separate chunks
                     if (id.includes('node_modules')) {
+                        // CRITICAL: Keep React and React-DOM together to prevent "useLayoutEffect" errors
+                        if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+                            return 'react-vendor';
+                        }
                         // Large libraries get their own chunks
                         if (id.includes('lucide-react')) {
                             return 'lucide-icons';
-                        }
-                        if (id.includes('react') || id.includes('react-dom')) {
-                            return 'react-vendor';
                         }
                         if (id.includes('@radix-ui') || id.includes('@headlessui')) {
                             return 'ui-vendor';
@@ -96,6 +97,10 @@ export default defineConfig({
         cssCodeSplit: true,
         // Target modern browsers for smaller bundles
         target: 'es2015',
+        // Common chunk strategy to ensure React is shared properly
+        commonjsOptions: {
+            include: [/node_modules/],
+        },
     },
     esbuild: {
         jsx: 'automatic',
