@@ -164,10 +164,25 @@ export default function Index({ users, filters }: IndexProps) {
 
             post(route('users.update', selectedCategory.id), {
                 forceFormData: true,
+                preserveScroll: true,
+                onBefore: () => {
+                    // Close modal BEFORE the request starts to prevent overlay blocking
+                    closeModal();
+                },
                 onSuccess: (response: { props: FlashProps }) => {
                     const successMessage = response.props.flash?.success;
                     successMessage && toast.success(successMessage);
-                    closeModal();
+                    // Ensure cleanup of any remaining overlay after redirect
+                    setTimeout(() => {
+                        const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
+                        overlays.forEach(overlay => {
+                            (overlay as HTMLElement).style.display = 'none';
+                            overlay.remove();
+                        });
+                        document.body.style.pointerEvents = '';
+                        document.documentElement.style.pointerEvents = '';
+                        document.body.style.overflow = '';
+                    }, 100);
                 },
                 onError: (error: Record<string, string>) => {
                     const errorMessage = error?.message;
@@ -176,10 +191,25 @@ export default function Index({ users, filters }: IndexProps) {
             });
         } else {
             post(route('users.store'), {
+                preserveScroll: true,
+                onBefore: () => {
+                    // Close modal BEFORE the request starts to prevent overlay blocking
+                    closeModal();
+                },
                 onSuccess: (response: { props: FlashProps }) => {
                     const successMessage = response.props.flash?.success;
                     successMessage && toast.success(successMessage);
-                    closeModal();
+                    // Ensure cleanup of any remaining overlay after redirect
+                    setTimeout(() => {
+                        const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
+                        overlays.forEach(overlay => {
+                            (overlay as HTMLElement).style.display = 'none';
+                            overlay.remove();
+                        });
+                        document.body.style.pointerEvents = '';
+                        document.documentElement.style.pointerEvents = '';
+                        document.body.style.overflow = '';
+                    }, 100);
                 },
                 onError: (error: Record<string, string>) => {
                     const errorMessage = error?.message;
@@ -195,7 +225,57 @@ export default function Index({ users, filters }: IndexProps) {
         setSelectedCategory(null);
         reset();
         setModalOpen(false);
+        
+        // Force cleanup of dialog overlays to prevent blocking
+        // Use requestAnimationFrame to ensure DOM updates are processed
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
+                overlays.forEach(overlay => {
+                    const dialog = overlay.closest('[data-slot="dialog"]');
+                    if (!dialog || dialog.getAttribute('data-state') === 'closed') {
+                        (overlay as HTMLElement).style.display = 'none';
+                        overlay.remove();
+                    }
+                });
+                // Ensure pointer events are restored
+                document.body.style.pointerEvents = '';
+                document.documentElement.style.pointerEvents = '';
+                // Remove any inline styles that might block interaction
+                document.body.style.overflow = '';
+                // Remove any Radix UI portal containers that might be left behind
+                const portals = document.querySelectorAll('[data-slot="dialog-portal"]');
+                portals.forEach(portal => {
+                    const dialog = portal.closest('[data-slot="dialog"]');
+                    if (!dialog || dialog.getAttribute('data-state') === 'closed') {
+                        portal.remove();
+                    }
+                });
+            }, 150);
+        });
     };
+    
+    // Cleanup effect when modal closes
+    useEffect(() => {
+        if (!modalOpen) {
+            // Clean up any remaining overlays when modal is closed
+            const cleanup = setTimeout(() => {
+                const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
+                overlays.forEach(overlay => {
+                    const dialog = overlay.closest('[data-slot="dialog"]');
+                    if (!dialog || dialog.getAttribute('data-state') === 'closed') {
+                        (overlay as HTMLElement).style.display = 'none';
+                        overlay.remove();
+                    }
+                });
+                document.body.style.pointerEvents = '';
+                document.documentElement.style.pointerEvents = '';
+                document.body.style.overflow = '';
+            }, 200);
+            
+            return () => clearTimeout(cleanup);
+        }
+    }, [modalOpen]);
 
     // Handle Modal Toggle
     const handleModalToggle = (open: boolean) => {

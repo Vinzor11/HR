@@ -52,8 +52,24 @@ function DialogOverlay({
               // Ensure pointer events are restored
               document.body.style.pointerEvents = '';
               document.documentElement.style.pointerEvents = '';
+              document.body.style.overflow = '';
+              // Remove overlay if dialog is closed
+              overlay.remove();
             }
           }, 100);
+        }
+      }}
+      onClick={(e) => {
+        // Ensure overlay doesn't block clicks when dialog is closed
+        const dialog = e.currentTarget.closest('[data-slot="dialog"]');
+        if (dialog && dialog.getAttribute('data-state') === 'closed') {
+          e.currentTarget.style.display = 'none';
+          e.currentTarget.remove();
+          document.body.style.pointerEvents = '';
+          document.documentElement.style.pointerEvents = '';
+        }
+        if (props.onClick) {
+          props.onClick(e);
         }
       }}
     />
