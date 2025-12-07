@@ -26,7 +26,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Force HTTPS URLs in production or when request is secure
+        // Force HTTPS URLs ONLY in production or when request is secure
+        // In development, explicitly use HTTP
         if (config('app.env') === 'production' || request()->secure()) {
             URL::forceScheme('https');
             
@@ -34,6 +35,15 @@ class AppServiceProvider extends ServiceProvider
             $appUrl = config('app.url');
             if ($appUrl && str_starts_with($appUrl, 'http://')) {
                 config(['app.url' => str_replace('http://', 'https://', $appUrl)]);
+            }
+        } else {
+            // In development, explicitly force HTTP
+            URL::forceScheme('http');
+            
+            // Ensure APP_URL uses HTTP in development
+            $appUrl = config('app.url');
+            if ($appUrl && str_starts_with($appUrl, 'https://')) {
+                config(['app.url' => str_replace('https://', 'http://', $appUrl)]);
             }
         }
         

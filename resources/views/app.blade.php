@@ -4,14 +4,15 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        {{-- Inline script to force HTTPS for ALL requests - MUST run first! --}}
+        {{-- Only force HTTPS in production - in development, use HTTP --}}
+        @if(config('app.env') === 'production')
         <script>
             (function() {
                 'use strict';
                 
-                // Fix HTTP asset URLs in the HTML before they're loaded
+                // Only run HTTPS forcing in production
                 if (window.location.protocol === 'https:') {
-                    // Fix stylesheet links
+                    // Fix HTTP asset URLs in the HTML before they're loaded
                     document.addEventListener('DOMContentLoaded', function() {
                         const links = document.querySelectorAll('link[rel="stylesheet"]');
                         links.forEach(function(link) {
@@ -20,7 +21,6 @@
                             }
                         });
                         
-                        // Fix script tags
                         const scripts = document.querySelectorAll('script[src]');
                         scripts.forEach(function(script) {
                             if (script.src && script.src.startsWith('http://')) {
@@ -29,67 +29,49 @@
                         });
                     });
                     
-                    // Also fix any that are already in the DOM
-                    const observer = new MutationObserver(function(mutations) {
-                        mutations.forEach(function(mutation) {
-                            mutation.addedNodes.forEach(function(node) {
-                                if (node.nodeType === 1) { // Element node
-                                    if (node.tagName === 'LINK' && node.href && node.href.startsWith('http://')) {
-                                        node.href = node.href.replace('http://', 'https://');
-                                    }
-                                    if (node.tagName === 'SCRIPT' && node.src && node.src.startsWith('http://')) {
-                                        node.src = node.src.replace('http://', 'https://');
-                                    }
+                    // Force HTTPS for all fetch requests in production
+                    const originalFetch = window.fetch;
+                    window.fetch = function(input, init) {
+                        if (typeof input === 'string' && input.startsWith('http://')) {
+                            input = input.replace('http://', 'https://');
+                        } else if (input instanceof Request && input.url.startsWith('http://')) {
+                            input = new Request(input.url.replace('http://', 'https://'), input);
+                        }
+                        return originalFetch.call(this, input, init);
+                    };
+                    
+                    // Force HTTPS for all XMLHttpRequest in production
+                    const originalOpen = XMLHttpRequest.prototype.open;
+                    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                        if (typeof url === 'string' && url.startsWith('http://')) {
+                            url = url.replace('http://', 'https://');
+                        }
+                        return originalOpen.call(this, method, url, ...args);
+                    };
+                    
+                    // Patch route helper in production
+                    const patchRoute = function() {
+                        if (window.route && typeof window.route === 'function') {
+                            const originalRoute = window.route;
+                            window.route = function(name, params, absolute) {
+                                const url = originalRoute(name, params, absolute);
+                                if (typeof url === 'string' && url.startsWith('http://')) {
+                                    return url.replace('http://', 'https://');
                                 }
-                            });
-                        });
-                    });
-                    observer.observe(document.head, { childList: true, subtree: true });
+                                return url;
+                            };
+                        }
+                    };
+                    
+                    patchRoute();
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', patchRoute);
+                    }
+                    setTimeout(patchRoute, 100);
                 }
-                
-                // Force HTTPS for all fetch requests
-                const originalFetch = window.fetch;
-                window.fetch = function(input, init) {
-                    if (typeof input === 'string' && input.startsWith('http://')) {
-                        input = input.replace('http://', 'https://');
-                    } else if (input instanceof Request && input.url.startsWith('http://')) {
-                        input = new Request(input.url.replace('http://', 'https://'), input);
-                    }
-                    return originalFetch.call(this, input, init);
-                };
-                
-                // Force HTTPS for all XMLHttpRequest
-                const originalOpen = XMLHttpRequest.prototype.open;
-                XMLHttpRequest.prototype.open = function(method, url, ...args) {
-                    if (typeof url === 'string' && url.startsWith('http://')) {
-                        url = url.replace('http://', 'https://');
-                    }
-                    return originalOpen.call(this, method, url, ...args);
-                };
-                
-                // Patch route helper as soon as Ziggy loads it
-                const patchRoute = function() {
-                    if (window.route && typeof window.route === 'function') {
-                        const originalRoute = window.route;
-                        window.route = function(name, params, absolute) {
-                            const url = originalRoute(name, params, absolute);
-                            if (typeof url === 'string' && url.startsWith('http://')) {
-                                return url.replace('http://', 'https://');
-                            }
-                            return url;
-                        };
-                    }
-                };
-                
-                // Try to patch immediately, then on DOMContentLoaded, then with a small delay
-                patchRoute();
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', patchRoute);
-                }
-                setTimeout(patchRoute, 100);
-                setTimeout(patchRoute, 500);
             })();
         </script>
+        @endif
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>

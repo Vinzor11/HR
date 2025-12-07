@@ -1965,15 +1965,26 @@ export default function CreateEmployee({ employee, departments, positions, facul
       console.log(pair[0] + ': ', pair[1]);
     }
 
-    // Get CSRF token from meta tag
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    console.log('CSRF Token:', csrfToken ? 'Found' : 'Missing');
+    // Get CSRF token from meta tag or cookie
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                      (document.cookie.match(/XSRF-TOKEN=([^;]+)/) ? decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)[1]) : null);
+    console.log('CSRF Token:', csrfToken ? `Found (${csrfToken.substring(0, 20)}...)` : 'Missing');
+    
+    // Ensure token is available
+    if (!csrfToken) {
+      toast.error('CSRF token not found. Please refresh the page and try again.');
+      setIsImporting(false);
+      if (event.target) {
+        event.target.value = '';
+      }
+      return;
+    }
     
     axios.post(importUrl, formData, {
       headers: {
         // Don't set Content-Type manually - let axios set it with boundary for FormData
         'Accept': 'application/json',
-        'X-CSRF-TOKEN': csrfToken || '',
+        'X-CSRF-TOKEN': csrfToken,
         'X-Requested-With': 'XMLHttpRequest',
       },
       withCredentials: true,

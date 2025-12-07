@@ -108,16 +108,31 @@ class HandleInertiaRequests extends Middleware
                     return $ziggy->toArray();
                 });
                 
-                // Force HTTPS for base URL from config
-                $baseUrl = config('app.url');
-                if ($baseUrl && str_starts_with($baseUrl, 'http://')) {
-                    $baseUrl = str_replace('http://', 'https://', $baseUrl);
-                }
+                // Only force HTTPS in production or when request is secure
+                $isProduction = config('app.env') === 'production';
+                $isSecure = $request->secure();
+                $shouldForceHttps = $isProduction || $isSecure;
                 
-                // Ensure location uses HTTPS (Ziggy uses this to generate full URLs)
+                $baseUrl = config('app.url');
                 $location = $request->url();
-                if (str_starts_with($location, 'http://')) {
-                    $location = str_replace('http://', 'https://', $location);
+                
+                // In development, ALWAYS use HTTP (never HTTPS)
+                if (!$shouldForceHttps) {
+                    // Force HTTP in development
+                    if ($baseUrl && str_starts_with($baseUrl, 'https://')) {
+                        $baseUrl = str_replace('https://', 'http://', $baseUrl);
+                    }
+                    if (str_starts_with($location, 'https://')) {
+                        $location = str_replace('https://', 'http://', $location);
+                    }
+                } else {
+                    // Only convert to HTTPS if we should force it (production)
+                    if ($baseUrl && str_starts_with($baseUrl, 'http://')) {
+                        $baseUrl = str_replace('http://', 'https://', $baseUrl);
+                    }
+                    if (str_starts_with($location, 'http://')) {
+                        $location = str_replace('http://', 'https://', $location);
+                    }
                 }
                 
                 return [
