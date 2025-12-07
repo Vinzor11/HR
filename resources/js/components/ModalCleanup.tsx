@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { router } from '@inertiajs/react';
 import { cleanupModalOverlays, forceCleanupModals } from '@/utils/modal-utils';
 
 /**
@@ -16,13 +15,6 @@ export function ModalCleanup() {
 
     // Cleanup on initial load
     cleanup();
-
-    // Cleanup after Inertia navigation
-    const handleFinish = () => {
-      cleanup();
-    };
-
-    router.on('finish', handleFinish);
 
     // Cleanup on page visibility change (user switches tabs and comes back)
     const handleVisibilityChange = () => {
@@ -53,7 +45,6 @@ export function ModalCleanup() {
     }, 2000); // Check every 2 seconds
 
     return () => {
-      router.off('finish', handleFinish);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);

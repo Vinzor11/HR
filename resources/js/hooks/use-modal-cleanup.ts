@@ -15,16 +15,26 @@ export function useModalCleanup(isOpen: boolean) {
         const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
         overlays.forEach((overlay) => {
           const element = overlay as HTMLElement;
+          // Check if element is still in the DOM
+          if (!element.isConnected) return;
+          
           // Check if overlay should be removed (not part of an open dialog)
           const dialog = element.closest('[data-slot="dialog"]');
-          if (!dialog || dialog.getAttribute('data-state') === 'closed') {
-            element.remove();
+          if ((!dialog || dialog.getAttribute('data-state') === 'closed') && element.parentNode) {
+            try {
+              element.remove();
+            } catch (e) {
+              console.debug('Overlay already removed:', e);
+            }
           }
         });
 
         // Remove any orphaned portals
         const portals = document.querySelectorAll('[data-slot="dialog-portal"]');
         portals.forEach((portal) => {
+          // Check if portal is still in the DOM
+          if (!portal.isConnected) return;
+          
           const content = portal.querySelector('[data-slot="dialog-content"]');
           if (!content || content.getAttribute('data-state') === 'closed') {
             // Check if any dialog is actually open
@@ -32,8 +42,12 @@ export function useModalCleanup(isOpen: boolean) {
               document.querySelectorAll('[data-slot="dialog"]')
             ).some((dialog) => dialog.getAttribute('data-state') === 'open');
             
-            if (!hasOpenDialog) {
-              portal.remove();
+            if (!hasOpenDialog && portal.parentNode) {
+              try {
+                portal.remove();
+              } catch (e) {
+                console.debug('Portal already removed:', e);
+              }
             }
           }
         });

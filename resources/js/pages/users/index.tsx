@@ -158,6 +158,15 @@ export default function Index({ users, filters }: IndexProps) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Debug: Log form data before submission
+        console.log('Submitting user form:', {
+            mode,
+            data,
+            roles: data.roles,
+            rolesType: typeof data.roles,
+            rolesIsArray: Array.isArray(data.roles),
+        });
+
         // Edit mode
         if (mode === 'edit' && selectedCategory) {
             data._method = 'PUT';
@@ -165,55 +174,58 @@ export default function Index({ users, filters }: IndexProps) {
             post(route('users.update', selectedCategory.id), {
                 forceFormData: true,
                 preserveScroll: true,
-                onBefore: () => {
-                    // Close modal BEFORE the request starts to prevent overlay blocking
-                    closeModal();
-                },
                 onSuccess: (response: { props: FlashProps }) => {
                     const successMessage = response.props.flash?.success;
                     successMessage && toast.success(successMessage);
-                    // Ensure cleanup of any remaining overlay after redirect
+                    closeModal();
+                    // Restore pointer events - let React/Radix handle DOM cleanup
                     setTimeout(() => {
-                        const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
-                        overlays.forEach(overlay => {
-                            (overlay as HTMLElement).style.display = 'none';
-                            overlay.remove();
-                        });
                         document.body.style.pointerEvents = '';
                         document.documentElement.style.pointerEvents = '';
                         document.body.style.overflow = '';
                     }, 100);
                 },
-                onError: (error: Record<string, string>) => {
-                    const errorMessage = error?.message;
-                    errorMessage && toast.error(errorMessage);
+                onError: (errors: Record<string, string | string[]>) => {
+                    // Keep modal open on error so user can fix issues
+                    // Show first validation error or generic message
+                    const firstError = Object.values(errors)[0];
+                    if (firstError) {
+                        const errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+                        toast.error(errorMessage);
+                    } else if (errors?.message) {
+                        toast.error(errors.message);
+                    } else {
+                        toast.error('Please check the form for errors.');
+                    }
                 },
             });
         } else {
+            // Create mode
             post(route('users.store'), {
                 preserveScroll: true,
-                onBefore: () => {
-                    // Close modal BEFORE the request starts to prevent overlay blocking
-                    closeModal();
-                },
                 onSuccess: (response: { props: FlashProps }) => {
                     const successMessage = response.props.flash?.success;
                     successMessage && toast.success(successMessage);
-                    // Ensure cleanup of any remaining overlay after redirect
+                    closeModal();
+                    // Restore pointer events - let React/Radix handle DOM cleanup
                     setTimeout(() => {
-                        const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
-                        overlays.forEach(overlay => {
-                            (overlay as HTMLElement).style.display = 'none';
-                            overlay.remove();
-                        });
                         document.body.style.pointerEvents = '';
                         document.documentElement.style.pointerEvents = '';
                         document.body.style.overflow = '';
                     }, 100);
                 },
-                onError: (error: Record<string, string>) => {
-                    const errorMessage = error?.message;
-                    errorMessage && toast.error(errorMessage);
+                onError: (errors: Record<string, string | string[]>) => {
+                    // Keep modal open on error so user can fix issues
+                    // Show first validation error or generic message
+                    const firstError = Object.values(errors)[0];
+                    if (firstError) {
+                        const errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+                        toast.error(errorMessage);
+                    } else if (errors?.message) {
+                        toast.error(errors.message);
+                    } else {
+                        toast.error('Please check the form for errors.');
+                    }
                 },
             });
         }
@@ -226,48 +238,19 @@ export default function Index({ users, filters }: IndexProps) {
         reset();
         setModalOpen(false);
         
-        // Force cleanup of dialog overlays to prevent blocking
-        // Use requestAnimationFrame to ensure DOM updates are processed
-        requestAnimationFrame(() => {
-            setTimeout(() => {
-                const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
-                overlays.forEach(overlay => {
-                    const dialog = overlay.closest('[data-slot="dialog"]');
-                    if (!dialog || dialog.getAttribute('data-state') === 'closed') {
-                        (overlay as HTMLElement).style.display = 'none';
-                        overlay.remove();
-                    }
-                });
-                // Ensure pointer events are restored
-                document.body.style.pointerEvents = '';
-                document.documentElement.style.pointerEvents = '';
-                // Remove any inline styles that might block interaction
-                document.body.style.overflow = '';
-                // Remove any Radix UI portal containers that might be left behind
-                const portals = document.querySelectorAll('[data-slot="dialog-portal"]');
-                portals.forEach(portal => {
-                    const dialog = portal.closest('[data-slot="dialog"]');
-                    if (!dialog || dialog.getAttribute('data-state') === 'closed') {
-                        portal.remove();
-                    }
-                });
-            }, 150);
-        });
+        // Restore pointer events - let React/Radix handle DOM cleanup
+        setTimeout(() => {
+            document.body.style.pointerEvents = '';
+            document.documentElement.style.pointerEvents = '';
+            document.body.style.overflow = '';
+        }, 100);
     };
     
     // Cleanup effect when modal closes
     useEffect(() => {
         if (!modalOpen) {
-            // Clean up any remaining overlays when modal is closed
+            // Restore pointer events when modal closes - let React/Radix handle DOM cleanup
             const cleanup = setTimeout(() => {
-                const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
-                overlays.forEach(overlay => {
-                    const dialog = overlay.closest('[data-slot="dialog"]');
-                    if (!dialog || dialog.getAttribute('data-state') === 'closed') {
-                        (overlay as HTMLElement).style.display = 'none';
-                        overlay.remove();
-                    }
-                });
                 document.body.style.pointerEvents = '';
                 document.documentElement.style.pointerEvents = '';
                 document.body.style.overflow = '';
@@ -279,12 +262,12 @@ export default function Index({ users, filters }: IndexProps) {
 
     // Handle Modal Toggle
     const handleModalToggle = (open: boolean) => {
-        setModalOpen(open);
-
-        if (!open) {
-            setMode('create');
-            setSelectedCategory(null);
-            reset();
+        if (open) {
+            // When opening, initialize form for create mode
+            openModal('create');
+        } else {
+            // When closing, clean up
+            closeModal();
         }
     };
 
@@ -305,6 +288,7 @@ export default function Index({ users, filters }: IndexProps) {
         setMode(mode);
 
         if (category) {
+            // Edit mode - populate form with existing data
             Object.entries(category).forEach(([key, value]) => {
                 if (key === 'roles' && Array.isArray(value)) {
                     setData('roles', value.map((r) => r.id.toString())); // ✅ fix: use r.id not r.name
@@ -318,7 +302,18 @@ export default function Index({ users, filters }: IndexProps) {
             // Setting image preview
             setSelectedCategory(category);
         } else {
+            // Create mode - reset form and set defaults
             reset();
+            setData({
+                name: '',
+                email: '',
+                employee_id: '',
+                password: '',
+                confirm_password: '',
+                roles: [],
+                _method: 'POST',
+            });
+            setSelectedCategory(null);
         }
 
         setModalOpen(true);

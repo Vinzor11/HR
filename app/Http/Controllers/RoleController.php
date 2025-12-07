@@ -134,6 +134,7 @@ class RoleController extends Controller
             'label'       => $request->label,
             'name'        => $roleName,
             'description' => $request->description,
+            'guard_name'  => 'web',
         ]);
 
         if ($role) {

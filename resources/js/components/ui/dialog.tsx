@@ -42,32 +42,21 @@ function DialogOverlay({
       {...props}
       onAnimationEnd={(e) => {
         // Clean up overlay if it's closing
-        if (e.currentTarget.getAttribute('data-state') === 'closed') {
+        const overlay = e.currentTarget;
+        const state = overlay.getAttribute('data-state');
+        
+        if (state === 'closed') {
           // Small delay to ensure animation completes
           setTimeout(() => {
-            const overlay = e.currentTarget;
-            // Check if dialog is still closed
-            const dialog = overlay.closest('[data-slot="dialog"]');
-            if (dialog && dialog.getAttribute('data-state') === 'closed') {
-              // Ensure pointer events are restored
-              document.body.style.pointerEvents = '';
-              document.documentElement.style.pointerEvents = '';
-              document.body.style.overflow = '';
-              // Remove overlay if dialog is closed
-              overlay.remove();
-            }
+            // Ensure pointer events are restored
+            document.body.style.pointerEvents = '';
+            document.documentElement.style.pointerEvents = '';
+            document.body.style.overflow = '';
           }, 100);
         }
       }}
       onClick={(e) => {
-        // Ensure overlay doesn't block clicks when dialog is closed
-        const dialog = e.currentTarget.closest('[data-slot="dialog"]');
-        if (dialog && dialog.getAttribute('data-state') === 'closed') {
-          e.currentTarget.style.display = 'none';
-          e.currentTarget.remove();
-          document.body.style.pointerEvents = '';
-          document.documentElement.style.pointerEvents = '';
-        }
+        // Call the original onClick if provided
         if (props.onClick) {
           props.onClick(e);
         }
@@ -93,35 +82,19 @@ function DialogContent({
         {...props}
         onAnimationEnd={(e) => {
           // Clean up when dialog closes
-          if (e.currentTarget.getAttribute('data-state') === 'closed') {
+          const content = e.currentTarget;
+          const state = content.getAttribute('data-state');
+          
+          if (state === 'closed') {
+            // Restore page interactivity when dialog closes
             setTimeout(() => {
-              const content = e.currentTarget;
-              const portal = content.closest('[data-slot="dialog-portal"]');
-              const overlay = portal?.querySelector('[data-slot="dialog-overlay"]');
-              
-              // Check if dialog is still closed
-              const dialog = content.closest('[data-slot="dialog"]');
-              if (dialog && dialog.getAttribute('data-state') === 'closed') {
-                // Remove overlay and portal if dialog is closed
-                if (overlay) {
-                  (overlay as HTMLElement).style.display = 'none';
-                  overlay.remove();
-                }
-                if (portal) {
-                  portal.remove();
-                }
-                
-                // Restore page interactivity
-                document.body.style.pointerEvents = '';
-                document.documentElement.style.pointerEvents = '';
-              }
-              
-              // Call the original onAnimationEnd if provided
-              if (props.onAnimationEnd) {
-                props.onAnimationEnd(e);
-              }
+              document.body.style.pointerEvents = '';
+              document.documentElement.style.pointerEvents = '';
             }, 100);
-          } else if (props.onAnimationEnd) {
+          }
+          
+          // Call the original onAnimationEnd if provided
+          if (props.onAnimationEnd) {
             props.onAnimationEnd(e);
           }
         }}

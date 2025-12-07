@@ -14,25 +14,38 @@ class UserRequest extends FormRequest
     public function rules(): array
     {
         $userId = $this->route('user')?->id;
-
-        return [
+        
+        $rules = [
             'name'             => 'required|string',
             'email'            => [
                 'required',
                 'email',
                 Rule::unique('users', 'email')->ignore($userId),
             ],
-            'employee_id'      => [
-                'required',
-                'string',
-                'max:15',
-                'exists:employees,id',
-                Rule::unique('users', 'employee_id')->ignore($userId),
-            ],
             'password'         => $this->isMethod('POST') ? 'required|string|min:6' : 'nullable|string|min:6',
             'confirm_password' => $this->isMethod('POST') ? 'required|same:password' : 'nullable|same:password',
             'roles'            => 'required|array',
             'roles.*'          => 'exists:roles,id',
         ];
+        
+        // Conditionally add employee_id validation
+        if ($this->filled('employee_id')) {
+            $rules['employee_id'] = [
+                'nullable',
+                'string',
+                'max:15',
+                Rule::exists('employees', 'id'),
+                Rule::unique('users', 'employee_id')->ignore($userId),
+            ];
+        } else {
+            $rules['employee_id'] = [
+                'nullable',
+                'string',
+                'max:15',
+                Rule::unique('users', 'employee_id')->ignore($userId),
+            ];
+        }
+        
+        return $rules;
     }
 }
