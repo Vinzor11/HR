@@ -658,17 +658,70 @@ class EmployeeController extends Controller
                     throw new \RuntimeException('The Excel file appears to be corrupted. It is not a valid ZIP archive. Please re-save the file in Excel and try again.');
                 }
                 
-                // Check for required XML files in the ZIP
+                // Check for required XML files in the ZIP and validate their content
                 $requiredFiles = ['[Content_Types].xml', '_rels/.rels'];
                 $missingFiles = [];
+                $emptyFiles = [];
+                $invalidXmlFiles = [];
+                
                 foreach ($requiredFiles as $requiredFile) {
-                    if ($zip->locateName($requiredFile) === false) {
+                    $index = $zip->locateName($requiredFile);
+                    if ($index === false) {
                         $missingFiles[] = $requiredFile;
+                        continue;
                     }
+                    
+                    // Read the file content
+                    $content = $zip->getFromIndex($index);
+                    
+                    // Check if file is empty
+                    if ($content === false || trim($content) === '') {
+                        $emptyFiles[] = $requiredFile;
+                        continue;
+                    }
+                    
+                    // Try to parse as XML to check if it's valid
+                    libxml_use_internal_errors(true);
+                    $xml = @simplexml_load_string($content);
+                    $xmlErrors = libxml_get_errors();
+                    libxml_clear_errors();
+                    
+                    if ($xml === false || !empty($xmlErrors)) {
+                        $invalidXmlFiles[] = $requiredFile;
+                        Log::warning('Invalid XML in required file', [
+                            'file' => $requiredFile,
+                            'content_length' => strlen($content),
+                            'xml_errors' => array_map(function($error) {
+                                return $error->message;
+                            }, $xmlErrors),
+                        ]);
+                    }
+                }
+                
+                // Also check for xl/workbook.xml which is critical for PhpSpreadsheet
+                $workbookIndex = $zip->locateName('xl/workbook.xml');
+                if ($workbookIndex !== false) {
+                    $workbookContent = $zip->getFromIndex($workbookIndex);
+                    if ($workbookContent === false || trim($workbookContent) === '') {
+                        $emptyFiles[] = 'xl/workbook.xml';
+                    } else {
+                        // Validate workbook.xml
+                        libxml_use_internal_errors(true);
+                        $workbookXml = @simplexml_load_string($workbookContent);
+                        $workbookErrors = libxml_get_errors();
+                        libxml_clear_errors();
+                        
+                        if ($workbookXml === false || !empty($workbookErrors)) {
+                            $invalidXmlFiles[] = 'xl/workbook.xml';
+                        }
+                    }
+                } else {
+                    $missingFiles[] = 'xl/workbook.xml';
                 }
                 
                 $zip->close();
                 
+                // Report all issues found
                 if (!empty($missingFiles)) {
                     Log::error('CS Form 212 file missing required XML files', [
                         'file_name' => $file->getClientOriginalName(),
@@ -677,7 +730,23 @@ class EmployeeController extends Controller
                     throw new \RuntimeException('The Excel file structure is invalid. Required files are missing: ' . implode(', ', $missingFiles) . '. The file may be corrupted. Please re-save it in Excel.');
                 }
                 
-                Log::info('CS Form 212 file ZIP structure validated', [
+                if (!empty($emptyFiles)) {
+                    Log::error('CS Form 212 file has empty XML files', [
+                        'file_name' => $file->getClientOriginalName(),
+                        'empty_files' => $emptyFiles,
+                    ]);
+                    throw new \RuntimeException('The Excel file contains empty or corrupted XML files: ' . implode(', ', $emptyFiles) . '. The file appears to be corrupted. Please open it in Excel, re-save it, and try uploading again.');
+                }
+                
+                if (!empty($invalidXmlFiles)) {
+                    Log::error('CS Form 212 file has invalid XML files', [
+                        'file_name' => $file->getClientOriginalName(),
+                        'invalid_files' => $invalidXmlFiles,
+                    ]);
+                    throw new \RuntimeException('The Excel file contains invalid XML structure in: ' . implode(', ', $invalidXmlFiles) . '. The file appears to be corrupted. Please open it in Excel, re-save it, and try uploading again.');
+                }
+                
+                Log::info('CS Form 212 file ZIP structure and XML validated', [
                     'file_name' => $file->getClientOriginalName(),
                 ]);
             } catch (\RuntimeException $e) {
@@ -690,9 +759,49 @@ class EmployeeController extends Controller
                 ]);
             }
             
+            // Additional validation: Try to read the file one more time to ensure it's fully written
+            clearstatcache(true, $tempStoragePath);
+            $finalCheckSize = filesize($tempStoragePath);
+            if ($finalCheckSize !== $fileSize) {
+                Log::warning('File size changed after copy', [
+                    'original_size' => $fileSize,
+                    'final_size' => $finalCheckSize,
+                ]);
+            }
+            
+            // Try to load with explicit Xlsx reader and better error handling
             try {
-                // Try to load from the copied file - use the temp storage path
-                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempStoragePath);
+                // Use explicit Xlsx reader with error reporting enabled
+                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
+                $reader->setReadDataOnly(false);
+                $reader->setReadEmptyCells(true);
+                
+                // Enable libxml error handling to catch XML parsing issues
+                libxml_use_internal_errors(true);
+                
+                try {
+                    $spreadsheet = $reader->load($tempStoragePath);
+                } finally {
+                    // Check for any XML errors that occurred during loading
+                    $xmlErrors = libxml_get_errors();
+                    libxml_clear_errors();
+                    
+                    if (!empty($xmlErrors)) {
+                        $xmlErrorMessages = array_map(function($error) {
+                            return trim($error->message);
+                        }, $xmlErrors);
+                        
+                        Log::error('XML parsing errors during PhpSpreadsheet load', [
+                            'file_name' => $file->getClientOriginalName(),
+                            'xml_errors' => $xmlErrorMessages,
+                            'temp_path' => $tempStoragePath,
+                        ]);
+                        
+                        // If we have XML errors but the spreadsheet still loaded, log it
+                        // If it didn't load, the exception below will handle it
+                    }
+                }
+                
                 $sheetNames = [];
                 foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
                     $sheetNames[] = $worksheet->getTitle();
@@ -705,23 +814,46 @@ class EmployeeController extends Controller
                 ]);
             } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
                 $errorMessage = $e->getMessage();
+                $previousException = $e->getPrevious();
+                
                 Log::error('Could not inspect file sheets before extraction (PhpSpreadsheet error)', [
+                    'error' => $errorMessage,
+                    'exception_class' => get_class($e),
+                    'previous_exception' => $previousException ? get_class($previousException) . ': ' . $previousException->getMessage() : null,
+                    'temp_path' => $tempStoragePath,
+                    'file_size' => filesize($tempStoragePath),
+                    'file_exists' => file_exists($tempStoragePath),
+                    'is_readable' => is_readable($tempStoragePath),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                
+                // Provide user-friendly error message
+                if (str_contains($errorMessage, 'simplexml_load_string') || str_contains($errorMessage, 'Document is empty')) {
+                    throw new \RuntimeException('The Excel file appears to be corrupted or incomplete. The XML structure inside the file is invalid or empty. This usually happens when a file is partially saved or corrupted during transfer. Please: 1) Open the file in Excel, 2) Re-save it (File > Save As), 3) Try uploading again.');
+                } elseif (str_contains($errorMessage, 'password') || str_contains($errorMessage, 'encrypted')) {
+                    throw new \RuntimeException('The Excel file is password-protected. Please remove the password protection and try again.');
+                } else {
+                    throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format. Please re-save the file in Excel and try again.');
+                }
+            } catch (\ErrorException $e) {
+                // Catch libxml errors that might be thrown as ErrorException
+                $errorMessage = $e->getMessage();
+                
+                Log::error('Could not inspect file sheets before extraction (XML parsing error)', [
                     'error' => $errorMessage,
                     'exception_class' => get_class($e),
                     'temp_path' => $tempStoragePath,
                     'file_size' => filesize($tempStoragePath),
                     'file_exists' => file_exists($tempStoragePath),
                     'is_readable' => is_readable($tempStoragePath),
+                    'trace' => $e->getTraceAsString(),
                 ]);
                 
-                // Provide user-friendly error message
                 if (str_contains($errorMessage, 'simplexml_load_string') || str_contains($errorMessage, 'Document is empty')) {
-                    throw new \RuntimeException('The Excel file appears to be corrupted or incomplete. The XML structure inside the file is invalid. Please open the file in Excel, re-save it, and try uploading again.');
-                } elseif (str_contains($errorMessage, 'password') || str_contains($errorMessage, 'encrypted')) {
-                    throw new \RuntimeException('The Excel file is password-protected. Please remove the password protection and try again.');
-                } else {
-                    throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format. Please re-save the file in Excel and try again: ' . $errorMessage);
+                    throw new \RuntimeException('The Excel file contains corrupted or empty XML files. Please open the file in Excel, re-save it, and try uploading again.');
                 }
+                
+                throw new \RuntimeException('Unable to read the Excel file due to XML parsing error: ' . $errorMessage);
             } catch (\Throwable $e) {
                 Log::error('Could not inspect file sheets before extraction (General error)', [
                     'error' => $e->getMessage(),
@@ -730,6 +862,7 @@ class EmployeeController extends Controller
                     'file_size' => filesize($tempStoragePath),
                     'file_exists' => file_exists($tempStoragePath),
                     'is_readable' => is_readable($tempStoragePath),
+                    'trace' => $e->getTraceAsString(),
                 ]);
                 throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format: ' . $e->getMessage());
             }
