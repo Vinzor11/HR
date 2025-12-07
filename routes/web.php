@@ -133,6 +133,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('oauth.clients.destroy')
         ->middleware('permission:access-users-module');
 
+    // Log Viewer Routes (Super Admin only)
+    Route::get('admin/logs', [App\Http\Controllers\LogViewController::class, 'index'])
+        ->name('admin.logs.view')
+        ->middleware('role:Super Admin');
+    Route::post('admin/logs/clear', [App\Http\Controllers\LogViewController::class, 'clear'])
+        ->name('admin.logs.clear')
+        ->middleware('role:Super Admin');
+    Route::get('admin/logs/download', [App\Http\Controllers\LogViewController::class, 'download'])
+        ->name('admin.logs.download')
+        ->middleware('role:Super Admin');
+
 });
 
 require __DIR__ . '/settings.php';

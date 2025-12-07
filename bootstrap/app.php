@@ -37,5 +37,22 @@ return Application::configure(basePath: dirname(__DIR__))
 
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Log all exceptions with detailed context in production
+        $exceptions->report(function (Throwable $e) {
+            // Only log in production (errors are already logged in development)
+            if (app()->environment('production')) {
+                \Log::error('Unhandled Exception', [
+                    'message' => $e->getMessage(),
+                    'exception' => get_class($e),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString(),
+                    'url' => request()->fullUrl(),
+                    'method' => request()->method(),
+                    'ip' => request()->ip(),
+                    'user_id' => auth()->id(),
+                    'user_agent' => request()->userAgent(),
+                ]);
+            }
+        });
     })->create();

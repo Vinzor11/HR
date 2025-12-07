@@ -529,7 +529,25 @@ class EmployeeController extends Controller
             $tempStoragePath = storage_path('app/temp/' . uniqid('cs_form_212_', true) . '_' . $file->getClientOriginalName());
             $tempStorageDir = dirname($tempStoragePath);
             if (!is_dir($tempStorageDir)) {
-                mkdir($tempStorageDir, 0755, true);
+                $created = @mkdir($tempStorageDir, 0755, true);
+                if (!$created) {
+                    Log::error('CS Form 212 - Failed to create temp directory', [
+                        'directory' => $tempStorageDir,
+                        'parent_exists' => is_dir(dirname($tempStorageDir)),
+                        'parent_writable' => is_writable(dirname($tempStorageDir)),
+                        'error' => error_get_last(),
+                    ]);
+                    throw new \RuntimeException('Failed to create temporary storage directory. Please check file permissions on storage/app/temp.');
+                }
+            }
+            
+            // Verify directory is writable
+            if (!is_writable($tempStorageDir)) {
+                Log::error('CS Form 212 - Temp directory not writable', [
+                    'directory' => $tempStorageDir,
+                    'permissions' => substr(sprintf('%o', fileperms($tempStorageDir)), -4),
+                ]);
+                throw new \RuntimeException('Temporary storage directory is not writable. Please check file permissions on storage/app/temp.');
             }
             
             // Read file content into memory using stream to avoid memory issues
@@ -624,8 +642,56 @@ class EmployeeController extends Controller
                 ]);
             }
             
+            // Validate XLSX file structure before attempting to read
             try {
-                // Try to load from the copied file - use the path directly
+                // Verify it's a valid ZIP archive (XLSX files are ZIP archives)
+                $zip = new \ZipArchive();
+                $zipResult = $zip->open($tempStoragePath, \ZipArchive::CHECKCONS);
+                
+                if ($zipResult !== true) {
+                    Log::error('CS Form 212 file is not a valid ZIP archive', [
+                        'file_name' => $file->getClientOriginalName(),
+                        'zip_error_code' => $zipResult,
+                        'temp_path' => $tempStoragePath,
+                        'file_size' => filesize($tempStoragePath),
+                    ]);
+                    throw new \RuntimeException('The Excel file appears to be corrupted. It is not a valid ZIP archive. Please re-save the file in Excel and try again.');
+                }
+                
+                // Check for required XML files in the ZIP
+                $requiredFiles = ['[Content_Types].xml', '_rels/.rels'];
+                $missingFiles = [];
+                foreach ($requiredFiles as $requiredFile) {
+                    if ($zip->locateName($requiredFile) === false) {
+                        $missingFiles[] = $requiredFile;
+                    }
+                }
+                
+                $zip->close();
+                
+                if (!empty($missingFiles)) {
+                    Log::error('CS Form 212 file missing required XML files', [
+                        'file_name' => $file->getClientOriginalName(),
+                        'missing_files' => $missingFiles,
+                    ]);
+                    throw new \RuntimeException('The Excel file structure is invalid. Required files are missing: ' . implode(', ', $missingFiles) . '. The file may be corrupted. Please re-save it in Excel.');
+                }
+                
+                Log::info('CS Form 212 file ZIP structure validated', [
+                    'file_name' => $file->getClientOriginalName(),
+                ]);
+            } catch (\RuntimeException $e) {
+                // Re-throw our custom errors
+                throw $e;
+            } catch (\Throwable $zipError) {
+                // Log ZIP validation errors but continue with PhpSpreadsheet
+                Log::warning('ZIP validation failed, will try PhpSpreadsheet anyway', [
+                    'error' => $zipError->getMessage(),
+                ]);
+            }
+            
+            try {
+                // Try to load from the copied file - use the temp storage path
                 $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempStoragePath);
                 $sheetNames = [];
                 foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
@@ -637,28 +703,56 @@ class EmployeeController extends Controller
                     'sheets_found' => $sheetNames,
                     'expected_sheets' => ['C1', 'C2', 'C3', 'C4'],
                 ]);
+            } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
+                $errorMessage = $e->getMessage();
+                Log::error('Could not inspect file sheets before extraction (PhpSpreadsheet error)', [
+                    'error' => $errorMessage,
+                    'exception_class' => get_class($e),
+                    'temp_path' => $tempStoragePath,
+                    'file_size' => filesize($tempStoragePath),
+                    'file_exists' => file_exists($tempStoragePath),
+                    'is_readable' => is_readable($tempStoragePath),
+                ]);
+                
+                // Provide user-friendly error message
+                if (str_contains($errorMessage, 'simplexml_load_string') || str_contains($errorMessage, 'Document is empty')) {
+                    throw new \RuntimeException('The Excel file appears to be corrupted or incomplete. The XML structure inside the file is invalid. Please open the file in Excel, re-save it, and try uploading again.');
+                } elseif (str_contains($errorMessage, 'password') || str_contains($errorMessage, 'encrypted')) {
+                    throw new \RuntimeException('The Excel file is password-protected. Please remove the password protection and try again.');
+                } else {
+                    throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format. Please re-save the file in Excel and try again: ' . $errorMessage);
+                }
             } catch (\Throwable $e) {
-                Log::error('Could not inspect file sheets before extraction', [
+                Log::error('Could not inspect file sheets before extraction (General error)', [
                     'error' => $e->getMessage(),
                     'exception_class' => get_class($e),
-                    'file_path' => $path,
-                    'file_size' => filesize($path),
-                    'file_exists' => file_exists($path),
-                    'is_readable' => is_readable($path),
+                    'temp_path' => $tempStoragePath,
+                    'file_size' => filesize($tempStoragePath),
+                    'file_exists' => file_exists($tempStoragePath),
+                    'is_readable' => is_readable($tempStoragePath),
                 ]);
                 throw new \RuntimeException('Unable to read the Excel file. It may be corrupted or in an unsupported format: ' . $e->getMessage());
             }
             
             // Try extraction with detailed error handling
             try {
-                // Use the file directly for extraction
-                $data = $importer->extract($path);
+                // Use the temp storage path for extraction (not the original temp file)
+                $data = $importer->extract($tempStoragePath);
                 
                 Log::info('CS Form 212 extraction successful', [
                     'file_name' => $file->getClientOriginalName(),
                     'fields_extracted' => count($data),
                 ]);
+                
+                // Clean up temporary file after successful extraction
+                if (isset($tempStoragePath) && file_exists($tempStoragePath)) {
+                    @unlink($tempStoragePath);
+                }
             } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $extractError) {
+                // Clean up temporary file on error
+                if (isset($tempStoragePath) && file_exists($tempStoragePath)) {
+                    @unlink($tempStoragePath);
+                }
                 // PhpSpreadsheet specific errors (corrupted file, unsupported format, etc.)
                 Log::error('CS Form 212 extraction failed (PhpSpreadsheet error)', [
                     'file_name' => $file->getClientOriginalName(),
@@ -670,23 +764,33 @@ class EmployeeController extends Controller
                 ]);
                 throw $extractError;
             } catch (\RuntimeException $extractError) {
+                // Clean up temporary file on error
+                if (isset($tempStoragePath) && file_exists($tempStoragePath)) {
+                    @unlink($tempStoragePath);
+                }
+                
                 // Runtime errors from the importer
                 Log::error('CS Form 212 extraction failed (Runtime error)', [
                     'file_name' => $file->getClientOriginalName(),
-                    'file_path' => $path,
+                    'temp_path' => $tempStoragePath ?? null,
                     'file_size' => $fileSize,
-                    'file_exists' => file_exists($path),
-                    'is_readable' => is_readable($path),
+                    'file_exists' => isset($tempStoragePath) ? file_exists($tempStoragePath) : null,
+                    'is_readable' => isset($tempStoragePath) ? is_readable($tempStoragePath) : null,
                     'error' => $extractError->getMessage(),
                     'exception_class' => get_class($extractError),
                     'trace' => $extractError->getTraceAsString(),
                 ]);
                 throw $extractError;
             } catch (\Throwable $extractError) {
+                // Clean up temporary file on error
+                if (isset($tempStoragePath) && file_exists($tempStoragePath)) {
+                    @unlink($tempStoragePath);
+                }
+                
                 // Any other errors
                 Log::error('CS Form 212 extraction failed (General error)', [
                     'file_name' => $file->getClientOriginalName(),
-                    'file_path' => $path,
+                    'temp_path' => $tempStoragePath ?? null,
                     'file_size' => $fileSize,
                     'error' => $extractError->getMessage(),
                     'exception_class' => get_class($extractError),
@@ -695,6 +799,10 @@ class EmployeeController extends Controller
                 throw $extractError;
             }
         } catch (\PhpOffice\PhpSpreadsheet\Reader\Exception $e) {
+            // Clean up temporary file on error
+            if (isset($tempStoragePath) && file_exists($tempStoragePath)) {
+                @unlink($tempStoragePath);
+            }
             // PhpSpreadsheet couldn't read the file
             Log::error('Failed to read CS Form 212 file (PhpSpreadsheet error)', [
                 'file_name' => $request->file('pds_file')?->getClientOriginalName(),
