@@ -8,6 +8,7 @@ import axios from 'axios';
 import { route as ziggyRoute } from 'ziggy-js';
 import { LayoutProvider } from './contexts/LayoutContext';
 import { initializeTheme } from './hooks/use-appearance';
+import { ModalCleanup } from './components/ModalCleanup';
 
 // Force HTTPS for all HTTP requests only in production or when already using HTTPS
 if (typeof window !== 'undefined') {
@@ -292,6 +293,7 @@ createInertiaApp({
         root.render(
             <LayoutProvider>
                 <App {...props} />
+                <ModalCleanup />
             </LayoutProvider>,
         );
     },

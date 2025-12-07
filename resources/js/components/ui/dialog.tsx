@@ -40,6 +40,22 @@ function DialogOverlay({
         className
       )}
       {...props}
+      onAnimationEnd={(e) => {
+        // Clean up overlay if it's closing
+        if (e.currentTarget.getAttribute('data-state') === 'closed') {
+          // Small delay to ensure animation completes
+          setTimeout(() => {
+            const overlay = e.currentTarget;
+            // Check if dialog is still closed
+            const dialog = overlay.closest('[data-slot="dialog"]');
+            if (dialog && dialog.getAttribute('data-state') === 'closed') {
+              // Ensure pointer events are restored
+              document.body.style.pointerEvents = '';
+              document.documentElement.style.pointerEvents = '';
+            }
+          }, 100);
+        }
+      }}
     />
   )
 }
@@ -59,6 +75,40 @@ function DialogContent({
           className
         )}
         {...props}
+        onAnimationEnd={(e) => {
+          // Clean up when dialog closes
+          if (e.currentTarget.getAttribute('data-state') === 'closed') {
+            setTimeout(() => {
+              const content = e.currentTarget;
+              const portal = content.closest('[data-slot="dialog-portal"]');
+              const overlay = portal?.querySelector('[data-slot="dialog-overlay"]');
+              
+              // Check if dialog is still closed
+              const dialog = content.closest('[data-slot="dialog"]');
+              if (dialog && dialog.getAttribute('data-state') === 'closed') {
+                // Remove overlay and portal if dialog is closed
+                if (overlay) {
+                  (overlay as HTMLElement).style.display = 'none';
+                  overlay.remove();
+                }
+                if (portal) {
+                  portal.remove();
+                }
+                
+                // Restore page interactivity
+                document.body.style.pointerEvents = '';
+                document.documentElement.style.pointerEvents = '';
+              }
+              
+              // Call the original onAnimationEnd if provided
+              if (props.onAnimationEnd) {
+                props.onAnimationEnd(e);
+              }
+            }, 100);
+          } else if (props.onAnimationEnd) {
+            props.onAnimationEnd(e);
+          }
+        }}
       >
         {children}
         <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">

@@ -21,7 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useModalCleanup } from '@/hooks/use-modal-cleanup';
+import { cleanupModalOverlays } from '@/utils/modal-utils';
 
 // Interfaces
 interface AddButtonProps {
@@ -135,6 +137,17 @@ export const CustomModalForm = ({
     typeof addButton.icon === 'string' ? null : addButton.icon;
 
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+
+  // Clean up modal overlays when modal closes
+  useModalCleanup(open);
+
+  // Additional cleanup when modal state changes
+  useEffect(() => {
+    if (!open) {
+      // Clean up after modal closes
+      cleanupModalOverlays();
+    }
+  }, [open]);
 
   // Helper function to determine resource type from permission name
   const getResourceTypeFromName = (name: string): string => {
@@ -509,6 +522,16 @@ export const CustomModalForm = ({
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
         className="sm:max-w-[830px] max-h-[90vh] overflow-hidden"
+        onEscapeKeyDown={() => {
+          onOpenChange(false);
+        }}
+        onPointerDownOutside={(e) => {
+          // Allow closing on outside click if not processing
+          if (!processing) {
+            e.preventDefault();
+            onOpenChange(false);
+          }
+        }}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
