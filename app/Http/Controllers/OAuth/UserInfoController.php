@@ -27,6 +27,9 @@ class UserInfoController extends Controller
         if ($employee) {
             $claims['employee_id'] = (string) $employee->id;
             $claims['employee_number'] = $employee->employee_number ?? null;
+            $claims['first_name'] = $employee->first_name ?? null;
+            $claims['last_name'] = $employee->surname ?? null;
+            $claims['middle_name'] = $employee->middle_name ?? null;
             
             // Load relationships if they exist
             if ($employee->relationLoaded('department') || $employee->department) {
