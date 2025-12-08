@@ -30,6 +30,12 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        
+        // Prevent double submission
+        if (processing) {
+            return;
+        }
+        
         post(route('password.store'), {
             onFinish: () => reset('password', 'password_confirmation'),
         });

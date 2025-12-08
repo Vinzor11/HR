@@ -30,6 +30,12 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        
+        // Prevent double submission
+        if (processing) {
+            return;
+        }
+        
         post(route('login'), {
             onFinish: () => reset('password'),
         });

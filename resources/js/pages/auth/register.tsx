@@ -28,6 +28,12 @@ export default function Register() {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        
+        // Prevent double submission
+        if (processing) {
+            return;
+        }
+        
         post(route('register'), {
             onFinish: () => reset('password', 'password_confirmation'),
         });

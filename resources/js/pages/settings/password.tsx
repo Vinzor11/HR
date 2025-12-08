@@ -31,6 +31,11 @@ export default function Password() {
     const updatePassword: FormEventHandler = (e) => {
         e.preventDefault();
 
+        // Prevent double submission
+        if (processing) {
+            return;
+        }
+
         put(route('password.update'), {
             preserveScroll: true,
             onSuccess: () => reset(),

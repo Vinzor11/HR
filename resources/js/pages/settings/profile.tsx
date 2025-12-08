@@ -35,6 +35,11 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
 
+        // Prevent double submission
+        if (processing) {
+            return;
+        }
+
         patch(route('profile.update'), {
             preserveScroll: true,
         });

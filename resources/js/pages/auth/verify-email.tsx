@@ -13,6 +13,11 @@ export default function VerifyEmail({ status }: { status?: string }) {
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
 
+        // Prevent double submission
+        if (processing) {
+            return;
+        }
+
         post(route('verification.send'));
     };
 
