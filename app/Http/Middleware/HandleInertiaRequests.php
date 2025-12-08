@@ -113,6 +113,7 @@ class HandleInertiaRequests extends Middleware
                 $isSecure = $request->secure();
                 $shouldForceHttps = $isProduction || $isSecure;
                 
+                // Get base URL and current request URL
                 $baseUrl = config('app.url');
                 $location = $request->url();
                 
@@ -126,9 +127,16 @@ class HandleInertiaRequests extends Middleware
                         $location = str_replace('https://', 'http://', $location);
                     }
                 } else {
-                    // Only convert to HTTPS if we should force it (production)
-                    if ($baseUrl && str_starts_with($baseUrl, 'http://')) {
-                        $baseUrl = str_replace('http://', 'https://', $baseUrl);
+                    // Force HTTPS in production - be more aggressive
+                    if ($baseUrl) {
+                        if (str_starts_with($baseUrl, 'http://')) {
+                            $baseUrl = str_replace('http://', 'https://', $baseUrl);
+                        }
+                        // Also ensure the host matches the current request
+                        $currentHost = $request->getHost();
+                        if (parse_url($baseUrl, PHP_URL_HOST) !== $currentHost) {
+                            $baseUrl = str_replace(parse_url($baseUrl, PHP_URL_HOST) ?? '', $currentHost, $baseUrl);
+                        }
                     }
                     if (str_starts_with($location, 'http://')) {
                         $location = str_replace('http://', 'https://', $location);

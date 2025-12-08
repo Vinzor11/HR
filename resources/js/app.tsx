@@ -10,7 +10,7 @@ import { LayoutProvider } from './contexts/LayoutContext';
 import { initializeTheme } from './hooks/use-appearance';
 import { ModalCleanup } from './components/ModalCleanup';
 
-// URL normalization utilities
+// URL normalization utilities - MUST run before anything else
 if (typeof window !== 'undefined') {
     const isProduction = import.meta.env.PROD || import.meta.env.VITE_APP_ENV === 'production';
     const isHttps = window.location.protocol === 'https:';
@@ -23,23 +23,29 @@ if (typeof window !== 'undefined') {
      * Normalize URL protocol based on environment
      */
     const normalizeUrl = (url: string | URL): string | URL => {
-                    if (typeof url === 'string') {
+        if (typeof url === 'string') {
+            // Handle relative URLs
+            if (url.startsWith('/') || !url.includes('://')) {
+                // Relative URL - return as is, will be resolved against current origin
+                return url;
+            }
+            
             if (shouldForceHttps && url.startsWith('http://')) {
                 return url.replace('http://', 'https://');
             } else if (!shouldForceHttps && url.startsWith('https://') && isLocalhost) {
                 return url.replace('https://', 'http://');
             }
             return url;
-                    } else if (url instanceof URL) {
+        } else if (url instanceof URL) {
             if (shouldForceHttps && url.protocol === 'http:') {
-                return new URL(url.href.replace('http://', 'https://'));
+                url.protocol = 'https:';
             } else if (!shouldForceHttps && url.protocol === 'https:' && isLocalhost) {
-                return new URL(url.href.replace('https://', 'http://'));
+                url.protocol = 'http:';
             }
             return url;
         }
         return url;
-        };
+    };
         
     /**
      * Check if URL is localhost
@@ -77,23 +83,69 @@ if (typeof window !== 'undefined') {
         });
         
     // Patch XMLHttpRequest
-        const originalXHROpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: any[]) {
-        const normalizedUrl = normalizeUrl(url);
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: any[]) {
+        let normalizedUrl: string | URL = url;
+        
+        if (typeof url === 'string') {
+            // Handle relative URLs by converting to absolute first
+            if (url.startsWith('/') || !url.includes('://')) {
+                try {
+                    const absoluteUrl = new URL(url, window.location.origin);
+                    normalizedUrl = normalizeUrl(absoluteUrl);
+                } catch {
+                    normalizedUrl = normalizeUrl(url);
+                }
+            } else {
+                normalizedUrl = normalizeUrl(url);
+            }
+        } else if (url instanceof URL) {
+            normalizedUrl = normalizeUrl(url);
+        }
+        
         return originalXHROpen.call(this, method, normalizedUrl, ...args);
     };
 
-    // Patch fetch
-    if (shouldForceHttps) {
-        const originalFetch = window.fetch;
-        window.fetch = function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-            const normalizedInput = normalizeUrl(input as string | URL);
-            if (input instanceof Request && typeof normalizedInput === 'string') {
-                input = new Request(normalizedInput, input);
+    // Patch fetch - always normalize URLs
+    const originalFetch = window.fetch;
+    window.fetch = function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+        let normalizedInput: RequestInfo | URL = input;
+        
+        if (typeof input === 'string') {
+            // Handle relative URLs by converting to absolute first
+            if (input.startsWith('/') || !input.includes('://')) {
+                try {
+                    const absoluteUrl = new URL(input, window.location.origin);
+                    normalizedInput = normalizeUrl(absoluteUrl);
+                } catch {
+                    normalizedInput = normalizeUrl(input);
+                }
+            } else {
+                normalizedInput = normalizeUrl(input);
             }
-            return originalFetch(normalizedInput as RequestInfo | URL, init);
-        };
-    }
+        } else if (input instanceof URL) {
+            normalizedInput = normalizeUrl(input);
+        } else if (input instanceof Request) {
+            // For Request objects, normalize the URL
+            const url = input.url;
+            if (url.startsWith('/') || !url.includes('://')) {
+                try {
+                    const absoluteUrl = new URL(url, window.location.origin);
+                    const normalizedUrl = normalizeUrl(absoluteUrl);
+                    input = new Request(normalizedUrl instanceof URL ? normalizedUrl.href : normalizedUrl, input);
+                } catch {
+                    const normalizedUrl = normalizeUrl(url);
+                    input = new Request(normalizedUrl instanceof URL ? normalizedUrl.href : normalizedUrl, input);
+                }
+            } else {
+                const normalizedUrl = normalizeUrl(url);
+                input = new Request(normalizedUrl instanceof URL ? normalizedUrl.href : normalizedUrl, input);
+            }
+            normalizedInput = input;
+        }
+        
+        return originalFetch(normalizedInput as RequestInfo | URL, init);
+    };
         
     // Patch Inertia router.visit
     const patchRouterVisit = () => {
