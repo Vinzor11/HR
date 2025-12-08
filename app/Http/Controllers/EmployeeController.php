@@ -1993,6 +1993,23 @@ class EmployeeController extends Controller
             'status' => 'required|in:active,inactive,on-leave',
             'employment_status' => 'required|in:Regular,Contractual,Job-Order,Probationary',
             'employee_type' => 'required|in:Teaching,Non-Teaching',
+            'organization_type' => 'nullable|in:academic,administrative',
+            'faculty_id' => [
+                function ($attribute, $value, $fail) use ($request) {
+                    $organizationType = $request->input('organization_type');
+                    // Faculty ID is only required for academic organization type
+                    if ($organizationType === 'academic' && empty($value)) {
+                        $fail('Faculty is required for academic departments.');
+                    }
+                    // For administrative, faculty_id should be null
+                    if ($organizationType === 'administrative' && !empty($value)) {
+                        $fail('Faculty must not be selected for administrative offices.');
+                    }
+                },
+                'nullable',
+                'integer',
+                'exists:faculties,id',
+            ],
             'department_id' => $isFacultyLevelPosition ? 'nullable|exists:departments,id' : 'required|exists:departments,id',
             'position_id' => [
                 'required',

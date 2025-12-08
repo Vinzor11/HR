@@ -452,8 +452,9 @@ export const validateEmployeeData = (data: Record<string, any>, positions?: Arra
   }
 
   // Employment required fields
-  if (!data.faculty_id) {
-    requiredErrors.faculty_id = 'Faculty is required';
+  // Faculty ID is only required for academic organization type
+  if (data.organization_type === 'academic' && !data.faculty_id) {
+    requiredErrors.faculty_id = 'Faculty is required for academic departments';
   }
   
   // Check if selected position is faculty-level (has faculty_id but no department_id)
