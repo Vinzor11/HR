@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\UserActivity;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -91,6 +92,22 @@ class TwoFactorVerificationController extends Controller
         // Log the user in
         Auth::login($user, $request->session()->get('login.remember', false));
         $request->session()->regenerate();
+
+        // Log successful login after 2FA verification
+        $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
+        $activity = UserActivity::create([
+            'user_id' => $user->id,
+            'activity_type' => 'login',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'device' => $userAgentInfo['device'],
+            'browser' => $userAgentInfo['browser'],
+            'status' => 'success',
+            'login_time' => now(),
+        ]);
+
+        // Store activity ID in session for logout tracking
+        $request->session()->put('last_activity_id', $activity->id);
 
         // Redirect to OAuth authorize if that's where they came from
         if ($request->session()->has('oauth_redirect')) {

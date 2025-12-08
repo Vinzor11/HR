@@ -54,6 +54,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/employees/logs', [EmployeeController::class, 'logs'])->name('employees.logs')->middleware('permission:view-employee-log');
     Route::get('/organizational/logs', [OrganizationalLogController::class, 'logs'])->name('organizational.logs')->middleware('permission:view-organizational-log');
     Route::get('/users/logs', [UserController::class, 'logs'])->name('users.logs')->middleware('permission:view-user-log');
+    Route::get('/users/activities', [App\Http\Controllers\UserActivitiesController::class, 'activities'])->name('users.activities')->middleware('permission:view-user-activities');
     Route::post('/employees/{id}/restore', [EmployeeController::class, 'restore'])->name('employees.restore')->middleware('permission:restore-employee');
     Route::delete('/employees/{id}/force-delete', [EmployeeController::class, 'forceDelete'])->name('employees.force-delete')->middleware('permission:force-delete-employee');
     Route::resource('faculties', FacultyController::class)->middleware('permission:access-faculty');

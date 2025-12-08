@@ -43,6 +43,12 @@ const mainNavItems: NavItem[] = [
                 icon: Clock,
                 permission: 'view-user-log',
             },
+            {
+                title: 'User Activities',
+                href: '/users/activities',
+                icon: Clock,
+                permission: 'view-user-activities',
+            },
         ],
     },
     {

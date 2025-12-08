@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\UserActivity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +30,29 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
-        $request->authenticate();
+        try {
+            $request->authenticate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Log failed login attempt
+            $email = $request->input('email');
+            $user = \App\Models\User::where('email', $email)->first();
+            
+            if ($user) {
+                $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
+                UserActivity::create([
+                    'user_id' => $user->id,
+                    'activity_type' => 'login_failed',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'device' => $userAgentInfo['device'],
+                    'browser' => $userAgentInfo['browser'],
+                    'status' => 'failed',
+                    'login_time' => now(),
+                ]);
+            }
+            
+            throw $e;
+        }
 
         $user = Auth::user();
 
@@ -50,6 +73,22 @@ class AuthenticatedSessionController extends Controller
         // Only regenerate session if 2FA is not enabled
         $request->session()->regenerate();
 
+        // Log successful login
+        $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
+        $activity = UserActivity::create([
+            'user_id' => $user->id,
+            'activity_type' => 'login',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'device' => $userAgentInfo['device'],
+            'browser' => $userAgentInfo['browser'],
+            'status' => 'success',
+            'login_time' => now(),
+        ]);
+
+        // Store activity ID in session for logout tracking
+        $request->session()->put('last_activity_id', $activity->id);
+
         // Redirect to OAuth authorize if that's where they came from
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
@@ -69,6 +108,55 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = Auth::user();
+        
+        // Log logout if user is authenticated
+        if ($user) {
+            $activityId = $request->session()->get('last_activity_id');
+            
+            if ($activityId) {
+                // Update the last login activity with logout time
+                $activity = UserActivity::where('id', $activityId)
+                    ->where('user_id', $user->id)
+                    ->where('activity_type', 'login')
+                    ->whereNull('logout_time')
+                    ->latest()
+                    ->first();
+                
+                if ($activity) {
+                    $activity->update([
+                        'logout_time' => now(),
+                    ]);
+                } else {
+                    // Create new logout activity if we can't find the login
+                    $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
+                    UserActivity::create([
+                        'user_id' => $user->id,
+                        'activity_type' => 'logout',
+                        'ip_address' => $request->ip(),
+                        'user_agent' => $request->userAgent(),
+                        'device' => $userAgentInfo['device'],
+                        'browser' => $userAgentInfo['browser'],
+                        'status' => 'success',
+                        'logout_time' => now(),
+                    ]);
+                }
+            } else {
+                // Create logout activity if no activity ID in session
+                $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
+                UserActivity::create([
+                    'user_id' => $user->id,
+                    'activity_type' => 'logout',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'device' => $userAgentInfo['device'],
+                    'browser' => $userAgentInfo['browser'],
+                    'status' => 'success',
+                    'logout_time' => now(),
+                ]);
+            }
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();
