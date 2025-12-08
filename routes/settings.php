@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -18,4 +19,10 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/appearance', function () {
         return Inertia::render('settings/appearance');
     })->name('appearance');
+
+    // Two Factor Authentication
+    Route::get('settings/two-factor', [TwoFactorController::class, 'show'])->name('two-factor.show');
+    Route::post('settings/two-factor/enable', [TwoFactorController::class, 'enable'])->name('two-factor.enable');
+    Route::post('settings/two-factor/disable', [TwoFactorController::class, 'disable'])->name('two-factor.disable');
+    Route::post('settings/two-factor/recovery-codes', [TwoFactorController::class, 'regenerateRecoveryCodes'])->name('two-factor.recovery-codes');
 });

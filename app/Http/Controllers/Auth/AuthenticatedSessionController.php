@@ -31,6 +31,23 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
+        $user = Auth::user();
+
+        // Check if user has 2FA enabled
+        if ($user && $user->hasTwoFactorEnabled()) {
+            // Store user ID and remember preference in session
+            // Don't regenerate session yet - we'll do it after 2FA verification
+            $request->session()->put('login.id', $user->id);
+            $request->session()->put('login.remember', $request->boolean('remember'));
+
+            // Logout the user temporarily
+            Auth::logout();
+
+            // Redirect to 2FA verification
+            return redirect()->route('two-factor.login');
+        }
+
+        // Only regenerate session if 2FA is not enabled
         $request->session()->regenerate();
 
         // Redirect to OAuth authorize if that's where they came from

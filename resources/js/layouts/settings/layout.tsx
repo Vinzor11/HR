@@ -18,6 +18,11 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
     },
     {
+        title: 'Two Factor',
+        href: '/settings/two-factor',
+        icon: null,
+    },
+    {
         title: 'Appearance',
         href: '/settings/appearance',
         icon: null,

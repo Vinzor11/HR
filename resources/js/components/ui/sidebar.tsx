@@ -374,8 +374,14 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
       data-sidebar="content"
       className={cn(
         "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "scrollbar-hide scroll-smooth",
         className
       )}
+      style={{
+        scrollBehavior: 'smooth',
+        scrollbarWidth: 'none', // Firefox
+        msOverflowStyle: 'none', // IE and Edge
+      } as React.CSSProperties}
       {...props}
     />
   )
