@@ -47,6 +47,11 @@ class TwoFactorController extends Controller
      */
     public function enable(Request $request)
     {
+        // If accessed via GET, redirect back to settings page
+        if ($request->isMethod('get')) {
+            return redirect()->route('two-factor.show');
+        }
+
         $request->validate([
             'code' => ['required', 'string', 'size:6'],
         ]);
@@ -76,6 +81,11 @@ class TwoFactorController extends Controller
      */
     public function disable(Request $request)
     {
+        // If accessed via GET, redirect back to settings page
+        if ($request->isMethod('get')) {
+            return redirect()->route('two-factor.show');
+        }
+
         $request->validate([
             'password' => ['required', 'string', 'current_password'],
         ]);
@@ -94,6 +104,11 @@ class TwoFactorController extends Controller
      */
     public function regenerateRecoveryCodes(Request $request)
     {
+        // If accessed via GET, redirect back to settings page
+        if ($request->isMethod('get')) {
+            return redirect()->route('two-factor.show');
+        }
+
         $request->validate([
             'password' => ['required', 'string', 'current_password'],
         ]);
