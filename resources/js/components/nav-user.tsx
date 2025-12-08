@@ -41,11 +41,11 @@ export function NavUser({ position }: { position: 'left' | 'right' }) {
                             ) : position === 'right' ? (
                                 <>
                                     <UserInfo user={auth.user} className="text-right" position={position} />
-                                    <ChevronsUpDown className="size-4" />
+                                    <ChevronsUpDown className="size-4 text-current" />
                                 </>
                             ) : (
                                 <>
-                                    <ChevronsUpDown className="size-4" />
+                                    <ChevronsUpDown className="size-4 text-current" />
                                     <UserInfo user={auth.user} className="text-left" position={position} />
                                 </>
                             )}

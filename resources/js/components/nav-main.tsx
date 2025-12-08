@@ -85,14 +85,14 @@ export function NavMain({ items = [], position }: { items: NavItem[]; position: 
             return (
                 <>
                     <span>{item.title}</span>
-                    {item.icon && <item.icon className="h-5 w-5" />}
+                    {item.icon && <item.icon className="h-5 w-5 text-current" />}
                 </>
             );
         }
 
         return (
             <>
-                {item.icon && <item.icon className="h-5 w-5" />}
+                {item.icon && <item.icon className="h-5 w-5 text-current" />}
                 <span>{item.title}</span>
             </>
         );
@@ -121,7 +121,7 @@ export function NavMain({ items = [], position }: { items: NavItem[]; position: 
                                                     'flex w-full items-center gap-2',
                                                     position === 'right' ? 'justify-end text-right' : 'justify-start text-left',
                                                 )}>
-                                                    {item.icon && <item.icon className="h-5 w-5" />}
+                                                    {item.icon && <item.icon className="h-5 w-5 text-current" />}
                                                 </div>
                                             </SidebarMenuButton>
                                         </DropdownMenuTrigger>
@@ -145,7 +145,7 @@ export function NavMain({ items = [], position }: { items: NavItem[]; position: 
                                                             child.href === page.url && 'bg-accent text-accent-foreground',
                                                         )}
                                                     >
-                                                        {child.icon && <child.icon className="h-4 w-4" />}
+                                                        {child.icon && <child.icon className="h-4 w-4 text-current" />}
                                                         <span>{child.title}</span>
                                                     </DropdownMenuItem>
                                                 ) : (

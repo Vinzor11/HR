@@ -32,11 +32,11 @@ export function NavFooter({
                                     {position === 'right' ? (
                                         <>
                                             <span>{item.title}</span>
-                                            {item.icon && <item.icon className="h-5 w-5" />}
+                                            {item.icon && <item.icon className="h-5 w-5 text-current" />}
                                         </>
                                     ) : (
                                         <>
-                                            {item.icon && <item.icon className="h-5 w-5" />}
+                                            {item.icon && <item.icon className="h-5 w-5 text-current" />}
                                             <span>{item.title}</span>
                                         </>
                                     )}
