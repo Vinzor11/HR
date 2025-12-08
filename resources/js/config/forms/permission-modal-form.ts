@@ -19,15 +19,12 @@ export const PermissionModalFormConfig = {
             key: 'module',
             name: 'module',
             label: 'Module Name',
-            type: 'single-select',
-            placeholder: 'Enter category name',
+            type: 'textarea',
+            placeholder: 'Enter module name',
             tabIndex: 1,
             autoFocus: true,
-            options: [
-                { label: 'Roles', value: 'roles', key: 'roles'},
-                { label: 'Users', value: 'users', key: 'users'},
-                { label: 'Permissions', value: 'permissions', key: 'permissions'},
-            ]
+            rows: 2,
+            className: 'rounded border p-2 w-full',
         },
         {
             id: 'permission-label',
