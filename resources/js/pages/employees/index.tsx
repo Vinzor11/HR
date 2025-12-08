@@ -534,7 +534,6 @@ export default function Index() {
       router.post(route('employees.restore', id), {}, {
         preserveScroll: true,
         onSuccess: () => {
-          toast.success('Employee restored successfully');
           triggerFetch({});
         },
         onError: () => toast.error('Failed to restore employee'),

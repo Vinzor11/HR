@@ -446,7 +446,6 @@ const handleCategoryFilterChange = (value: string) => {
     router.post(route('positions.restore', id), {}, {
       preserveScroll: true,
       onSuccess: () => {
-        toast.success('Position restored successfully')
         triggerFetch({})
       },
       onError: () => toast.error('Failed to restore position'),

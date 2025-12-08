@@ -201,7 +201,6 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
     router.post(route('faculties.restore', id), {}, {
       preserveScroll: true,
       onSuccess: () => {
-        toast.success('Faculty restored successfully')
         triggerFetch({})
       },
       onError: () => toast.error('Failed to restore faculty'),

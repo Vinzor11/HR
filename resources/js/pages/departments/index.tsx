@@ -221,7 +221,6 @@ export default function DepartmentIndex({ departments, faculties, filters }: Ind
     router.post(route('departments.restore', id), {}, {
       preserveScroll: true,
       onSuccess: () => {
-        toast.success('Department restored successfully')
         triggerFetch({})
       },
       onError: () => toast.error('Failed to restore department'),

@@ -192,7 +192,6 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
     router.post(route('offices.restore', id), {}, {
       preserveScroll: true,
       onSuccess: () => {
-        toast.success('Office restored successfully')
         triggerFetch({})
       },
       onError: () => toast.error('Failed to restore office'),

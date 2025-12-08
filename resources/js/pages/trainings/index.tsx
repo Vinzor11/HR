@@ -569,9 +569,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
     const handleRestore = (id: string | number) => {
         router.post(route('trainings.restore', id), {}, {
             preserveScroll: true,
-            onSuccess: (response: { props: { flash?: { success?: string } } }) => {
-                const successMessage = response.props.flash?.success;
-                if (successMessage) toast.success(successMessage);
+            onSuccess: () => {
                 triggerFetch({ search: searchTerm, perPage });
             },
             onError: (errors) => {

@@ -389,7 +389,6 @@ export default function Index({ users, filters }: IndexProps) {
         router.post(route('users.restore', id), {}, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('User restored successfully');
                 triggerFetch({});
             },
             onError: () => toast.error('Failed to restore user'),
