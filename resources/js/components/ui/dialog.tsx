@@ -42,15 +42,24 @@ function DialogOverlay({
       {...props}
       onAnimationEnd={(e) => {
         // Restore pointer events when overlay animation completes
-        const state = e.currentTarget.getAttribute('data-state');
+        // Capture element reference before async operation
+        const overlay = e.currentTarget;
+        if (!overlay) return;
+        
+        const state = overlay.getAttribute('data-state');
         if (state === 'closed') {
           requestAnimationFrame(() => {
-            // Check if overlay is still connected before restoring
-            const overlay = e.currentTarget;
-            if (!overlay.isConnected) return; // Already removed by Radix UI
+            // Check if overlay still exists and is connected
+            if (!overlay || !overlay.isConnected) return; // Already removed by Radix UI
             
-            const dialog = overlay.closest('[data-slot="dialog"]');
-            if (dialog && dialog.getAttribute('data-state') === 'closed') {
+            try {
+              const dialog = overlay.closest('[data-slot="dialog"]');
+              if (dialog && dialog.getAttribute('data-state') === 'closed') {
+                document.body.style.pointerEvents = '';
+                document.documentElement.style.pointerEvents = '';
+              }
+            } catch (err) {
+              // Element may have been removed, just restore styles
               document.body.style.pointerEvents = '';
               document.documentElement.style.pointerEvents = '';
             }
@@ -84,13 +93,35 @@ function DialogContent({
         {...props}
         onAnimationEnd={(e) => {
           // Restore page interactivity when dialog closes
-          const state = e.currentTarget.getAttribute('data-state');
+          // Capture element reference before async operation
+          const content = e.currentTarget;
+          if (!content) return;
+          
+          const state = content.getAttribute('data-state');
           if (state === 'closed') {
             // Restore pointer events after animation
             requestAnimationFrame(() => {
-              // Check if dialog is still closed before restoring
-              const dialog = e.currentTarget.closest('[data-slot="dialog"]');
-              if (dialog && dialog.getAttribute('data-state') === 'closed') {
+              try {
+                // Check if content still exists before accessing properties
+                if (!content || !content.isConnected) {
+                  // Element removed, just restore styles
+                  document.body.style.pointerEvents = '';
+                  document.documentElement.style.pointerEvents = '';
+                  return;
+                }
+                
+                // Check if dialog is still closed before restoring
+                const dialog = content.closest('[data-slot="dialog"]');
+                if (dialog && dialog.getAttribute('data-state') === 'closed') {
+                  document.body.style.pointerEvents = '';
+                  document.documentElement.style.pointerEvents = '';
+                } else if (!dialog) {
+                  // Dialog not found, restore styles anyway
+                  document.body.style.pointerEvents = '';
+                  document.documentElement.style.pointerEvents = '';
+                }
+              } catch (err) {
+                // Element may have been removed, just restore styles
                 document.body.style.pointerEvents = '';
                 document.documentElement.style.pointerEvents = '';
               }
