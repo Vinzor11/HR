@@ -73,6 +73,7 @@ class SuperAdminSeeder extends Seeder
             ['name' => 'edit-user', 'module' => 'Users', 'label' => 'Edit User', 'description' => 'Can modify user accounts'],
             ['name' => 'delete-user', 'module' => 'Users', 'label' => 'Delete User', 'description' => 'Can delete users'],
             ['name' => 'view-user', 'module' => 'Users', 'label' => 'View User', 'description' => 'Can view user details'],
+            ['name' => 'view-user-log', 'module' => 'Users', 'label' => 'View User Log', 'description' => 'Can view user logs'],
             ['name' => 'restore-user', 'module' => 'Users', 'label' => 'Restore User', 'description' => 'Can restore deactivated users'],
             ['name' => 'force-delete-user', 'module' => 'Users', 'label' => 'Force Delete User', 'description' => 'Can permanently delete users'],
 

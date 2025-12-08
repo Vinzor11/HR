@@ -88,6 +88,7 @@ class HandleInertiaRequests extends Middleware
              ...parent::share($request),
             'name'  => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
+            'csrf'  => csrf_token(), // Explicitly share CSRF token for Inertia
             'auth'  => [
                 'user'        => $user ? [
                     'id' => $user->id,

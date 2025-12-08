@@ -28,9 +28,22 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Users',
-        href: '/users',
         icon: Users,
         permission: 'access-users-module',
+        children: [
+            {
+                title: 'Manage Users',
+                href: '/users',
+                icon: Users,
+                permission: 'access-users-module',
+            },
+            {
+                title: 'User Logs',
+                href: '/users/logs',
+                icon: Clock,
+                permission: 'view-user-log',
+            },
+        ],
     },
     {
         title: 'Employees',

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UserAuditLog;
 use Illuminate\Validation\Rule;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -49,6 +50,18 @@ class RegisteredUserController extends Controller
             'email' => $request->email,
             'employee_id' => $request->employee_id,
             'password' => Hash::make($request->password),
+        ]);
+
+        // Log user registration (self-registration)
+        $userName = $user->name ?? $user->email ?? "User #{$user->id}";
+        UserAuditLog::create([
+            'user_id' => $user->id,
+            'action_type' => 'CREATE',
+            'field_changed' => null,
+            'old_value' => null,
+            'new_value' => "Created a New User Record: {$userName} (Self-Registered)",
+            'action_date' => now(),
+            'performed_by' => $userName, // User registered themselves
         ]);
 
         event(new Registered($user));
