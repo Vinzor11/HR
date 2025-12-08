@@ -19,12 +19,10 @@ export const PermissionModalFormConfig = {
             key: 'module',
             name: 'module',
             label: 'Module Name',
-            type: 'textarea',
+            type: 'text',
             placeholder: 'Enter module name',
             tabIndex: 1,
             autoFocus: true,
-            rows: 2,
-            className: 'rounded border p-2 w-full',
         },
         {
             id: 'permission-label',
