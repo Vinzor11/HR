@@ -175,11 +175,8 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
     post(routePath, {
       preserveState: true,
       preserveScroll: true,
-      onSuccess: (response: { props: FlashProps }) => {
-        const successMessage = response.props.flash?.success
-        if (successMessage) {
-          toast.success(successMessage)
-        }
+      onSuccess: () => {
+        // Flash message will be handled by useEffect watching flash prop
         closeModal()
         refreshTable()
       },

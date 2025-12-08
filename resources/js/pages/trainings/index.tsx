@@ -613,9 +613,8 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         setData('_method', isEdit ? 'PUT' : 'POST');
 
         post(routePath, {
-            onSuccess: (response: { props: { flash?: { success?: string } } }) => {
-                const successMessage = response.props.flash?.success || flash?.success;
-                if (successMessage) toast.success(successMessage);
+            onSuccess: () => {
+                // Flash message will be available in next render via flash prop
                 closeModal();
             },
             onError: (error: any) => {
