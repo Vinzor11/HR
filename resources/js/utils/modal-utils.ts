@@ -10,66 +10,27 @@ export function cleanupModalOverlays() {
   // Use requestAnimationFrame to ensure DOM updates are complete
   requestAnimationFrame(() => {
     setTimeout(() => {
-      // Remove all dialog overlays
-      const overlays = document.querySelectorAll('[data-slot="dialog-overlay"]');
-      overlays.forEach((overlay) => {
-        const element = overlay as HTMLElement;
-        // Check if element is still in the DOM before trying to access parent
-        if (!element.isConnected) return;
-        
-        const dialog = element.closest('[data-slot="dialog"]');
-        
-        // Remove if dialog is closed or doesn't exist
-        if (!dialog || dialog.getAttribute('data-state') === 'closed') {
-          // Check if element has a parent before removing
-          if (element.parentNode) {
-            try {
-              element.remove();
-            } catch (e) {
-              // Element might have already been removed, ignore error
-              console.debug('Overlay already removed:', e);
-            }
-          }
-        }
-      });
-
-      // Remove orphaned portals
-      const portals = document.querySelectorAll('[data-slot="dialog-portal"]');
-      portals.forEach((portal) => {
-        // Check if portal is still in the DOM
-        if (!portal.isConnected) return;
-        
-        const content = portal.querySelector('[data-slot="dialog-content"]');
-        const dialog = portal.closest('[data-slot="dialog"]');
-        
-        if ((!content || content.getAttribute('data-state') === 'closed') &&
-            (!dialog || dialog.getAttribute('data-state') === 'closed')) {
-          const hasOpenDialog = Array.from(
-            document.querySelectorAll('[data-slot="dialog"]')
-          ).some((d) => d.getAttribute('data-state') === 'open');
-          
-          if (!hasOpenDialog && portal.parentNode) {
-            try {
-              portal.remove();
-            } catch (e) {
-              // Portal might have already been removed, ignore error
-              console.debug('Portal already removed:', e);
-            }
-          }
-        }
-      });
-
-      // Restore pointer events - check if any dialogs are actually open
+      // Only restore pointer events - let Radix UI handle DOM removal
+      // Check if any dialogs are actually open
       const hasOpenDialog = Array.from(
         document.querySelectorAll('[data-slot="dialog"]')
-      ).some((dialog) => dialog.getAttribute('data-state') === 'open');
+      ).some((dialog) => {
+        const state = dialog.getAttribute('data-state');
+        return state === 'open';
+      });
 
       if (!hasOpenDialog) {
-        // Restore interactivity
+        // Restore interactivity - don't try to remove elements, just restore styles
         document.body.style.pointerEvents = '';
         document.documentElement.style.pointerEvents = '';
         
         // Remove body scroll lock if no dialogs are open
+        // Check if overflow was set by our code before clearing
+        const htmlStyle = window.getComputedStyle(document.documentElement);
+        const bodyStyle = window.getComputedStyle(document.body);
+        
+        // Only restore if it's actually hidden (might be hidden for other reasons)
+        // We'll just restore it since we're ensuring no dialogs are open
         document.body.style.overflow = '';
         document.documentElement.style.overflow = '';
       }
@@ -78,32 +39,29 @@ export function cleanupModalOverlays() {
 }
 
 /**
- * Force cleanup - removes all overlays immediately
+ * Force cleanup - restores page interactivity without trying to remove DOM nodes
+ * (Let Radix UI handle DOM cleanup to avoid conflicts)
  */
 export function forceCleanupModals() {
-  document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el) => {
-    if (el.isConnected && el.parentNode) {
-      try {
-        el.remove();
-      } catch (e) {
-        console.debug('Overlay already removed:', e);
-      }
-    }
-  });
-  
-  document.querySelectorAll('[data-slot="dialog-portal"]').forEach((el) => {
-    if (el.isConnected && el.parentNode) {
-      try {
-        el.remove();
-      } catch (e) {
-        console.debug('Portal already removed:', e);
-      }
-    }
-  });
-  
+  // Just restore styles - don't try to remove DOM nodes that React/Radix UI manages
   document.body.style.pointerEvents = '';
   document.documentElement.style.pointerEvents = '';
   document.body.style.overflow = '';
   document.documentElement.style.overflow = '';
+  
+  // Force close any open dialogs by setting their state
+  // This is safer than trying to remove DOM nodes
+  const dialogs = document.querySelectorAll('[data-slot="dialog"]');
+  dialogs.forEach((dialog) => {
+    // Radix UI will handle the actual cleanup
+    const root = dialog as HTMLElement;
+    if (root.getAttribute('data-state') === 'open') {
+      // Try to find and click the close button if it exists
+      const closeButton = root.querySelector('[data-slot="dialog-close"]') as HTMLElement;
+      if (closeButton) {
+        closeButton.click();
+      }
+    }
+  });
 }
 
