@@ -80,7 +80,7 @@ class FacultyController extends Controller
                 'action_type' => 'CREATE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Created a New Faculty Record',
+                'new_value' => "Created a New Faculty Record: {$faculty->name}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -182,6 +182,9 @@ class FacultyController extends Controller
         abort_unless(request()->user()->can('delete-faculty'), 403, 'Unauthorized action.');
 
         if ($faculty) {
+            // Refresh to ensure we have the latest data
+            $faculty->refresh();
+            
             // Check if faculty has departments
             if ($faculty->departments()->count() > 0) {
                 return redirect()
@@ -190,6 +193,7 @@ class FacultyController extends Controller
             }
 
             $facultyId = $faculty->id;
+            $facultyName = $faculty->name ?? 'Unknown';
             
             // Log faculty deletion before deleting
             OrganizationalAuditLog::create([
@@ -198,7 +202,7 @@ class FacultyController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Faculty Record Deleted',
+                'new_value' => "Faculty Record Deleted: {$facultyName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -258,10 +262,12 @@ class FacultyController extends Controller
         abort_unless(request()->user()->can('force-delete-faculty'), 403, 'Unauthorized action.');
 
         $faculty = Faculty::withTrashed()->findOrFail($id);
+        $faculty->refresh();
         
         $facultyId = $faculty->id;
+        $facultyName = $faculty->name ?? 'Unknown';
         
-        DB::transaction(function () use ($faculty, $facultyId) {
+        DB::transaction(function () use ($faculty, $facultyId, $facultyName) {
             // Log permanent deletion
             OrganizationalAuditLog::create([
                 'unit_type' => 'faculty',
@@ -269,7 +275,7 @@ class FacultyController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Faculty Record Permanently Deleted',
+                'new_value' => "Faculty Record Permanently Deleted: {$facultyName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

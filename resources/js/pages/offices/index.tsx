@@ -203,7 +203,7 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
     router.delete(route('offices.force-delete', id), {
       preserveScroll: true,
       onSuccess: () => {
-        toast.success('Office permanently deleted')
+        // Flash message will be handled by useEffect watching flash prop
         triggerFetch({})
       },
       onError: () => toast.error('Failed to permanently delete office'),

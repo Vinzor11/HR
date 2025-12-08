@@ -232,7 +232,7 @@ export default function DepartmentIndex({ departments, faculties, filters }: Ind
     router.delete(route('departments.force-delete', id), {
       preserveScroll: true,
       onSuccess: () => {
-        toast.success('Department permanently deleted')
+        // Flash message will be handled by useEffect watching flash prop
         triggerFetch({})
       },
       onError: () => toast.error('Failed to permanently delete department'),

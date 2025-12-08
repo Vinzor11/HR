@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { Clock, User, FileText, RefreshCw, Building, Briefcase, Trash2, Eye, Plus, Edit, Search, Download, Calendar } from 'lucide-react';
+import { Clock, User, FileText, RefreshCw, Building, Briefcase, Trash2, Eye, Plus, Edit, Search, Download, Calendar, RotateCcw, XCircle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useState, useCallback } from 'react';
 import {
@@ -60,10 +60,22 @@ const actionConfig: Record<string, { label: string; icon: string; color: string;
         bgColor: 'bg-blue-100 dark:bg-blue-900/30',
     },
     DELETE: {
-        label: 'Deleted',
+        label: 'Soft Deleted',
         icon: 'Trash2',
+        color: 'text-orange-700 dark:text-orange-400',
+        bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+    },
+    PERMANENT_DELETE: {
+        label: 'Permanently Deleted',
+        icon: 'XCircle',
         color: 'text-red-700 dark:text-red-400',
         bgColor: 'bg-red-100 dark:bg-red-900/30',
+    },
+    RESTORE: {
+        label: 'Restored',
+        icon: 'RotateCcw',
+        color: 'text-purple-700 dark:text-purple-400',
+        bgColor: 'bg-purple-100 dark:bg-purple-900/30',
     },
 };
 
@@ -85,7 +97,18 @@ export default function EmployeeLogs() {
         }).format(date);
     };
 
-    const getActionConfig = (actionType: string) => {
+    const getActionConfig = (actionType: string, fieldChanged?: string, newValue?: any) => {
+        // Check if this is a restore action (UPDATE with field_changed === 'restored')
+        if (actionType === 'UPDATE' && fieldChanged === 'restored') {
+            return actionConfig['RESTORE'];
+        }
+        // Check if this is a permanent delete (DELETE with "Permanently Deleted" in new_value)
+        if (actionType === 'DELETE') {
+            const newValueStr = typeof newValue === 'string' ? newValue : (newValue ? JSON.stringify(newValue) : '');
+            if (newValueStr.includes('Permanently Deleted')) {
+                return actionConfig['PERMANENT_DELETE'];
+            }
+        }
         return actionConfig[actionType] || {
             label: actionType,
             icon: 'FileText',
@@ -123,27 +146,43 @@ export default function EmployeeLogs() {
         if (log.action_type === 'DELETE') {
             // Extract employee ID from log
             const employeeId = log.employee_id;
+            const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
+            const isPermanentDelete = newValueStr.includes('Permanently Deleted');
             
-            // Determine if it's a soft delete (employee still exists) or permanent delete (employee doesn't exist)
-            const isPermanentDelete = !log.employee;
-            const detailsText = isPermanentDelete 
-                ? 'Details: Full record permanently deleted.'
-                : 'Details: Full record archived for recovery.';
+            // Extract employee name if available
+            let employeeName = null;
+            if (!isPermanentDelete && log.employee) {
+                employeeName = `${log.employee.first_name} ${log.employee.middle_name || ''} ${log.employee.surname}`.trim();
+            } else if (newValueStr) {
+                // Extract name from format like "Employee Record Permanently Deleted: {name}"
+                const match = newValueStr.match(/:\s*(.+)$/);
+                if (match) {
+                    employeeName = match[1].trim();
+                }
+            }
             
             return (
                 <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50 dark:border-border-dark/50">
                     <div className="space-y-2.5">
                         <div className="text-sm font-medium text-foreground mb-2">
-                            Employee Record Deleted
+                            Employee Record {isPermanentDelete ? 'Permanently Deleted' : 'Soft Deleted'}
                         </div>
                         <div className="text-xs text-muted-foreground mb-2">
-                            {detailsText}
+                            {isPermanentDelete 
+                                ? 'This record has been permanently deleted and cannot be recovered.'
+                                : 'This record is now inactive and recoverable.'}
                         </div>
                         <div className="text-xs">
                             <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground font-medium">Employee ID:</span>
                                 <span className="font-semibold text-foreground">{employeeId}</span>
                             </div>
+                            {employeeName && (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-muted-foreground font-medium">Name:</span>
+                                    <span className="font-semibold text-foreground">{employeeName}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -151,18 +190,39 @@ export default function EmployeeLogs() {
         }
         
         // UPDATE action
-        if (log.field_changed) {
-            // Special handling for restore action
-            if (log.field_changed === 'restored') {
-                return (
-                    <div className="mt-2 p-2 bg-muted/30 rounded text-xs">
-                        <div className="font-medium text-muted-foreground mb-1">Restored Employee:</div>
-                        <div className="text-foreground text-xs">
-                            Employee was restored from soft deletion
+        // RESTORE action (UPDATE with field_changed === 'restored')
+        if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
+            const employeeName = log.employee 
+                ? `${log.employee.first_name} ${log.employee.middle_name || ''} ${log.employee.surname}`.trim()
+                : log.employee_id;
+            
+            return (
+                <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50 dark:border-border-dark/50">
+                    <div className="space-y-2.5">
+                        <div className="text-sm font-medium text-foreground mb-2">
+                            Employee Record Restored
+                        </div>
+                        <div className="text-xs text-muted-foreground mb-2">
+                            This record has been restored and is now active.
+                        </div>
+                        <div className="text-xs">
+                            <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground font-medium">Employee ID:</span>
+                                <span className="font-semibold text-foreground">{log.employee_id}</span>
+                            </div>
+                            {log.employee && (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-muted-foreground font-medium">Name:</span>
+                                    <span className="font-semibold text-foreground">{employeeName}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
-                );
-            }
+                </div>
+            );
+        }
+        
+        if (log.field_changed) {
             
             // Format field name for display
             const fieldName = log.field_changed
@@ -205,7 +265,17 @@ export default function EmployeeLogs() {
             log.employee?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.employee?.surname?.toLowerCase().includes(searchTerm.toLowerCase());
 
-        const matchesAction = filterAction === 'all' || log.action_type === filterAction;
+        // Handle restore and permanent delete as separate action types for filtering
+        let effectiveActionType = log.action_type;
+        if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
+            effectiveActionType = 'RESTORE';
+        } else if (log.action_type === 'DELETE') {
+            const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
+            if (newValueStr.includes('Permanently Deleted')) {
+                effectiveActionType = 'PERMANENT_DELETE';
+            }
+        }
+        const matchesAction = filterAction === 'all' || effectiveActionType === filterAction;
         
         // Date range filter
         const logDate = new Date(log.action_date);
@@ -215,7 +285,19 @@ export default function EmployeeLogs() {
         return matchesSearch && matchesAction && matchesDateFrom && matchesDateTo;
     });
 
-    const uniqueActions = Array.from(new Set(logs.map(log => log.action_type)));
+    // Get unique actions, treating restore and permanent delete as separate
+    const uniqueActions = Array.from(new Set(logs.map(log => {
+        if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
+            return 'RESTORE';
+        }
+        if (log.action_type === 'DELETE') {
+            const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
+            if (newValueStr.includes('Permanently Deleted')) {
+                return 'PERMANENT_DELETE';
+            }
+        }
+        return log.action_type;
+    })));
 
     // Group logs by date
     const groupedLogs = filteredLogs.reduce((acc, log) => {
@@ -397,7 +479,7 @@ export default function EmployeeLogs() {
                                         <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-border dark:bg-border-dark"></div>
                                         
                                         {groupedLogs[dateKey].map((log, logIndex) => {
-                                            const config = getActionConfig(log.action_type);
+                                            const config = getActionConfig(log.action_type, log.field_changed, log.new_value);
                                             const IconComponent = (LucideIcons as any)[config.icon] || LucideIcons.FileText;
 
                                             return (

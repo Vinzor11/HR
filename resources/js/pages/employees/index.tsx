@@ -549,7 +549,7 @@ export default function Index() {
       router.delete(route('employees.force-delete', id), {
         preserveScroll: true,
         onSuccess: () => {
-          toast.success('Employee permanently deleted');
+          // Flash message will be handled by useEffect watching flash prop
           triggerFetch({});
         },
         onError: () => toast.error('Failed to permanently delete employee'),

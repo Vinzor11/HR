@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { Clock, User, FileText, Building, Trash2, Eye, Plus, Edit, Landmark, Briefcase, Search, Download, Calendar } from 'lucide-react';
+import { Clock, User, FileText, Building, Trash2, Eye, Plus, Edit, Landmark, Briefcase, Search, Download, Calendar, RotateCcw, XCircle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useState, useCallback } from 'react';
 import {
@@ -56,10 +56,22 @@ const actionConfig: Record<string, { label: string; icon: string; color: string;
         bgColor: 'bg-blue-100 dark:bg-blue-900/30',
     },
     DELETE: {
-        label: 'Deleted',
+        label: 'Soft Deleted',
         icon: 'Trash2',
+        color: 'text-orange-700 dark:text-orange-400',
+        bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+    },
+    PERMANENT_DELETE: {
+        label: 'Permanently Deleted',
+        icon: 'XCircle',
         color: 'text-red-700 dark:text-red-400',
         bgColor: 'bg-red-100 dark:bg-red-900/30',
+    },
+    RESTORE: {
+        label: 'Restored',
+        icon: 'RotateCcw',
+        color: 'text-purple-700 dark:text-purple-400',
+        bgColor: 'bg-purple-100 dark:bg-purple-900/30',
     },
 };
 
@@ -105,7 +117,18 @@ export default function OrganizationalLogs() {
         }).format(date);
     };
 
-    const getActionConfig = (actionType: string) => {
+    const getActionConfig = (actionType: string, fieldChanged?: string, newValue?: any) => {
+        // Check if this is a restore action (UPDATE with field_changed === 'restored')
+        if (actionType === 'UPDATE' && fieldChanged === 'restored') {
+            return actionConfig['RESTORE'];
+        }
+        // Check if this is a permanent delete (DELETE with "Permanently Deleted" in new_value)
+        if (actionType === 'DELETE') {
+            const newValueStr = typeof newValue === 'string' ? newValue : (newValue ? JSON.stringify(newValue) : '');
+            if (newValueStr.includes('Permanently Deleted')) {
+                return actionConfig['PERMANENT_DELETE'];
+            }
+        }
         return actionConfig[actionType] || {
             label: actionType,
             icon: 'FileText',
@@ -188,24 +211,76 @@ export default function OrganizationalLogs() {
             const unitConfig = getUnitTypeConfig(log.unit_type);
             const unitLabel = unitConfig.label;
             
+            // Extract name from new_value if unit_name is not available
+            let recordName = log.unit_name;
+            const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
+            const isPermanentDelete = newValueStr.includes('Permanently Deleted');
+            
+            if (!recordName && newValueStr) {
+                // Extract name from format like "Position Record Deleted: {name}" or "{Label} Record Permanently Deleted: {name}"
+                const match = newValueStr.match(/:\s*(.+)$/);
+                if (match) {
+                    recordName = match[1].trim();
+                }
+            }
+            
             return (
                 <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50 dark:border-border-dark/50">
                     <div className="space-y-2.5">
                         <div className="text-sm font-medium text-foreground mb-2">
-                            {unitLabel} Record Deleted
+                            {unitLabel} Record {isPermanentDelete ? 'Permanently Deleted' : 'Soft Deleted'}
                         </div>
                         <div className="text-xs text-muted-foreground mb-2">
-                            Details: Full record permanently deleted.
+                            {isPermanentDelete 
+                                ? 'This record has been permanently deleted and cannot be recovered.'
+                                : 'This record is now inactive and recoverable.'}
                         </div>
                         <div className="text-xs">
                             <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground font-medium">{unitLabel} ID:</span>
                                 <span className="font-semibold text-foreground">{log.unit_id}</span>
                             </div>
-                            {log.unit_name && (
+                            {recordName && (
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-muted-foreground font-medium">Name:</span>
-                                    <span className="font-semibold text-foreground">{log.unit_name}</span>
+                                    <span className="font-semibold text-foreground">{recordName}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        
+        // RESTORE action (UPDATE with field_changed === 'restored')
+        if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
+            const unitConfig = getUnitTypeConfig(log.unit_type);
+            const unitLabel = unitConfig.label;
+            
+            // Extract name from new_value if unit_name is not available
+            let recordName = log.unit_name;
+            if (!recordName && typeof log.new_value === 'object' && log.new_value) {
+                // Try to get name from the unit if available
+            }
+            
+            return (
+                <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50 dark:border-border-dark/50">
+                    <div className="space-y-2.5">
+                        <div className="text-sm font-medium text-foreground mb-2">
+                            {unitLabel} Record Restored
+                        </div>
+                        <div className="text-xs text-muted-foreground mb-2">
+                            This record has been restored and is now active.
+                        </div>
+                        <div className="text-xs">
+                            <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground font-medium">{unitLabel} ID:</span>
+                                <span className="font-semibold text-foreground">{log.unit_id}</span>
+                            </div>
+                            {recordName && (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-muted-foreground font-medium">Name:</span>
+                                    <span className="font-semibold text-foreground">{recordName}</span>
                                 </div>
                             )}
                         </div>
@@ -257,7 +332,17 @@ export default function OrganizationalLogs() {
             log.unit_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.unit_code?.toLowerCase().includes(searchTerm.toLowerCase());
 
-        const matchesAction = filterAction === 'all' || log.action_type === filterAction;
+        // Handle restore and permanent delete as separate action types for filtering
+        let effectiveActionType = log.action_type;
+        if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
+            effectiveActionType = 'RESTORE';
+        } else if (log.action_type === 'DELETE') {
+            const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
+            if (newValueStr.includes('Permanently Deleted')) {
+                effectiveActionType = 'PERMANENT_DELETE';
+            }
+        }
+        const matchesAction = filterAction === 'all' || effectiveActionType === filterAction;
         const matchesUnitType = filterUnitType === 'all' || log.unit_type === filterUnitType;
         
         // Date range filter
@@ -268,7 +353,19 @@ export default function OrganizationalLogs() {
         return matchesSearch && matchesAction && matchesUnitType && matchesDateFrom && matchesDateTo;
     });
 
-    const uniqueActions = Array.from(new Set(logs.map(log => log.action_type)));
+    // Get unique actions, treating restore and permanent delete as separate
+    const uniqueActions = Array.from(new Set(logs.map(log => {
+        if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
+            return 'RESTORE';
+        }
+        if (log.action_type === 'DELETE') {
+            const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
+            if (newValueStr.includes('Permanently Deleted')) {
+                return 'PERMANENT_DELETE';
+            }
+        }
+        return log.action_type;
+    })));
 
     // Group logs by date
     const groupedLogs = filteredLogs.reduce((acc, log) => {
@@ -466,7 +563,7 @@ export default function OrganizationalLogs() {
                                         <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-border dark:bg-border-dark"></div>
                                         
                                         {groupedLogs[dateKey].map((log, logIndex) => {
-                                            const config = getActionConfig(log.action_type);
+                                            const config = getActionConfig(log.action_type, log.field_changed, log.new_value);
                                             const unitConfig = getUnitTypeConfig(log.unit_type);
                                             const IconComponent = (LucideIcons as any)[config.icon] || LucideIcons.FileText;
                                             const UnitIconComponent = (LucideIcons as any)[unitConfig.icon] || LucideIcons.FileText;

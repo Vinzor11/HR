@@ -1092,12 +1092,13 @@ class EmployeeController extends Controller
             $this->handleRelatedData($request, $employee);
             
             // Log employee creation - simple text message
+            $employeeName = $this->getEmployeeFullName($employee);
             EmployeeAuditLog::create([
                 'employee_id' => $employee->id,
                 'action_type' => 'CREATE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Created a New Employee Record',
+                'new_value' => "Created a New Employee Record: {$employeeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -1624,18 +1625,36 @@ class EmployeeController extends Controller
         return (string) $value;
     }
 
+    /**
+     * Get employee's full name for logging purposes
+     */
+    protected function getEmployeeFullName(Employee $employee): string
+    {
+        $nameParts = array_filter([
+            $employee->first_name,
+            $employee->middle_name,
+            $employee->surname,
+        ]);
+        
+        return implode(' ', $nameParts) ?: $employee->id;
+    }
+
     public function destroy(Employee $employee)
     {
-        $employeeId = $employee->id;
+        // Refresh to ensure we have the latest data
+        $employee->refresh();
         
-        DB::transaction(function () use ($employee, $employeeId) {
+        $employeeId = $employee->id;
+        $employeeName = $this->getEmployeeFullName($employee);
+        
+        DB::transaction(function () use ($employee, $employeeId, $employeeName) {
             // Log employee soft deletion - simple text message
             EmployeeAuditLog::create([
                 'employee_id' => $employeeId,
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Employee Record Soft-Deleted',
+                'new_value' => "Employee Record Soft-Deleted: {$employeeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -1644,7 +1663,7 @@ class EmployeeController extends Controller
             $employee->delete();
         });
 
-        return redirect()->route('employees.index')->with('success', 'Employee has been soft deleted successfully.');
+        return redirect()->route('employees.index')->with('success', 'Employee deleted successfully.');
     }
 
     /**
@@ -1690,17 +1709,19 @@ class EmployeeController extends Controller
         abort_unless(request()->user()->can('force-delete-employee'), 403, 'Unauthorized action.');
 
         $employee = Employee::withTrashed()->findOrFail($id);
+        $employee->refresh();
         
         $employeeId = $employee->id;
+        $employeeName = $this->getEmployeeFullName($employee);
         
-        DB::transaction(function () use ($employee, $employeeId) {
+        DB::transaction(function () use ($employee, $employeeId, $employeeName) {
             // Log permanent deletion - simple text message
             EmployeeAuditLog::create([
                 'employee_id' => $employeeId,
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Employee Record Permanently Deleted',
+                'new_value' => "Employee Record Permanently Deleted: {$employeeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

@@ -77,7 +77,7 @@ class OfficeController extends Controller
                 'action_type' => 'CREATE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Created a New Office Record',
+                'new_value' => "Created a New Office Record: {$office->name}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -173,6 +173,7 @@ class OfficeController extends Controller
         abort_unless(request()->user()->can('delete-office'), 403, 'Unauthorized action.');
 
         $office = Department::findOrFail($office);
+        $office->refresh();
         
         // Ensure this is an administrative department (office)
         if ($office->type !== 'administrative') {
@@ -197,6 +198,7 @@ class OfficeController extends Controller
             }
 
             $officeId = $office->id;
+            $officeName = $office->name ?? 'Unknown';
             
             // Log office deletion before deleting
             OrganizationalAuditLog::create([
@@ -205,7 +207,7 @@ class OfficeController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Office Record Deleted',
+                'new_value' => "Office Record Deleted: {$officeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -270,6 +272,7 @@ class OfficeController extends Controller
         abort_unless(request()->user()->can('force-delete-office'), 403, 'Unauthorized action.');
 
         $office = Department::withTrashed()->findOrFail($id);
+        $office->refresh();
         
         // Ensure this is an administrative department (office)
         if ($office->type !== 'administrative') {
@@ -277,8 +280,9 @@ class OfficeController extends Controller
         }
         
         $officeId = $office->id;
+        $officeName = $office->name ?? 'Unknown';
         
-        DB::transaction(function () use ($office, $officeId) {
+        DB::transaction(function () use ($office, $officeId, $officeName) {
             // Log permanent deletion
             OrganizationalAuditLog::create([
                 'unit_type' => 'office',
@@ -286,7 +290,7 @@ class OfficeController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Office Record Permanently Deleted',
+                'new_value' => "Office Record Permanently Deleted: {$officeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

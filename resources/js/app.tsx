@@ -23,14 +23,14 @@ if (typeof window !== 'undefined') {
      * Normalize URL protocol based on environment
      */
     const normalizeUrl = (url: string | URL): string | URL => {
-        if (typeof url === 'string') {
+                    if (typeof url === 'string') {
             if (shouldForceHttps && url.startsWith('http://')) {
                 return url.replace('http://', 'https://');
             } else if (!shouldForceHttps && url.startsWith('https://') && isLocalhost) {
                 return url.replace('https://', 'http://');
             }
             return url;
-        } else if (url instanceof URL) {
+                    } else if (url instanceof URL) {
             if (shouldForceHttps && url.protocol === 'http:') {
                 return new URL(url.href.replace('http://', 'https://'));
             } else if (!shouldForceHttps && url.protocol === 'https:' && isLocalhost) {
@@ -39,46 +39,46 @@ if (typeof window !== 'undefined') {
             return url;
         }
         return url;
-    };
-
+        };
+        
     /**
      * Check if URL is localhost
      */
     const isLocalhostUrl = (url: string): boolean => {
         return url.includes('127.0.0.1') || url.includes('localhost') || url.includes(':8000');
-    };
-
+        };
+        
     // Configure axios
-    axios.defaults.baseURL = window.location.origin;
-
+        axios.defaults.baseURL = window.location.origin;
+        
     // Axios interceptor for URL normalization and CSRF token
-    axios.interceptors.request.use((config) => {
+        axios.interceptors.request.use((config) => {
         // Normalize URLs
-        if (config.url && typeof config.url === 'string') {
+            if (config.url && typeof config.url === 'string') {
             config.url = normalizeUrl(config.url) as string;
-        }
-        if (config.baseURL && typeof config.baseURL === 'string') {
+            }
+            if (config.baseURL && typeof config.baseURL === 'string') {
             config.baseURL = normalizeUrl(config.baseURL) as string;
         }
 
         // Add CSRF token for state-changing requests
-        const method = (config.method || 'get').toLowerCase();
-        if (['post', 'put', 'patch', 'delete'].includes(method)) {
-            if (!config.headers['X-CSRF-TOKEN'] && !config.headers['x-csrf-token']) {
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+            const method = (config.method || 'get').toLowerCase();
+            if (['post', 'put', 'patch', 'delete'].includes(method)) {
+                if (!config.headers['X-CSRF-TOKEN'] && !config.headers['x-csrf-token']) {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                     (document.cookie.match(/XSRF-TOKEN=([^;]+)/) ? decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)![1]) : null);
-                if (csrfToken) {
-                    config.headers['X-CSRF-TOKEN'] = csrfToken;
+                    if (csrfToken) {
+                        config.headers['X-CSRF-TOKEN'] = csrfToken;
+                    }
                 }
             }
-        }
-
-        return config;
-    });
-
+            
+            return config;
+        });
+        
     // Patch XMLHttpRequest
-    const originalXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: any[]) {
+        const originalXHROpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method: string, url: string | URL, ...args: any[]) {
         const normalizedUrl = normalizeUrl(url);
         return originalXHROpen.call(this, method, normalizedUrl, ...args);
     };
@@ -94,19 +94,19 @@ if (typeof window !== 'undefined') {
             return originalFetch(normalizedInput as RequestInfo | URL, init);
         };
     }
-
+        
     // Patch Inertia router.visit
     const patchRouterVisit = () => {
         if (router && typeof router.visit === 'function' && !(router.visit as any).__patched) {
             const originalVisit = router.visit.bind(router);
             (router.visit as any).__original = originalVisit;
             
-            router.visit = function(url: string | URL, options?: any) {
+                    router.visit = function(url: string | URL, options?: any) {
                 const normalizedUrl = normalizeUrl(url);
-                return originalVisit(normalizedUrl, options);
-            };
+                        return originalVisit(normalizedUrl, options);
+                    };
             
-            (router.visit as any).__patched = true;
+                    (router.visit as any).__patched = true;
         }
     };
 
@@ -155,7 +155,7 @@ createInertiaApp({
             const shouldForceHttps = isProduction || isHttps;
             const currentProtocol = window.location.protocol;
             const currentHost = window.location.host;
-
+            
             // Normalize Ziggy base URLs
             if (ziggy.location && typeof ziggy.location === 'string') {
                 if (currentProtocol === 'http:' && ziggy.location.startsWith('https://')) {
@@ -174,7 +174,7 @@ createInertiaApp({
                     ziggy.url = ziggy.url.replace('http://', 'https://');
                 }
             }
-
+            
             // Override route function
             const originalRoute = (window as any).route;
             if (originalRoute) {

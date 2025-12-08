@@ -107,7 +107,7 @@ class DepartmentController extends Controller
                 'action_type' => 'CREATE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Created a New {$unitLabel} Record",
+                'new_value' => "Created a New {$unitLabel} Record: {$department->name}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -215,6 +215,9 @@ class DepartmentController extends Controller
         abort_unless(request()->user()->can('delete-department'), 403, 'Unauthorized action.');
 
         if ($department) {
+            // Refresh to ensure we have the latest data
+            $department->refresh();
+            
             // Check if department has employees
             if ($department->employees()->count() > 0) {
                 return redirect()
@@ -223,6 +226,7 @@ class DepartmentController extends Controller
             }
 
             $departmentId = $department->id;
+            $departmentName = $department->name ?? 'Unknown';
             $unitType = $department->type === 'administrative' ? 'office' : 'department';
             $unitLabel = $department->type === 'administrative' ? 'Office' : 'Department';
             
@@ -233,7 +237,7 @@ class DepartmentController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "{$unitLabel} Record Deleted",
+                'new_value' => "{$unitLabel} Record Deleted: {$departmentName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -318,12 +322,14 @@ class DepartmentController extends Controller
         abort_unless(request()->user()->can('force-delete-department'), 403, 'Unauthorized action.');
 
         $department = Department::withTrashed()->findOrFail($id);
+        $department->refresh();
         
         $departmentId = $department->id;
+        $departmentName = $department->name ?? 'Unknown';
         $unitType = $department->type === 'administrative' ? 'office' : 'department';
         $unitLabel = $department->type === 'administrative' ? 'Office' : 'Department';
         
-        DB::transaction(function () use ($department, $departmentId, $unitType, $unitLabel) {
+        DB::transaction(function () use ($department, $departmentId, $departmentName, $unitType, $unitLabel) {
             // Log permanent deletion
             OrganizationalAuditLog::create([
                 'unit_type' => $unitType,
@@ -331,7 +337,7 @@ class DepartmentController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "{$unitLabel} Record Permanently Deleted",
+                'new_value' => "{$unitLabel} Record Permanently Deleted: {$departmentName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

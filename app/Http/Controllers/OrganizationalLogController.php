@@ -29,18 +29,26 @@ class OrganizationalLogController extends Controller
                 $unitCode = null;
                 
                 if ($log->unit_type === 'faculty') {
-                    $unit = \App\Models\Faculty::find($log->unit_id);
+                    $unit = \App\Models\Faculty::withTrashed()->find($log->unit_id);
                     $unitName = $unit?->name;
                     $unitCode = $unit?->code;
                 } elseif ($log->unit_type === 'department' || $log->unit_type === 'office') {
                     // Both departments and offices are stored in the departments table
-                    $unit = \App\Models\Department::find($log->unit_id);
+                    $unit = \App\Models\Department::withTrashed()->find($log->unit_id);
                     $unitName = $unit?->name;
                     $unitCode = $unit?->code;
                 } elseif ($log->unit_type === 'position') {
-                    $unit = \App\Models\Position::find($log->unit_id);
+                    $unit = \App\Models\Position::withTrashed()->find($log->unit_id);
                     $unitName = $unit?->pos_name;
                     $unitCode = $unit?->pos_code;
+                }
+                
+                // If unit_name is null but we have a DELETE action with name in new_value, extract it
+                if (!$unitName && $log->action_type === 'DELETE' && is_string($log->new_value)) {
+                    // Extract name from format like "Position Record Deleted: {name}" or "{Label} Record Deleted: {name}"
+                    if (preg_match('/:\s*(.+)$/', $log->new_value, $matches)) {
+                        $unitName = trim($matches[1]);
+                    }
                 }
                 
                 return [

@@ -457,7 +457,7 @@ const handleCategoryFilterChange = (value: string) => {
     router.delete(route('positions.force-delete', id), {
       preserveScroll: true,
       onSuccess: () => {
-        toast.success('Position permanently deleted')
+        // Flash message will be handled by useEffect watching flash prop
         triggerFetch({})
       },
       onError: () => toast.error('Failed to permanently delete position'),

@@ -399,8 +399,12 @@ export default function Index({ users, filters }: IndexProps) {
     const handleForceDelete = (id: string | number) => {
         router.delete(route('users.force-delete', id), {
             preserveScroll: true,
-            onSuccess: () => {
-                toast.success('User permanently deleted');
+            onSuccess: (response: { props: { flash?: { success?: string } } }) => {
+                // Show toast from flash message if available
+                const successMessage = response.props.flash?.success;
+                if (successMessage) {
+                    toast.success(successMessage);
+                }
                 triggerFetch({});
             },
             onError: () => toast.error('Failed to permanently delete user'),

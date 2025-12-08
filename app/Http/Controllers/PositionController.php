@@ -107,7 +107,7 @@ class PositionController extends Controller
                 'action_type' => 'CREATE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Created a New Position Record',
+                'new_value' => "Created a New Position Record: {$position->pos_name}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -202,6 +202,9 @@ class PositionController extends Controller
         abort_unless(request()->user()->can('delete-position'), 403, 'Unauthorized action.');
 
         if ($position) {
+            // Refresh to ensure we have the latest data
+            $position->refresh();
+            
             // Check if position has employees
             if ($position->employees()->count() > 0) {
                 return redirect()
@@ -210,6 +213,7 @@ class PositionController extends Controller
             }
 
             $positionId = $position->id;
+            $positionName = $position->pos_name ?? 'Unknown';
             
             // Log position deletion before deleting
             OrganizationalAuditLog::create([
@@ -218,7 +222,7 @@ class PositionController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Position Record Deleted',
+                'new_value' => "Position Record Deleted: {$positionName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -278,10 +282,12 @@ class PositionController extends Controller
         abort_unless(request()->user()->can('force-delete-position'), 403, 'Unauthorized action.');
 
         $position = Position::withTrashed()->findOrFail($id);
+        $position->refresh();
         
         $positionId = $position->id;
+        $positionName = $position->pos_name ?? 'Unknown';
         
-        DB::transaction(function () use ($position, $positionId) {
+        DB::transaction(function () use ($position, $positionId, $positionName) {
             // Log permanent deletion
             OrganizationalAuditLog::create([
                 'unit_type' => 'position',
@@ -289,7 +295,7 @@ class PositionController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => 'Position Record Permanently Deleted',
+                'new_value' => "Position Record Permanently Deleted: {$positionName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
