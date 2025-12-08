@@ -91,6 +91,11 @@ export default function CertificateTemplateEdit({ template }: CertificateTemplat
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
+        // Prevent double submission - check if already processing
+        if (form.processing) {
+            return;
+        }
+        
         // Ensure name is always included and not empty
         if (!data.name || data.name.trim() === '') {
             toast.error('Template name is required.');

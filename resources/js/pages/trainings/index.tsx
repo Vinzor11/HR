@@ -597,6 +597,11 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
 
+        // Prevent double submission - check if already processing
+        if (processing) {
+            return;
+        }
+
         // Note: If requires_approval is true and request_type_id is empty,
         // the backend will auto-create a request type
         const isEdit = mode === 'edit' && !!selectedTraining;

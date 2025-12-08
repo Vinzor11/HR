@@ -64,6 +64,11 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
     const fulfillmentForm = useForm<{ file: File | null; notes: string }>({ file: null, notes: '' });
 
     const handleApprove = () => {
+        // Prevent double submission
+        if (approvalForm.processing) {
+            return;
+        }
+        
         approvalForm.post(route('requests.approve', submission.id), {
             preserveScroll: true,
             onSuccess: () => {
@@ -75,6 +80,11 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
     };
 
     const handleReject = () => {
+        // Prevent double submission
+        if (rejectionForm.processing) {
+            return;
+        }
+        
         rejectionForm.post(route('requests.reject', submission.id), {
             preserveScroll: true,
             onSuccess: () => {
@@ -86,6 +96,11 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
     };
 
     const handleFulfill = () => {
+        // Prevent double submission
+        if (fulfillmentForm.processing) {
+            return;
+        }
+        
         fulfillmentForm.post(route('requests.fulfill', submission.id), {
             forceFormData: true,
             preserveScroll: true,

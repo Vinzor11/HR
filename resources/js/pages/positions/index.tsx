@@ -402,6 +402,12 @@ const handleCategoryFilterChange = (value: string) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Prevent double submission - check if already processing
+    if (processing) {
+      return
+    }
+    
     const isEditMode = mode === 'edit' && selectedItem
     data._method = isEditMode ? 'PUT' : 'POST'
 

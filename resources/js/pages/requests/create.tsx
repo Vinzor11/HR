@@ -49,6 +49,12 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        
+        // Prevent double submission - check if already processing
+        if (processing) {
+            return;
+        }
+        
         post(route('requests.store', requestType.id), {
             forceFormData: true,
             preserveScroll: true,

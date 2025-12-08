@@ -1519,6 +1519,11 @@ export default function CreateEmployee({ employee, departments, positions, facul
     
     e.preventDefault();
     
+    // Prevent double submission - check if already processing
+    if (processing) {
+      return;
+    }
+    
     // Mark that user has attempted submission
     setHasAttemptedSubmit(true);
     setShouldShowValidation(true);

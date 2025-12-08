@@ -168,6 +168,12 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Prevent double submission - check if already processing
+    if (processing) {
+      return
+    }
+    
     const isEditMode = mode === 'edit' && selectedFaculty
     data._method = isEditMode ? 'PUT' : 'POST'
 

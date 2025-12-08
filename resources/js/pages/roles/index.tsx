@@ -140,6 +140,11 @@ export default function Index({ roles, filters }: IndexProps) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Prevent double submission - check if already processing
+        if (processing) {
+            return;
+        }
+
         // Edit mode
         if (mode === 'edit' && selectedCategory) {
             data._method = 'PUT';

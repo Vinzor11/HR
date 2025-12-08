@@ -50,6 +50,12 @@ export default function CertificateTemplateCreate() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Prevent double submission - check if already processing
+        if (processing) {
+            return;
+        }
+        
         post('/certificate-templates', {
             forceFormData: true,
             preserveScroll: true,

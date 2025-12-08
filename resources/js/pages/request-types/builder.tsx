@@ -232,6 +232,11 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
+        // Prevent double submission - check if already processing
+        if (processing) {
+            return;
+        }
+
         if (!fields.length) {
             toast.error('Add at least one form field.');
             return;

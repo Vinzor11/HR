@@ -158,6 +158,11 @@ export default function Index({ users, filters }: IndexProps) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Prevent double submission - check if already processing
+        if (processing) {
+            return;
+        }
+
         // Debug: Log form data before submission
         console.log('Submitting user form:', {
             mode,

@@ -257,6 +257,12 @@ export default function DepartmentIndex({ departments, faculties, filters }: Ind
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission - check if already processing
+    if (processing) {
+      return;
+    }
+    
     const isEditMode = mode === 'edit' && selectedDepartment;
     data._method = isEditMode ? 'PUT' : 'POST';
 

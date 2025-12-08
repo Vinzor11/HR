@@ -538,7 +538,17 @@ export const CustomModalForm = ({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex max-h-[70vh] flex-col gap-6">
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            // Prevent double submission - check if already processing
+            if (processing) {
+              return;
+            }
+            handleSubmit(e);
+          }} 
+          className="flex max-h-[70vh] flex-col gap-6"
+        >
           <div className="flex-1 overflow-y-auto pr-1">
             {Array.isArray(groups) && groups.length > 0 ? (
               <div className="border-b pb-4 mb-4">

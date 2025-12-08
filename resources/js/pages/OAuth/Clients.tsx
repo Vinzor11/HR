@@ -74,6 +74,12 @@ export default function Clients({ clients }: ClientsProps) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Prevent double submission - check if already processing
+        if (processing) {
+            return;
+        }
+        
         post('/oauth/clients', {
             onSuccess: () => {
                 reset();
