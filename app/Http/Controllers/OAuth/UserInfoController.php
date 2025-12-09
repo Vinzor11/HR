@@ -12,6 +12,9 @@ class UserInfoController extends Controller
     {
         $user = $request->user();
         
+        // Eager load employee with position and department relationships
+        $user->load('employee.position', 'employee.department');
+        
         // Get user's employee data if exists
         $employee = $user->employee ?? null;
         
@@ -31,13 +34,14 @@ class UserInfoController extends Controller
             $claims['last_name'] = $employee->surname ?? null;
             $claims['middle_name'] = $employee->middle_name ?? null;
             
-            // Load relationships if they exist
-            if ($employee->relationLoaded('department') || $employee->department) {
+            // Add department name if available
+            if ($employee->department) {
                 $claims['department'] = $employee->department->name ?? null;
             }
             
-            if ($employee->relationLoaded('position') || $employee->position) {
-                $claims['position'] = $employee->position->name ?? null;
+            // Add position name if available (Position model uses 'pos_name' field)
+            if ($employee->position) {
+                $claims['position'] = $employee->position->pos_name ?? null;
             }
         }
         
