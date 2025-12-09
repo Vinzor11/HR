@@ -19,8 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Trust all hosts (required for Railway, Heroku, and other platforms behind load balancers)
         // This ensures Laravel correctly detects HTTPS from X-Forwarded-Proto header
-        // Note: Using null to trust all hosts instead of ['*'] to avoid regex issues
-        $middleware->trustHosts(at: null);
+        // Note: Removed trustHosts as it was causing regex errors. Trusted proxies in AppServiceProvider should handle this.
 
         $middleware->web(append: [
             AddCacheHeaders::class, // Add cache headers early for static assets
