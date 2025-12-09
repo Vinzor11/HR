@@ -19,7 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Trust all proxies (required for Railway, Heroku, and other platforms behind load balancers)
         // This ensures Laravel correctly detects HTTPS from X-Forwarded-Proto header
-        $middleware->trustProxies(at: '*');
+        $middleware->trustProxies(headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO);
 
         $middleware->web(append: [
             AddCacheHeaders::class, // Add cache headers early for static assets

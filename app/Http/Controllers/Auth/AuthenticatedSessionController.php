@@ -90,8 +90,10 @@ class AuthenticatedSessionController extends Controller
         $request->session()->put('last_activity_id', $activity->id);
 
         // Redirect to OAuth authorize if that's where they came from
+        // This preserves the OAuth authorization flow with all query parameters (state, client_id, etc.)
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
+            // Use the stored full URL (with query parameters) to resume OAuth flow
             return redirect($oauthRedirect);
         }
 
