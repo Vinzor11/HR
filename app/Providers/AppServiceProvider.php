@@ -26,13 +26,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Trust all proxies for Railway/Heroku (behind load balancers)
-        // This ensures Laravel correctly detects HTTPS from X-Forwarded-Proto header
-        // Must be set early, before any request handling
-        if (config('app.env') === 'production') {
-            \Illuminate\Http\Request::setTrustedProxies(['*'], \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO);
-        }
-        
         // Force HTTPS URLs ONLY in production
         // In development, explicitly use HTTP
         if (config('app.env') === 'production') {
