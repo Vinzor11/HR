@@ -22,7 +22,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustHosts(at: ['*']);
 
         $middleware->web(append: [
-            \App\Http\Middleware\TrustProxies::class, // Trust proxies for Railway/Heroku
             AddCacheHeaders::class, // Add cache headers early for static assets
             \App\Http\Middleware\PreserveOAuthRedirect::class, // Preserve OAuth authorization URL before auth redirect
             HandleAppearance::class,

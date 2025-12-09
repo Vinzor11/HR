@@ -26,6 +26,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Trust all proxies for Railway/Heroku (behind load balancers)
+        // This must be done early, before any request handling
+        if (config('app.env') === 'production') {
+            try {
+                // Set trusted proxies using Symfony's Request class
+                \Symfony\Component\HttpFoundation\Request::setTrustedProxies(
+                    ['*'],
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_FOR |
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_HOST |
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PORT |
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PROTO
+                );
+            } catch (\Exception $e) {
+                // Silently fail if method doesn't exist
+            }
+        }
+        
         // Force HTTPS URLs ONLY in production
         // In development, explicitly use HTTP
         if (config('app.env') === 'production') {
