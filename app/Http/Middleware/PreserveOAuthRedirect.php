@@ -30,9 +30,17 @@ class PreserveOAuthRedirect
         // This ensures the authorization request with all params (client_id, state, etc.)
         // is preserved when user is redirected to login
         if ($request->is('oauth/authorize')) {
-            // Store the full authorization URL with all query parameters
-            // This includes: client_id, redirect_uri, response_type, scope, state, etc.
-            $request->session()->put('oauth_redirect', $request->fullUrl());
+            try {
+                // Only try to access session if it's available
+                if ($request->hasSession()) {
+                    // Store the full authorization URL with all query parameters
+                    // This includes: client_id, redirect_uri, response_type, scope, state, etc.
+                    $request->session()->put('oauth_redirect', $request->fullUrl());
+                }
+            } catch (\Throwable $e) {
+                // Silently fail if session is not available
+                // This can happen during early bootstrap errors
+            }
         }
 
         return $next($request);

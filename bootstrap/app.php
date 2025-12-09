@@ -46,18 +46,30 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->report(function (Throwable $e) {
             // Only log in production (errors are already logged in development)
             if (app()->environment('production')) {
-                \Log::error('Unhandled Exception', [
-                    'message' => $e->getMessage(),
-                    'exception' => get_class($e),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'trace' => $e->getTraceAsString(),
-                    'url' => request()->fullUrl(),
-                    'method' => request()->method(),
-                    'ip' => request()->ip(),
-                    'user_id' => auth()->id(),
-                    'user_agent' => request()->userAgent(),
-                ]);
+                try {
+                    $request = request();
+                    \Log::error('Unhandled Exception', [
+                        'message' => $e->getMessage(),
+                        'exception' => get_class($e),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'trace' => $e->getTraceAsString(),
+                        'url' => $request ? $request->fullUrl() : 'N/A',
+                        'method' => $request ? $request->method() : 'N/A',
+                        'ip' => $request ? $request->ip() : 'N/A',
+                        'user_id' => auth()->check() ? auth()->id() : null,
+                        'user_agent' => $request ? $request->userAgent() : 'N/A',
+                    ]);
+                } catch (\Throwable $logError) {
+                    // If logging fails, at least log the original error
+                    \Log::error('Unhandled Exception (logging failed)', [
+                        'message' => $e->getMessage(),
+                        'exception' => get_class($e),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'log_error' => $logError->getMessage(),
+                    ]);
+                }
             }
         });
     })->create();
