@@ -38,7 +38,17 @@ Route::get('/test', function () {
 });
 
 Route::get('/', function () {
-    return Inertia::render('welcome');
+    try {
+        return Inertia::render('welcome');
+    } catch (\Throwable $e) {
+        // Fallback if Inertia or welcome page fails
+        return response()->json([
+            'error' => 'Welcome page error',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ], 500);
+    }
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
