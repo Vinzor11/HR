@@ -17,8 +17,13 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance']);
 
+        // Trust all proxies (required for Railway, Heroku, and other platforms behind load balancers)
+        // This ensures Laravel correctly detects HTTPS from X-Forwarded-Proto header
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             AddCacheHeaders::class, // Add cache headers early for static assets
+            \App\Http\Middleware\PreserveOAuthRedirect::class, // Preserve OAuth authorization URL before auth redirect
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
