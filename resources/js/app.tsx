@@ -30,6 +30,7 @@ if (typeof window !== 'undefined') {
                 return url;
             }
             
+            // Absolute URL - normalize protocol
             if (shouldForceHttps && url.startsWith('http://')) {
                 return url.replace('http://', 'https://');
             } else if (!shouldForceHttps && url.startsWith('https://') && isLocalhost) {
@@ -37,12 +38,14 @@ if (typeof window !== 'undefined') {
             }
             return url;
         } else if (url instanceof URL) {
-            if (shouldForceHttps && url.protocol === 'http:') {
-                url.protocol = 'https:';
-            } else if (!shouldForceHttps && url.protocol === 'https:' && isLocalhost) {
-                url.protocol = 'http:';
+            // Clone to avoid modifying original
+            const normalized = new URL(url.href);
+            if (shouldForceHttps && normalized.protocol === 'http:') {
+                normalized.protocol = 'https:';
+            } else if (!shouldForceHttps && normalized.protocol === 'https:' && isLocalhost) {
+                normalized.protocol = 'http:';
             }
-            return url;
+            return normalized;
         }
         return url;
     };
@@ -91,19 +94,33 @@ if (typeof window !== 'undefined') {
             // Handle relative URLs by converting to absolute first
             if (url.startsWith('/') || !url.includes('://')) {
                 try {
+                    // Always use current origin (which should be HTTPS in production)
                     const absoluteUrl = new URL(url, window.location.origin);
-                    normalizedUrl = normalizeUrl(absoluteUrl);
+                    // Ensure it uses HTTPS if we're on HTTPS
+                    if (shouldForceHttps && absoluteUrl.protocol === 'http:') {
+                        absoluteUrl.protocol = 'https:';
+                    }
+                    normalizedUrl = absoluteUrl;
                 } catch {
                     normalizedUrl = normalizeUrl(url);
                 }
             } else {
+                // Absolute URL - normalize it
                 normalizedUrl = normalizeUrl(url);
             }
         } else if (url instanceof URL) {
-            normalizedUrl = normalizeUrl(url);
+            // Clone the URL to avoid modifying the original
+            const clonedUrl = new URL(url.href);
+            if (shouldForceHttps && clonedUrl.protocol === 'http:') {
+                clonedUrl.protocol = 'https:';
+            }
+            normalizedUrl = clonedUrl;
         }
         
-        return originalXHROpen.call(this, method, normalizedUrl, ...args);
+        // Convert URL object to string for XMLHttpRequest
+        const finalUrl = normalizedUrl instanceof URL ? normalizedUrl.href : normalizedUrl;
+        
+        return originalXHROpen.call(this, method, finalUrl, ...args);
     };
 
     // Patch fetch - always normalize URLs
@@ -115,24 +132,38 @@ if (typeof window !== 'undefined') {
             // Handle relative URLs by converting to absolute first
             if (input.startsWith('/') || !input.includes('://')) {
                 try {
+                    // Always use current origin (which should be HTTPS in production)
                     const absoluteUrl = new URL(input, window.location.origin);
-                    normalizedInput = normalizeUrl(absoluteUrl);
+                    // Ensure it uses HTTPS if we're on HTTPS
+                    if (shouldForceHttps && absoluteUrl.protocol === 'http:') {
+                        absoluteUrl.protocol = 'https:';
+                    }
+                    normalizedInput = absoluteUrl.href;
                 } catch {
                     normalizedInput = normalizeUrl(input);
                 }
             } else {
+                // Absolute URL - normalize it
                 normalizedInput = normalizeUrl(input);
             }
         } else if (input instanceof URL) {
-            normalizedInput = normalizeUrl(input);
+            // Clone and normalize
+            const cloned = new URL(input.href);
+            if (shouldForceHttps && cloned.protocol === 'http:') {
+                cloned.protocol = 'https:';
+            }
+            normalizedInput = cloned;
         } else if (input instanceof Request) {
             // For Request objects, normalize the URL
             const url = input.url;
             if (url.startsWith('/') || !url.includes('://')) {
                 try {
+                    // Always use current origin
                     const absoluteUrl = new URL(url, window.location.origin);
-                    const normalizedUrl = normalizeUrl(absoluteUrl);
-                    input = new Request(normalizedUrl instanceof URL ? normalizedUrl.href : normalizedUrl, input);
+                    if (shouldForceHttps && absoluteUrl.protocol === 'http:') {
+                        absoluteUrl.protocol = 'https:';
+                    }
+                    input = new Request(absoluteUrl.href, input);
                 } catch {
                     const normalizedUrl = normalizeUrl(url);
                     input = new Request(normalizedUrl instanceof URL ? normalizedUrl.href : normalizedUrl, input);
@@ -153,12 +184,26 @@ if (typeof window !== 'undefined') {
             const originalVisit = router.visit.bind(router);
             (router.visit as any).__original = originalVisit;
             
-                    router.visit = function(url: string | URL, options?: any) {
-                const normalizedUrl = normalizeUrl(url);
-                        return originalVisit(normalizedUrl, options);
-                    };
+            router.visit = function(url: string | URL, options?: any) {
+                let normalizedUrl: string | URL = url;
+                
+                if (typeof url === 'string') {
+                    // Handle relative URLs
+                    if (url.startsWith('/') || !url.includes('://')) {
+                        // Relative URL - use as is (will use current origin)
+                        normalizedUrl = url;
+                    } else {
+                        // Absolute URL - normalize it
+                        normalizedUrl = normalizeUrl(url);
+                    }
+                } else if (url instanceof URL) {
+                    normalizedUrl = normalizeUrl(url);
+                }
+                
+                return originalVisit(normalizedUrl, options);
+            };
             
-                    (router.visit as any).__patched = true;
+            (router.visit as any).__patched = true;
         }
     };
 
