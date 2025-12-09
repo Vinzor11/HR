@@ -2300,12 +2300,107 @@ export default function CreateEmployee({ employee, departments, positions, facul
     let targetStep = currentStep;
     let targetTab = step1Tab;
     
-    // Handle nested field errors (e.g., educational_background.5.period_to)
+    // Handle nested object fields (e.g., other_information.skill_or_hobby) - these are NOT array fields
+    if (errorKey.startsWith('other_information.')) {
+      const field = errorKey.split('.')[1]; // e.g., 'skill_or_hobby'
+      const fieldToStepTab: Record<string, { step: number; tab: string }> = {
+        'skill_or_hobby': { step: 4, tab: 'other' },
+        'non_academic_distinctions': { step: 4, tab: 'other' },
+        'memberships': { step: 4, tab: 'other' },
+      };
+      
+      const stepTabConfig = fieldToStepTab[field];
+      if (stepTabConfig) {
+        // Navigate to the correct step/tab first
+        if (currentStep !== stepTabConfig.step) {
+          setCurrentStep(stepTabConfig.step);
+          needsNavigation = true;
+        }
+        if (stepTabConfig.step === 4 && step4Tab !== stepTabConfig.tab) {
+          setStep4Tab(stepTabConfig.tab as any);
+          needsNavigation = true;
+        }
+        
+        // Wait for navigation, then find the textarea
+        const findField = (attempt = 0) => {
+          const fieldToLabel: Record<string, string> = {
+            'skill_or_hobby': 'Special Skills and Hobbies',
+            'non_academic_distinctions': 'Non-Academic Distinctions',
+            'memberships': 'Memberships',
+          };
+          
+          const labelText = fieldToLabel[field];
+          
+          // Find by label text
+          if (labelText) {
+            const labels = Array.from(document.querySelectorAll('label'));
+            const matchingLabel = labels.find(label => {
+              const text = label.textContent?.trim() || '';
+              return text.includes(labelText);
+            });
+            
+            if (matchingLabel) {
+              const parent = matchingLabel.closest('div');
+              if (parent) {
+                errorElement = parent.querySelector('textarea') as HTMLElement;
+              }
+            }
+          }
+          
+          // Fallback: find all textareas and match by position or nearby label
+          if (!errorElement) {
+            const allTextareas = Array.from(document.querySelectorAll('textarea')) as HTMLElement[];
+            for (const textarea of allTextareas) {
+              const container = textarea.closest('div');
+              if (container) {
+                const containerText = container.textContent || '';
+                if (containerText.includes(labelText || '')) {
+                  errorElement = textarea;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (errorElement) {
+            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+              errorElement?.focus();
+            }, 100);
+          } else if (attempt < 5) {
+            setTimeout(() => findField(attempt + 1), 300);
+          } else {
+            scrollToTop();
+          }
+        };
+        
+        if (needsNavigation) {
+          setTimeout(findField, 600);
+        } else {
+          setTimeout(findField, 100);
+        }
+        return;
+      }
+    }
+    
+    // Handle nested array field errors (e.g., educational_background.5.period_to)
     if (errorKey.includes('.')) {
       const parts = errorKey.split('.');
       const section = parts[0];
-      const index = parts[1];
+      const indexStr = parts[1];
       const field = parts[2] || 'date_range'; // Handle date_range case
+      
+      // Check if this is an array field (index should be numeric) vs nested object field
+      const parsedIndex = parseInt(indexStr);
+      if (isNaN(parsedIndex)) {
+        // This is not an array field, it's a nested object field that we haven't handled yet
+        // Fall through to simple field handling below
+        // (other_information fields are already handled above)
+        return;
+      }
+      
+      // This is an array field - proceed with array field logic
+      const index = parsedIndex;
       
       // Map field names to ID patterns (convert snake_case to kebab-case)
       const fieldToId: Record<string, string> = {
@@ -2313,8 +2408,23 @@ export default function CreateEmployee({ employee, departments, positions, facul
         'period_to': 'period-to',
         'date_from': 'date-from',
         'date_to': 'date-to',
-        'date_range': 'date-to', // date_range errors should point to date_to field
+        // For educational_background, date_range should point to period_to, not date_to
+        'date_range': section === 'educational_background' ? 'period-to' : 'date-to',
         'exam_date': 'exam-date',
+        'full_name': 'full-name',
+        'birth_date': 'birth-date',
+        'surname': 'surname',
+        'first_name': 'first-name',
+        'middle_name': 'middle-name',
+        'name_extension': 'name-extension',
+        'occupation': 'occupation',
+        'employer': 'employer',
+        'business_address': 'business-address',
+        'telephone_no': 'telephone-no',
+        'details': 'details',
+        'level': 'level',
+        'type_of_ld': 'type-of-ld',
+        'conducted_by': 'conducted-by',
       };
       
       const fieldId = fieldToId[field] || field.replace(/_/g, '-');
@@ -2346,6 +2456,21 @@ export default function CreateEmployee({ employee, departments, positions, facul
           step: 3,
           tab: 'eligibility'
         },
+        'family_background': {
+          idPattern: `fb-${fieldId}-${index}`,
+          step: 2,
+          tab: 'family'
+        },
+        'children': {
+          idPattern: `child-${fieldId}-${index}`,
+          step: 2,
+          tab: 'family'
+        },
+        'questionnaire': {
+          idPattern: `q-${fieldId}-${index}`,
+          step: 5,
+          tab: ''
+        },
       };
       
       const config = sectionConfig[section];
@@ -2368,12 +2493,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
         
         // Wait for navigation, then find the element by exact ID
         const findField = (attempt = 0) => {
-          // Try exact ID first - this is the most reliable (e.g., "ld-date-to-5")
+          // Try exact ID first - this is the most reliable (e.g., "edu-period-to-1")
           errorElement = document.getElementById(config.idPattern);
           
           if (!errorElement) {
-            // Try with querySelector using exact ID
-            errorElement = document.querySelector(`input#${config.idPattern}`) as HTMLElement;
+            // Try with querySelector using exact ID (input, select, or textarea)
+            errorElement = document.querySelector(`input#${config.idPattern}, select#${config.idPattern}, textarea#${config.idPattern}`) as HTMLElement;
           }
           
           if (!errorElement) {
@@ -2382,17 +2507,47 @@ export default function CreateEmployee({ employee, departments, positions, facul
           }
           
           if (!errorElement) {
-            // Find by matching the exact pattern: prefix-fieldId-index
-            // e.g., for work-date-to-9, find input with id ending in -9 and containing date-to
-            const prefix = config.idPattern.split('-')[0]; // e.g., "work" or "ld"
-            const allSectionInputs = Array.from(document.querySelectorAll(`input[id^="${prefix}-"]`)) as HTMLElement[];
+            // Try finding select element with the exact ID
+            errorElement = document.querySelector(`select#${config.idPattern}`) as HTMLElement;
+          }
+          
+          // Try finding by matching the exact pattern with different separators
+          if (!errorElement) {
+            // The actual IDs use hyphens: edu-period-from-0, edu-period-to-1, etc.
+            // Try the exact pattern we're looking for
+            const exactId = config.idPattern;
+            errorElement = document.getElementById(exactId);
+          }
+          
+          // Try finding by matching pattern with all inputs that start with the prefix
+          if (!errorElement) {
+            const prefix = config.idPattern.split('-')[0]; // e.g., "edu", "work", "ld"
+            const allSectionInputs = Array.from(document.querySelectorAll(`input[id^="${prefix}-"], textarea[id^="${prefix}-"], select[id^="${prefix}-"]`)) as HTMLElement[];
             
             // Find the input that exactly matches our pattern
             for (const input of allSectionInputs) {
               const inputId = input.id;
-              // Match pattern: prefix-fieldId-index (e.g., "work-date-to-9" or "ld-date-to-5")
-              const idRegex = new RegExp(`^${prefix}-${fieldId}-${index}$`);
+              // Match pattern: prefix-fieldId-index (e.g., "edu-period-to-1")
+              // Escape special regex characters in fieldId
+              const escapedFieldId = fieldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const idRegex = new RegExp(`^${prefix}-${escapedFieldId}-${index}$`);
               if (idRegex.test(inputId)) {
+                errorElement = input;
+                break;
+              }
+            }
+          }
+          
+          // Try finding by matching the pattern parts separately
+          if (!errorElement) {
+            const prefix = config.idPattern.split('-')[0];
+            const allInputs = Array.from(document.querySelectorAll(`input[id^="${prefix}-"], textarea[id^="${prefix}-"], select[id^="${prefix}-"]`)) as HTMLElement[];
+            
+            for (const input of allInputs) {
+              const inputId = input.id;
+              // Check if the ID contains the field name and ends with the index
+              // e.g., for "edu-period-to-1", check if it contains "period-to" and ends with "-1"
+              if (inputId.includes(fieldId) && inputId.endsWith(`-${index}`)) {
                 errorElement = input;
                 break;
               }
@@ -2401,7 +2556,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
           
           // Also try finding by the pattern without escaping (direct string match)
           if (!errorElement) {
-            const allInputs = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLElement[];
+            const allInputs = Array.from(document.querySelectorAll('input[type="date"], input[type="text"], textarea, select')) as HTMLElement[];
             for (const input of allInputs) {
               if (input.id === config.idPattern) {
                 errorElement = input;
@@ -2413,7 +2568,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
           // If still not found, try finding by name attribute (format: section[index][field])
           if (!errorElement) {
             const namePattern = `${section}[${index}][${field}]`;
-            errorElement = document.querySelector(`input[name="${namePattern}"]`) as HTMLElement;
+            errorElement = document.querySelector(`input[name="${namePattern}"], textarea[name="${namePattern}"], select[name="${namePattern}"]`) as HTMLElement;
+          }
+          
+          // Try finding by data attributes if they exist
+          if (!errorElement) {
+            errorElement = document.querySelector(`[data-section="${section}"][data-index="${index}"][data-field="${field}"]`) as HTMLElement;
           }
           
           // If still not found, try finding by FloatingInput's auto-generated ID pattern
@@ -2512,7 +2672,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                     // Find input near the label
                     const parent = targetLabel.closest('.relative, div');
                     if (parent) {
-                      errorElement = parent.querySelector('input[type="date"], input') as HTMLElement;
+                      errorElement = parent.querySelector('input[type="date"], input, select, textarea') as HTMLElement;
                     }
                   }
                 }
@@ -2530,9 +2690,107 @@ export default function CreateEmployee({ employee, departments, positions, facul
             // Retry if element not found yet (DOM might still be updating)
             setTimeout(() => findField(attempt + 1), 300);
           } else {
-            // Last resort: try to find by data attribute or scroll to section
-            console.warn(`Could not find field with ID: ${config.idPattern}. Attempted to navigate to ${section} record ${parseInt(index) + 1}`);
-            scrollToTop();
+            // Last resort: try to find by searching all inputs with the prefix and matching index
+            const prefix = config.idPattern.split('-')[0];
+            const allPrefixInputs = Array.from(document.querySelectorAll(`input[id^="${prefix}-"], textarea[id^="${prefix}-"]`)) as HTMLElement[];
+            
+            // Try to find by matching the field name in the ID and the index
+            for (const input of allPrefixInputs) {
+              const inputId = input.id;
+              // Check if ID contains the field name and ends with the index
+              // e.g., for "edu-period-to-1", check if it contains "period-to" and ends with "-1"
+              if (inputId.includes(fieldId) && inputId.endsWith(`-${index}`)) {
+                errorElement = input;
+                break;
+              }
+            }
+            
+            // If still not found, try to find by counting similar inputs
+            if (!errorElement && allPrefixInputs.length > 0) {
+              // Group inputs by their field pattern (everything except the index)
+              const fieldPattern = fieldId;
+              const matchingInputs = allPrefixInputs.filter(input => {
+                const id = input.id;
+                // Extract the field part (everything between prefix and index)
+                const parts = id.split('-');
+                if (parts.length >= 3) {
+                  const fieldPart = parts.slice(1, -1).join('-');
+                  return fieldPart === fieldPattern || fieldPart.includes(fieldPattern) || fieldPattern.includes(fieldPart);
+                }
+                return false;
+              });
+              
+              if (matchingInputs.length > parseInt(index)) {
+                errorElement = matchingInputs[parseInt(index)];
+              } else if (matchingInputs.length > 0) {
+                // Use the last one if index is out of bounds
+                errorElement = matchingInputs[matchingInputs.length - 1];
+              }
+            }
+            
+            if (!errorElement) {
+              // Enhanced fallback: try to find by counting all inputs of the same type in the section
+              const prefix = config.idPattern.split('-')[0];
+              const allSectionInputs = Array.from(document.querySelectorAll(`input[id^="${prefix}-"], textarea[id^="${prefix}-"], select[id^="${prefix}-"]`)) as HTMLElement[];
+              
+              // For educational_background, try both "period-to" and "date-to" patterns
+              // since date_range errors might map to date-to
+              const possibleFieldIds = [fieldId];
+              if (section === 'educational_background') {
+                if (fieldId === 'date-to' || field === 'date_range') {
+                  possibleFieldIds.push('period-to');
+                } else if (fieldId === 'period-to') {
+                  possibleFieldIds.push('date-to');
+                }
+              }
+              
+              for (const possibleFieldId of possibleFieldIds) {
+                const matching = allSectionInputs.filter(input => {
+                  const id = input.id;
+                  return id.includes(possibleFieldId) && id.endsWith(`-${index}`);
+                });
+                
+                if (matching.length > 0) {
+                  errorElement = matching[0];
+                  break;
+                }
+              }
+              
+              // If still not found, try to find by index position (count similar inputs)
+              if (!errorElement && allSectionInputs.length > 0) {
+                // Group by field type and get the one at the index
+                const fieldTypeInputs = allSectionInputs.filter(input => {
+                  const id = input.id;
+                  // Match any of the possible field IDs
+                  return possibleFieldIds.some(fid => id.includes(fid));
+                });
+                
+                if (fieldTypeInputs.length > parseInt(index)) {
+                  errorElement = fieldTypeInputs[parseInt(index)];
+                }
+              }
+              
+              // Also try finding select elements specifically
+              if (!errorElement) {
+                const selectId = config.idPattern;
+                const select = document.getElementById(selectId) as HTMLSelectElement;
+                if (select && select.tagName === 'SELECT') {
+                  errorElement = select;
+                }
+              }
+            }
+            
+            if (!errorElement) {
+              // Final fallback: scroll to the section and show a message
+              console.warn(`Could not find field with ID: ${config.idPattern}. Attempted to navigate to ${section} record ${parseInt(index) + 1}. Field: ${field}, FieldId: ${fieldId}, Index: ${index}`);
+              scrollToTop();
+            } else {
+              // Found it on retry - scroll and focus
+              errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              setTimeout(() => {
+                errorElement?.focus();
+              }, 100);
+            }
           }
         };
         
@@ -2587,6 +2845,10 @@ export default function CreateEmployee({ employee, departments, positions, facul
         'philhealth_no': { step: 1, tab: 'government' },
         'sss_no': { step: 1, tab: 'government' },
         'tin_no': { step: 1, tab: 'government' },
+        // Step 4 - Other Information tab
+        'other_information.skill_or_hobby': { step: 4, tab: 'other' },
+        'other_information.non_academic_distinctions': { step: 4, tab: 'other' },
+        'other_information.memberships': { step: 4, tab: 'other' },
       };
       
       const stepTabConfig = fieldToStepTab[errorKey];
@@ -2600,6 +2862,9 @@ export default function CreateEmployee({ employee, departments, positions, facul
         
         if (stepTabConfig.step === 1 && step1Tab !== stepTabConfig.tab) {
           setStep1Tab(stepTabConfig.tab as any);
+          needsNavigation = true;
+        } else if (stepTabConfig.step === 4 && step4Tab !== stepTabConfig.tab) {
+          setStep4Tab(stepTabConfig.tab as any);
           needsNavigation = true;
         }
         
@@ -2637,6 +2902,9 @@ export default function CreateEmployee({ employee, departments, positions, facul
             'perm_city': 'City/Municipality',
             'perm_province': 'Province',
             'perm_zip_code': 'ZIP Code',
+            'other_information.skill_or_hobby': 'Special Skills and Hobbies',
+            'other_information.non_academic_distinctions': 'Non-Academic Distinctions',
+            'other_information.memberships': 'Memberships',
           };
           
           const labelText = fieldToLabel[errorKey];
@@ -2650,7 +2918,23 @@ export default function CreateEmployee({ employee, departments, positions, facul
             errorElement = document.querySelector(`[name="${errorKey}"]`) as HTMLElement;
           }
           
-          // 3. Try FloatingInput auto-generated ID pattern (if label is known)
+          // 3. For other_information fields, try finding textarea by label
+          if (!errorElement && errorKey.startsWith('other_information.')) {
+            const fieldName = errorKey.split('.')[1];
+            const labels = Array.from(document.querySelectorAll('label'));
+            const matchingLabel = labels.find(label => {
+              const text = label.textContent?.trim() || '';
+              return text.includes(labelText || '');
+            });
+            if (matchingLabel) {
+              const parent = matchingLabel.closest('div');
+              if (parent) {
+                errorElement = parent.querySelector('textarea') as HTMLElement;
+              }
+            }
+          }
+          
+          // 4. Try FloatingInput auto-generated ID pattern (if label is known)
           // FloatingInput generates: floating-input-${label.toLowerCase().replace(/\s+/g, '-')}
           if (!errorElement && labelText) {
             const normalizedLabel = labelText.toLowerCase().replace(/\s+/g, '-');
@@ -2696,13 +2980,13 @@ export default function CreateEmployee({ employee, departments, positions, facul
                 if (!errorElement) {
                   const parent = matchingLabel.closest('.relative');
                   if (parent) {
-                    errorElement = parent.querySelector('input, select') as HTMLElement;
+                    errorElement = parent.querySelector('input, select, textarea') as HTMLElement;
                   }
                 }
                 
                 if (!errorElement) {
-                  errorElement = matchingLabel.nextElementSibling?.querySelector('input, select') as HTMLElement ||
-                                matchingLabel.parentElement?.querySelector('input, select') as HTMLElement;
+                  errorElement = matchingLabel.nextElementSibling?.querySelector('input, select, textarea') as HTMLElement ||
+                                matchingLabel.parentElement?.querySelector('input, select, textarea') as HTMLElement;
                 }
               }
             }
@@ -2738,7 +3022,40 @@ export default function CreateEmployee({ employee, departments, positions, facul
           // 6. Try finding by field name in a more flexible way
           if (!errorElement) {
             const fieldName = errorKey.replace(/_/g, '-');
-            errorElement = document.querySelector(`input[id*="${fieldName}"], select[id*="${fieldName}"], input[name*="${fieldName}"]`) as HTMLElement;
+            errorElement = document.querySelector(`input[id*="${fieldName}"], select[id*="${fieldName}"], textarea[id*="${fieldName}"], input[name*="${fieldName}"], select[name*="${fieldName}"]`) as HTMLElement;
+          }
+          
+          // 7. For select elements, try finding by ID pattern (e.g., edu-level-0, organization_type)
+          if (!errorElement) {
+            // Try exact ID match for select elements
+            errorElement = document.getElementById(errorKey) as HTMLElement;
+            if (errorElement && errorElement.tagName !== 'SELECT') {
+              errorElement = null; // Reset if not a select
+            }
+          }
+          
+          // 8. For nested select fields (e.g., educational_background.0.level)
+          if (!errorElement && errorKey.includes('.')) {
+            const parts = errorKey.split('.');
+            if (parts.length === 3) {
+              const section = parts[0];
+              const index = parts[1];
+              const field = parts[2];
+              
+              // Try common select ID patterns
+              const selectIdPatterns = [
+                `${section}-${field}-${index}`, // e.g., edu-level-0
+                `${section}-${field.replace(/_/g, '-')}-${index}`, // e.g., learning-development-type-of-ld-0
+              ];
+              
+              for (const pattern of selectIdPatterns) {
+                const select = document.getElementById(pattern) as HTMLSelectElement;
+                if (select && select.tagName === 'SELECT') {
+                  errorElement = select;
+                  break;
+                }
+              }
+            }
           }
           
           // 7. For FloatingInput - generate ID from label (FloatingInput uses: floating-input-${label.toLowerCase().replace(/\s+/g, '-')})
@@ -2763,6 +3080,15 @@ export default function CreateEmployee({ employee, departments, positions, facul
                 errorElement = document.getElementById(variationId);
                 if (errorElement) break;
               }
+            }
+          }
+          
+          // 9. For select elements with specific IDs (e.g., organization_type, faculty_id, etc.)
+          if (!errorElement) {
+            // Try finding select by exact ID match
+            const selectElement = document.getElementById(errorKey) as HTMLSelectElement;
+            if (selectElement && selectElement.tagName === 'SELECT') {
+              errorElement = selectElement;
             }
           }
           
@@ -2828,12 +3154,32 @@ export default function CreateEmployee({ employee, departments, positions, facul
 
   // Helper function to format field names for display
   const formatFieldName = (fieldKey: string): string => {
-    // Handle nested field errors
+    // Handle other_information fields (nested object, not array)
+    if (fieldKey.startsWith('other_information.')) {
+      const field = fieldKey.split('.')[1];
+      const fieldNames: Record<string, string> = {
+        'skill_or_hobby': 'Special Skills and Hobbies',
+        'non_academic_distinctions': 'Non-Academic Distinctions',
+        'memberships': 'Memberships',
+      };
+      return fieldNames[field] || field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    }
+    
+    // Handle nested array field errors
     if (fieldKey.includes('.')) {
       const parts = fieldKey.split('.');
       const section = parts[0];
-      const index = parts[1];
+      const indexStr = parts[1];
       const field = parts[2] || 'date_range';
+      
+      // Check if this is an array field (index should be numeric)
+      const parsedIndex = parseInt(indexStr);
+      if (isNaN(parsedIndex)) {
+        // Not an array field - return formatted field name
+        return field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+      }
+      
+      const index = parsedIndex;
       
       const sectionNames: Record<string, string> = {
         'educational_background': 'Education',
@@ -2841,6 +3187,10 @@ export default function CreateEmployee({ employee, departments, positions, facul
         'learning_development': 'Learning & Development',
         'voluntary_work': 'Voluntary Work',
         'civil_service_eligibility': 'Civil Service Eligibility',
+        'family_background': 'Family Background',
+        'children': 'Children',
+        'questionnaire': 'Questionnaire',
+        'references': 'References',
       };
       
       const fieldNames: Record<string, string> = {
@@ -2850,6 +3200,44 @@ export default function CreateEmployee({ employee, departments, positions, facul
         'date_to': 'Date To',
         'date_range': 'Date Range',
         'exam_date': 'Exam Date',
+        'school_name': 'School Name',
+        'degree_course': 'Degree/Course',
+        'year_graduated': 'Year Graduated',
+        'highest_level_units': 'Highest Level/Units',
+        'honors_received': 'Honors Received',
+        'eligibility': 'Eligibility',
+        'rating': 'Rating',
+        'exam_place': 'Exam Place',
+        'license_no': 'License No.',
+        'license_validity': 'License Validity',
+        'position_title': 'Position Title',
+        'company_name': 'Company/Agency',
+        'company_address': 'Company Address',
+        'monthly_salary': 'Monthly Salary',
+        'salary_grade_step': 'Salary Grade/Step',
+        'status_of_appointment': 'Status of Appointment',
+        'is_gov_service': 'Government Service',
+        'organization_name': 'Organization Name',
+        'organization_address': 'Organization Address',
+        'hours_rendered': 'Hours Rendered',
+        'position_or_nature': 'Position/Nature',
+        'title': 'Title',
+        'hours': 'Hours',
+        'type_of_ld': 'Type of L&D',
+        'conducted_by': 'Conducted By',
+        'fullname': 'Full Name',
+        'address': 'Address',
+        'telephone_no': 'Telephone No.',
+        'details': 'Details',
+        'full_name': 'Full Name',
+        'birth_date': 'Birth Date',
+        'surname': 'Surname',
+        'first_name': 'First Name',
+        'middle_name': 'Middle Name',
+        'name_extension': 'Name Extension',
+        'occupation': 'Occupation',
+        'employer': 'Employer',
+        'business_address': 'Business Address',
       };
       
       const sectionName = sectionNames[section] || section;
@@ -2876,6 +3264,20 @@ export default function CreateEmployee({ employee, departments, positions, facul
     return requiredErrors[key] || formatErrors[key] || errors[key];
   };
 
+  // Helper function to get error for family background fields
+  const getFamilyBackgroundError = (relation: string, field: string) => {
+    const idx = data.family_background.findIndex(fb => fb.relation === relation);
+    if (idx >= 0) {
+      return getNestedError('family_background', idx, field);
+    }
+    return undefined;
+  };
+
+  // Helper function to make error messages clickable
+  const handleErrorClick = (errorKey: string) => {
+    scrollToErrorField(errorKey);
+  };
+
   // Input mask patterns
   const maskPatterns = {
     sss: '999-9999-9999',
@@ -2891,7 +3293,10 @@ export default function CreateEmployee({ employee, departments, positions, facul
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={isView ? "View Employee" : isEdit ? "Edit Employee" : "Create Employee"} />
       <div ref={formContainerRef} style={{ scrollMarginTop: '64px' }}>
-      <form ref={formRef} onSubmit={handleSubmit} className="p-4 max-w-7xl mx-auto" method="POST">
+      <div className="flex gap-6 max-w-[95rem] mx-auto p-4 items-start">
+        {/* Main Form Container */}
+        <div className="flex-1 min-w-0">
+      <form ref={formRef} onSubmit={handleSubmit} className="w-full" method="POST">
         {/* CSRF Token */}
         <input type="hidden" name="_token" value={csrf} />
 
@@ -3014,65 +3419,6 @@ export default function CreateEmployee({ employee, departments, positions, facul
           </div>
         )}
 
-        {/* Format Validation Errors - Clickable List - Only show if validation is enabled */}
-        {shouldShowValidation && Object.keys(formatErrors).length > 0 && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <h4 className="font-semibold text-red-900 mb-2">
-                  Format Validation Errors ({Object.keys(formatErrors).length})
-                </h4>
-                <p className="text-sm text-red-700 mb-3">
-                  Click on any error below to navigate to the field:
-                </p>
-                <ul className="space-y-2 max-h-60 overflow-y-auto">
-                  {Object.entries(formatErrors).map(([field, message]) => (
-                    <li key={field}>
-                      <button
-                        type="button"
-                        onClick={() => scrollToErrorField(field)}
-                        className="text-left text-sm text-red-700 hover:text-red-900 hover:underline cursor-pointer w-full text-start"
-                      >
-                        <span className="font-medium">{formatFieldName(field)}:</span> {message}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Required Fields Errors - Only show if validation is enabled */}
-        {shouldShowValidation && Object.keys(requiredErrors).length > 0 && (
-          <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <h4 className="font-semibold text-orange-900 mb-2">
-                  Missing Required Fields ({Object.keys(requiredErrors).length})
-                </h4>
-                <p className="text-sm text-orange-700 mb-3">
-                  The following required fields must be filled:
-                </p>
-                <ul className="space-y-1">
-                  {Object.entries(requiredErrors).map(([field, message]) => (
-                    <li key={field}>
-                      <button
-                        type="button"
-                        onClick={() => scrollToErrorField(field)}
-                        className="text-left text-sm text-orange-700 hover:text-orange-900 hover:underline cursor-pointer"
-                      >
-                        {formatFieldName(field)}: {message}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
         
         {/* Progress Indicator */}
         <div className="mb-8">
@@ -3219,7 +3565,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               ]}
                               error={getError('sex')}
                               disabled={isView}
-                              required
+                              onErrorClick={() => handleErrorClick('sex')}
                             />
                             <RadioGroup
                               label="Civil Status"
@@ -3235,7 +3581,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               error={getError('civil_status')}
                               disabled={isView}
                               orientation="vertical"
-                              required
+                              onErrorClick={() => handleErrorClick('civil_status')}
                             />
                             <FloatingInput
                               label="Height (m)"
@@ -3294,7 +3640,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 <option value="administrative">Administrative</option>
                               </select>
                               {getError('organization_type') && (
-                                <p className="mt-1.5 text-xs text-destructive px-1">{getError('organization_type')}</p>
+                                <p 
+                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                  onClick={() => handleErrorClick('organization_type')}
+                                >
+                                  {getError('organization_type')}
+                                </p>
                               )}
                             </div>
 
@@ -3318,7 +3669,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 ))}
                               </select>
                               {getError('faculty_id') && (
-                                <p className="mt-1.5 text-xs text-destructive px-1">{getError('faculty_id')}</p>
+                                <p 
+                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                  onClick={() => handleErrorClick('faculty_id')}
+                                >
+                                  {getError('faculty_id')}
+                                </p>
                               )}
                               {shouldShowSelectFacultyMessage && isAcademic && (
                                 <p className="mt-1.5 text-xs text-muted-foreground px-1">
@@ -3354,7 +3710,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 ))}
                               </select>
                               {getError('department_id') && (
-                                <p className="mt-1.5 text-xs text-destructive px-1">{getError('department_id')}</p>
+                                <p 
+                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                  onClick={() => handleErrorClick('department_id')}
+                                >
+                                  {getError('department_id')}
+                                </p>
                               )}
                               {isAcademic && facultySelected && !hasDepartmentsForFaculty && !isView && (
                                 <p className="mt-1.5 text-xs text-amber-600 px-1">
@@ -3413,7 +3774,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 ))}
                               </select>
                               {getError('position_id') && (
-                                <p className="mt-1.5 text-xs text-destructive px-1">{getError('position_id')}</p>
+                                <p 
+                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                  onClick={() => handleErrorClick('position_id')}
+                                >
+                                  {getError('position_id')}
+                                </p>
                               )}
                               {!hasPositionsAvailable && facultySelected && !isView && (
                                 <p className="mt-1.5 text-xs text-amber-600 px-1">
@@ -3438,6 +3804,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               error={getError('status')}
                               disabled={isView}
                               orientation="vertical"
+                              onErrorClick={() => handleErrorClick('status')}
                             />
                             <RadioGroup
                               label="Employment Status"
@@ -3452,6 +3819,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               error={getError('employment_status')}
                               disabled={isView}
                               orientation="vertical"
+                              onErrorClick={() => handleErrorClick('employment_status')}
                             />
                             <div>
                               <Label htmlFor="employee_type" className="text-sm font-medium mb-2 block">
@@ -3470,7 +3838,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 <option value="Non-Teaching">Non-Teaching</option>
                               </select>
                               {getError('employee_type') && (
-                                <p className="mt-1.5 text-xs text-destructive px-1">{getError('employee_type')}</p>
+                                <p 
+                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                  onClick={() => handleErrorClick('employee_type')}
+                                >
+                                  {getError('employee_type')}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -3513,6 +3886,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 ]}
                                 error={getError('citizenship')}
                                 disabled={isView}
+                                onErrorClick={() => handleErrorClick('citizenship')}
                               />
                             </div>
                           </div>
@@ -3542,7 +3916,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                   <option value="By naturalization">By naturalization</option>
                                 </select>
                                 {getError('citizenship_type') && (
-                                  <p className="mt-1.5 text-xs text-destructive px-1">{getError('citizenship_type')}</p>
+                                  <p 
+                                    className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                    onClick={() => handleErrorClick('citizenship_type')}
+                                  >
+                                    {getError('citizenship_type')}
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -3928,6 +4307,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 value={spouse.surname}
                                 onChange={e => updateFamilyBackground('Spouse', 'surname', e.target.value)}
                                 readOnly={isView}
+                                error={getFamilyBackgroundError('Spouse', 'surname')}
                               />
                               <div className="md:col-span-2">
                                 <FloatingInput
@@ -3935,6 +4315,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                   value={spouse.first_name}
                                   onChange={e => updateFamilyBackground('Spouse', 'first_name', e.target.value)}
                                   readOnly={isView}
+                                  error={getFamilyBackgroundError('Spouse', 'first_name')}
                                 />
                               </div>
                               <FloatingInput
@@ -3942,6 +4323,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 value={spouse.middle_name}
                                 onChange={e => updateFamilyBackground('Spouse', 'middle_name', e.target.value)}
                                 readOnly={isView}
+                                error={getFamilyBackgroundError('Spouse', 'middle_name')}
                               />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -3951,18 +4333,21 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 onChange={e => updateFamilyBackground('Spouse', 'name_extension', e.target.value)}
                                 readOnly={isView}
                                 helperText="e.g., Jr., Sr."
+                                error={getFamilyBackgroundError('Spouse', 'name_extension')}
                               />
                               <FloatingInput
                                 label="Occupation"
                                 value={spouse.occupation}
                                 onChange={e => updateFamilyBackground('Spouse', 'occupation', e.target.value)}
                                 readOnly={isView}
+                                error={getFamilyBackgroundError('Spouse', 'occupation')}
                               />
                               <FloatingInput
                                 label="Employer/Business Name"
                                 value={spouse.employer}
                                 onChange={e => updateFamilyBackground('Spouse', 'employer', e.target.value)}
                                 readOnly={isView}
+                                error={getFamilyBackgroundError('Spouse', 'employer')}
                               />
                               <FloatingInput
                                 label="Telephone No."
@@ -3973,6 +4358,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 helperText="7-10 characters"
                                 minLength={7}
                                 maxLength={10}
+                                error={getFamilyBackgroundError('Spouse', 'telephone_no')}
                               />
                             </div>
                             <FloatingInput
@@ -3980,6 +4366,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               value={spouse.business_address}
                               onChange={e => updateFamilyBackground('Spouse', 'business_address', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Spouse', 'business_address')}
                             />
                           </>
                         );
@@ -4020,6 +4407,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                             value={child.full_name}
                             onChange={e => updateSection('children', idx, 'full_name', e.target.value)}
                             readOnly={isView}
+                            error={getNestedError('children', idx, 'full_name')}
                           />
                           <FloatingInput
                             label="Date of Birth"
@@ -4027,6 +4415,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                             value={child.birth_date || ''}
                             onChange={e => updateSection('children', idx, 'birth_date', e.target.value)}
                             readOnly={isView}
+                            error={getNestedError('children', idx, 'birth_date')}
                           />
                         </div>
                       </div>
@@ -4060,6 +4449,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               value={father.surname}
                               onChange={e => updateFamilyBackground('Father', 'surname', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Father', 'surname')}
                             />
                             <div className="md:col-span-2">
                               <FloatingInput
@@ -4067,6 +4457,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 value={father.first_name}
                                 onChange={e => updateFamilyBackground('Father', 'first_name', e.target.value)}
                                 readOnly={isView}
+                                error={getFamilyBackgroundError('Father', 'first_name')}
                               />
                             </div>
                             <FloatingInput
@@ -4074,6 +4465,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               value={father.middle_name}
                               onChange={e => updateFamilyBackground('Father', 'middle_name', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Father', 'middle_name')}
                             />
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -4083,18 +4475,21 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               onChange={e => updateFamilyBackground('Father', 'name_extension', e.target.value)}
                               readOnly={isView}
                               helperText="e.g., Jr., Sr."
+                              error={getFamilyBackgroundError('Father', 'name_extension')}
                             />
                             <FloatingInput
                               label="Occupation"
                               value={father.occupation}
                               onChange={e => updateFamilyBackground('Father', 'occupation', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Father', 'occupation')}
                             />
                             <FloatingInput
                               label="Employer/Business Name"
                               value={father.employer}
                               onChange={e => updateFamilyBackground('Father', 'employer', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Father', 'employer')}
                             />
                             <FloatingInput
                               label="Telephone No."
@@ -4105,6 +4500,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               helperText="7-10 characters"
                               minLength={7}
                               maxLength={10}
+                              error={getFamilyBackgroundError('Father', 'telephone_no')}
                             />
                           </div>
                           <FloatingInput
@@ -4112,6 +4508,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                             value={father.business_address}
                             onChange={e => updateFamilyBackground('Father', 'business_address', e.target.value)}
                             readOnly={isView}
+                            error={getFamilyBackgroundError('Father', 'business_address')}
                           />
                         </>
                       );
@@ -4134,6 +4531,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               value={mother.surname}
                               onChange={e => updateFamilyBackground('Mother', 'surname', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Mother', 'surname')}
                             />
                             <div className="md:col-span-2">
                               <FloatingInput
@@ -4141,6 +4539,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 value={mother.first_name}
                                 onChange={e => updateFamilyBackground('Mother', 'first_name', e.target.value)}
                                 readOnly={isView}
+                                error={getFamilyBackgroundError('Mother', 'first_name')}
                               />
                             </div>
                             <FloatingInput
@@ -4148,6 +4547,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               value={mother.middle_name}
                               onChange={e => updateFamilyBackground('Mother', 'middle_name', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Mother', 'middle_name')}
                             />
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -4156,18 +4556,21 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               value={mother.occupation}
                               onChange={e => updateFamilyBackground('Mother', 'occupation', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Mother', 'occupation')}
                             />
                             <FloatingInput
                               label="Employer/Business Name"
                               value={mother.employer}
                               onChange={e => updateFamilyBackground('Mother', 'employer', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Mother', 'employer')}
                             />
                             <FloatingInput
                               label="Business Address"
                               value={mother.business_address}
                               onChange={e => updateFamilyBackground('Mother', 'business_address', e.target.value)}
                               readOnly={isView}
+                              error={getFamilyBackgroundError('Mother', 'business_address')}
                             />
                             <FloatingInput
                               label="Telephone No."
@@ -4178,6 +4581,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               helperText="7-10 characters"
                               minLength={7}
                               maxLength={10}
+                              error={getFamilyBackgroundError('Mother', 'telephone_no')}
                             />
                           </div>
                         </>
@@ -4225,7 +4629,11 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               id={`edu-level-${idx}`}
                               value={edu.level || 'Elementary'}
                               onChange={e => updateSection('educational_background', idx, 'level', e.target.value)}
-                              className="h-12 w-full rounded-lg border border-border bg-background px-4 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              className={`h-12 w-full rounded-lg border bg-background px-4 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                getNestedError('educational_background', idx, 'level') 
+                                  ? 'border-destructive focus:border-destructive focus:ring-destructive/20' 
+                                  : 'border-border focus:border-primary'
+                              }`}
                               disabled={isView}
                               required
                             >
@@ -4235,6 +4643,14 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               <option value="College">College</option>
                               <option value="Graduate Studies">Graduate Studies</option>
                             </select>
+                            {getNestedError('educational_background', idx, 'level') && (
+                              <p 
+                                className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                onClick={() => handleErrorClick(`educational_background.${idx}.level`)}
+                              >
+                                {getNestedError('educational_background', idx, 'level')}
+                              </p>
+                            )}
                           </div>
                           <div className="md:col-span-2">
                             <FloatingInput
@@ -4745,9 +5161,14 @@ export default function CreateEmployee({ employee, departments, positions, facul
                           <div>
                             <Label className="text-sm font-medium mb-2 block">Type of L&D</Label>
                             <select
+                              id={`ld-type-of-ld-${idx}`}
                               value={ld.type_of_ld}
                               onChange={e => updateSection('learning_development', idx, 'type_of_ld', e.target.value)}
-                              className="h-12 w-full rounded-lg border border-border bg-background px-4 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              className={`h-12 w-full rounded-lg border bg-background px-4 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                getNestedError('learning_development', idx, 'type_of_ld') 
+                                  ? 'border-destructive focus:border-destructive focus:ring-destructive/20' 
+                                  : 'border-border focus:border-primary'
+                              }`}
                               disabled={isView}
                             >
                               <option value="Managerial">Managerial</option>
@@ -4756,12 +5177,21 @@ export default function CreateEmployee({ employee, departments, positions, facul
                               <option value="Foundation">Foundation</option>
                               <option value="Others">Others</option>
                             </select>
+                            {getNestedError('learning_development', idx, 'type_of_ld') && (
+                              <p 
+                                className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                onClick={() => handleErrorClick(`learning_development.${idx}.type_of_ld`)}
+                              >
+                                {getNestedError('learning_development', idx, 'type_of_ld')}
+                              </p>
+                            )}
                           </div>
                           <FloatingInput
                             label="Conducted By"
                             value={ld.conducted_by}
                             onChange={e => updateSection('learning_development', idx, 'conducted_by', e.target.value)}
                             readOnly={isView}
+                            error={getNestedError('learning_development', idx, 'conducted_by')}
                           />
                         </div>
                       </div>
@@ -4796,33 +5226,69 @@ export default function CreateEmployee({ employee, departments, positions, facul
                       <textarea 
                         value={data.other_information.skill_or_hobby} 
                         onChange={e => setData('other_information', { ...data.other_information, skill_or_hobby: e.target.value })} 
-                        className="w-full min-h-[100px] rounded-lg border border-border bg-background px-4 py-3 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 resize-none" 
+                        className={`w-full min-h-[100px] rounded-lg border bg-background px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
+                          getError('other_information.skill_or_hobby') 
+                            ? 'border-destructive focus:border-destructive' 
+                            : 'border-border focus:border-primary'
+                        }`}
                         rows={4}
                         readOnly={isView}
                         placeholder="List your special skills and hobbies"
                       />
+                      {getError('other_information.skill_or_hobby') && (
+                        <p 
+                          className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                          onClick={() => handleErrorClick('other_information.skill_or_hobby')}
+                        >
+                          {getError('other_information.skill_or_hobby')}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-sm font-medium mb-2 block">Non-Academic Distinctions</Label>
                       <textarea 
                         value={data.other_information.non_academic_distinctions} 
                         onChange={e => setData('other_information', { ...data.other_information, non_academic_distinctions: e.target.value })} 
-                        className="w-full min-h-[100px] rounded-lg border border-border bg-background px-4 py-3 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 resize-none" 
+                        className={`w-full min-h-[100px] rounded-lg border bg-background px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
+                          getError('other_information.non_academic_distinctions') 
+                            ? 'border-destructive focus:border-destructive' 
+                            : 'border-border focus:border-primary'
+                        }`}
                         rows={4}
                         readOnly={isView}
                         placeholder="List any non-academic distinctions or awards"
                       />
+                      {getError('other_information.non_academic_distinctions') && (
+                        <p 
+                          className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                          onClick={() => handleErrorClick('other_information.non_academic_distinctions')}
+                        >
+                          {getError('other_information.non_academic_distinctions')}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-sm font-medium mb-2 block">Memberships</Label>
                       <textarea 
                         value={data.other_information.memberships} 
                         onChange={e => setData('other_information', { ...data.other_information, memberships: e.target.value })} 
-                        className="w-full min-h-[100px] rounded-lg border border-border bg-background px-4 py-3 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 resize-none" 
+                        className={`w-full min-h-[100px] rounded-lg border bg-background px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 resize-none ${
+                          getError('other_information.memberships') 
+                            ? 'border-destructive focus:border-destructive' 
+                            : 'border-border focus:border-primary'
+                        }`}
                         rows={4}
                         readOnly={isView}
                         placeholder="List professional or organizational memberships"
                       />
+                      {getError('other_information.memberships') && (
+                        <p 
+                          className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                          onClick={() => handleErrorClick('other_information.memberships')}
+                        >
+                          {getError('other_information.memberships')}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -4894,6 +5360,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                         value={q.details || ''}
                         onChange={e => updateSection('questionnaire', idx, 'details', e.target.value)}
                         readOnly={isView}
+                        error={getNestedError('questionnaire', idx, 'details')}
                       />
                     )}
                   </div>
@@ -5008,6 +5475,211 @@ export default function CreateEmployee({ employee, departments, positions, facul
           </div>
         </div>
       </form>
+
+        {/* Mobile Error Display - Show at bottom on small screens */}
+        {((shouldShowValidation && (Object.keys(formatErrors).length > 0 || Object.keys(requiredErrors).length > 0)) || Object.keys(errors || {}).length > 0) && (
+          <div className="lg:hidden w-full mt-6 space-y-4">
+            {/* Server-side Errors from Inertia */}
+            {Object.keys(errors || {}).length > 0 && (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-red-900 mb-2">
+                      Server Validation Errors ({Object.keys(errors || {}).length})
+                    </h4>
+                    <p className="text-sm text-red-700 mb-3">
+                      Click on any error below to navigate to the field:
+                    </p>
+                    <ul className="space-y-2 max-h-60 overflow-y-auto">
+                      {Object.entries(errors || {}).map(([field, message]) => {
+                        const errorMessage = Array.isArray(message) ? message[0] : message;
+                        return (
+                          <li key={field}>
+                            <button
+                              type="button"
+                              onClick={() => scrollToErrorField(field)}
+                              className="text-left text-sm text-red-700 hover:text-red-900 hover:underline cursor-pointer w-full"
+                            >
+                              <span className="font-medium">{formatFieldName(field)}:</span> {errorMessage}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Format Validation Errors */}
+            {shouldShowValidation && Object.keys(formatErrors).length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-red-900 mb-2">
+                      Format Validation Errors ({Object.keys(formatErrors).length})
+                    </h4>
+                    <p className="text-sm text-red-700 mb-3">
+                      Click on any error below to navigate to the field:
+                    </p>
+                    <ul className="space-y-2 max-h-60 overflow-y-auto">
+                      {Object.entries(formatErrors).map(([field, message]) => (
+                        <li key={field}>
+                          <button
+                            type="button"
+                            onClick={() => scrollToErrorField(field)}
+                            className="text-left text-sm text-red-700 hover:text-red-900 hover:underline cursor-pointer w-full"
+                          >
+                            <span className="font-medium">{formatFieldName(field)}:</span> {message}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Required Fields Errors */}
+            {shouldShowValidation && Object.keys(requiredErrors).length > 0 && (
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-orange-900 mb-2">
+                      Missing Required Fields ({Object.keys(requiredErrors).length})
+                    </h4>
+                    <p className="text-sm text-orange-700 mb-3">
+                      The following required fields must be filled:
+                    </p>
+                    <ul className="space-y-1">
+                      {Object.entries(requiredErrors).map(([field, message]) => (
+                        <li key={field}>
+                          <button
+                            type="button"
+                            onClick={() => scrollToErrorField(field)}
+                            className="text-left text-sm text-orange-700 hover:text-orange-900 hover:underline cursor-pointer"
+                          >
+                            {formatFieldName(field)}: {message}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        {/* Spacer for fixed sidebar on desktop - prevents content overlap */}
+        {((shouldShowValidation && (Object.keys(formatErrors).length > 0 || Object.keys(requiredErrors).length > 0)) || Object.keys(errors || {}).length > 0) && (
+          <div className="hidden lg:block w-80 flex-shrink-0"></div>
+        )}
+      </div>
+      
+      {/* Fixed Error Sidebar - Always visible on screen when scrolling */}
+      {((shouldShowValidation && (Object.keys(formatErrors).length > 0 || Object.keys(requiredErrors).length > 0)) || Object.keys(errors || {}).length > 0) && (
+        <div className="hidden lg:block fixed right-4 top-20 w-80 z-40">
+          <div className="space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
+            {/* Server-side Errors from Inertia */}
+              {Object.keys(errors || {}).length > 0 && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-red-900 mb-2 text-sm">
+                        Server Errors ({Object.keys(errors || {}).length})
+                      </h4>
+                      <p className="text-xs text-red-700 mb-3">
+                        Click to navigate:
+                      </p>
+                      <ul className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {Object.entries(errors || {}).map(([field, message]) => {
+                          const errorMessage = Array.isArray(message) ? message[0] : message;
+                          return (
+                            <li key={field}>
+                              <button
+                                type="button"
+                                onClick={() => scrollToErrorField(field)}
+                                className="text-left text-xs text-red-700 hover:text-red-900 hover:underline cursor-pointer w-full break-words"
+                              >
+                                <span className="font-medium">{formatFieldName(field)}:</span> {errorMessage}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Format Validation Errors */}
+              {shouldShowValidation && Object.keys(formatErrors).length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-red-900 mb-2 text-sm">
+                        Format Errors ({Object.keys(formatErrors).length})
+                      </h4>
+                      <p className="text-xs text-red-700 mb-3">
+                        Click to navigate:
+                      </p>
+                      <ul className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {Object.entries(formatErrors).map(([field, message]) => (
+                          <li key={field}>
+                            <button
+                              type="button"
+                              onClick={() => scrollToErrorField(field)}
+                              className="text-left text-xs text-red-700 hover:text-red-900 hover:underline cursor-pointer w-full break-words"
+                            >
+                              <span className="font-medium">{formatFieldName(field)}:</span> {message}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Required Fields Errors */}
+              {shouldShowValidation && Object.keys(requiredErrors).length > 0 && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-orange-900 mb-2 text-sm">
+                        Required Fields ({Object.keys(requiredErrors).length})
+                      </h4>
+                      <p className="text-xs text-orange-700 mb-3">
+                        Click to navigate:
+                      </p>
+                      <ul className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                        {Object.entries(requiredErrors).map(([field, message]) => (
+                          <li key={field}>
+                            <button
+                              type="button"
+                              onClick={() => scrollToErrorField(field)}
+                              className="text-left text-xs text-orange-700 hover:text-orange-900 hover:underline cursor-pointer w-full break-words"
+                            >
+                              {formatFieldName(field)}: {message}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

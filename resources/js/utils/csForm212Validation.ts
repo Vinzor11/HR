@@ -636,6 +636,95 @@ export const validateEmployeeData = (data: Record<string, any>, positions?: Arra
     });
   }
 
+  // Family background validations
+  if (data.family_background && Array.isArray(data.family_background)) {
+    data.family_background.forEach((member: any, index: number) => {
+      const relation = member.relation || '';
+      
+      // Validate name fields if provided
+      if (member.surname) {
+        const nameError = validateName(member.surname, `${relation} surname`);
+        if (nameError) formatErrors[`family_background.${index}.surname`] = nameError;
+      }
+      
+      if (member.first_name) {
+        const nameError = validateName(member.first_name, `${relation} first name`);
+        if (nameError) formatErrors[`family_background.${index}.first_name`] = nameError;
+      }
+      
+      if (member.middle_name) {
+        const nameError = validateName(member.middle_name, `${relation} middle name`);
+        if (nameError) formatErrors[`family_background.${index}.middle_name`] = nameError;
+      }
+      
+      if (member.name_extension) {
+        const nameError = validateName(member.name_extension, `${relation} name extension`);
+        if (nameError) formatErrors[`family_background.${index}.name_extension`] = nameError;
+      }
+      
+      // Validate occupation if provided
+      if (member.occupation) {
+        const occError = validateMaxLength(member.occupation, 100, `${relation} occupation`);
+        if (occError) formatErrors[`family_background.${index}.occupation`] = occError;
+      }
+      
+      // Validate employer if provided
+      if (member.employer) {
+        const empError = validateMaxLength(member.employer, 100, `${relation} employer`);
+        if (empError) formatErrors[`family_background.${index}.employer`] = empError;
+      }
+      
+      // Validate business address if provided
+      if (member.business_address) {
+        const addrError = validateMaxLength(member.business_address, 200, `${relation} business address`);
+        if (addrError) formatErrors[`family_background.${index}.business_address`] = addrError;
+      }
+      
+      // Validate telephone number if provided
+      if (member.telephone_no) {
+        const telLength = member.telephone_no.replace(/\D/g, '').length;
+        if (telLength > 0 && (telLength < 7 || telLength > 10)) {
+          formatErrors[`family_background.${index}.telephone_no`] = 'Telephone number must be 7-10 digits';
+        }
+      }
+    });
+  }
+
+  // Children validations
+  if (data.children && Array.isArray(data.children)) {
+    data.children.forEach((child: any, index: number) => {
+      // Validate full name if provided
+      if (child.full_name) {
+        const nameError = validateName(child.full_name, `Child ${index + 1} full name`);
+        if (nameError) formatErrors[`children.${index}.full_name`] = nameError;
+      }
+      
+      // Validate birth date if provided
+      if (child.birth_date) {
+        const dateError = validateDateNotFuture(child.birth_date, `Child ${index + 1} birth date`);
+        if (dateError) formatErrors[`children.${index}.birth_date`] = dateError;
+      }
+    });
+  }
+
+  // Other information validations
+  if (data.other_information) {
+    if (data.other_information.skill_or_hobby) {
+      const skillError = validateMaxLength(data.other_information.skill_or_hobby, 500, 'Special skills and hobbies');
+      if (skillError) formatErrors['other_information.skill_or_hobby'] = skillError;
+    }
+    
+    if (data.other_information.non_academic_distinctions) {
+      const distError = validateMaxLength(data.other_information.non_academic_distinctions, 500, 'Non-academic distinctions');
+      if (distError) formatErrors['other_information.non_academic_distinctions'] = distError;
+    }
+    
+    if (data.other_information.memberships) {
+      const memError = validateMaxLength(data.other_information.memberships, 500, 'Memberships');
+      if (memError) formatErrors['other_information.memberships'] = memError;
+    }
+  }
+
   // Character limit validations for optional fields
   if (data.telephone_no) {
     const telError = validateMaxLength(data.telephone_no, 20, 'Telephone number');

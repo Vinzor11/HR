@@ -56,7 +56,17 @@ export const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputPro
           </p>
         )}
         {error && (
-          <p id={`${inputId}-error`} className="mt-1.5 text-xs text-destructive px-1">
+          <p 
+            id={`${inputId}-error`} 
+            className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+            onClick={() => {
+              const input = document.getElementById(inputId);
+              if (input) {
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => input.focus(), 100);
+              }
+            }}
+          >
             {error}
           </p>
         )}

@@ -10,12 +10,29 @@ interface RadioGroupProps {
   className?: string;
   disabled?: boolean;
   orientation?: 'horizontal' | 'vertical';
+  onErrorClick?: () => void;
 }
 
 export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
-  ({ label, value, onChange, options = [], error, className, disabled, orientation = 'horizontal', ...props }, ref) => {
+  ({ label, value, onChange, options = [], error, className, disabled, orientation = 'horizontal', onErrorClick, ...props }, ref) => {
+    const handleErrorClick = () => {
+      if (onErrorClick) {
+        onErrorClick();
+      } else {
+        // Default behavior: scroll to the first radio button in the group
+        const radioGroup = document.querySelector(`[data-radio-group-label="${label}"]`);
+        if (radioGroup) {
+          const firstRadio = radioGroup.querySelector('input[type="radio"]') as HTMLElement;
+          if (firstRadio) {
+            firstRadio.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => firstRadio.focus(), 100);
+          }
+        }
+      }
+    };
+
     return (
-      <div ref={ref} className={cn("space-y-2", className)} {...props}>
+      <div ref={ref} className={cn("space-y-2", className)} data-radio-group-label={label} {...props}>
         {label && (
           <label className="text-sm font-medium text-foreground">
             {label}
@@ -47,7 +64,12 @@ export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
           ))}
         </div>
         {error && (
-          <p className="text-xs text-destructive mt-1.5 px-1">{error}</p>
+          <p 
+            className="text-xs text-destructive mt-1.5 px-1 cursor-pointer hover:underline"
+            onClick={handleErrorClick}
+          >
+            {error}
+          </p>
         )}
       </div>
     );
