@@ -389,22 +389,22 @@ export default function RequestsIndex({
                                         ))}
                                     </select>
                                     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-                                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">From</span>
+                                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                                        <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">From</span>
                                             <Input
                                                 type="date"
-                                                className="h-8 w-[140px] text-sm"
+                                                className="h-8 flex-1 min-w-[140px] text-sm"
                                                 value={dateFrom}
                                                 onChange={(event) => handleDateChange('date_from', event.target.value)}
                                             />
                                         </div>
-                                        <span className="text-xs text-muted-foreground">to</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">To</span>
+                                        <span className="text-xs text-muted-foreground shrink-0">to</span>
+                                        <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">To</span>
                                             <Input
                                                 type="date"
-                                                className="h-8 w-[140px] text-sm"
+                                                className="h-8 flex-1 min-w-[140px] text-sm"
                                                 value={dateTo}
                                                 onChange={(event) => handleDateChange('date_to', event.target.value)}
                                             />

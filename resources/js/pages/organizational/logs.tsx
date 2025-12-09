@@ -500,24 +500,24 @@ export default function OrganizationalLogs() {
                             })}
                         </SelectContent>
                     </Select>
-                    <div className="flex items-center gap-3 h-9 rounded-lg border border-border bg-muted/30 px-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 h-auto sm:h-9 py-2 sm:py-0 rounded-lg border border-border bg-muted/30 px-3">
                         <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">From</label>
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1">
+                            <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">From</label>
                                 <Input
                                     type="date"
-                                    className="h-9 w-[140px] border-border bg-background text-sm"
+                                    className="h-9 flex-1 min-w-[140px] border-border bg-background text-sm"
                                     value={dateFrom}
                                     onChange={(e) => setDateFrom(e.target.value)}
                                 />
                             </div>
-                            <div className="h-4 w-px bg-border" />
-                            <div className="flex items-center gap-2">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">To</label>
+                            <div className="hidden sm:block h-4 w-px bg-border" />
+                            <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">To</label>
                                 <Input
                                     type="date"
-                                    className="h-9 w-[140px] border-border bg-background text-sm"
+                                    className="h-9 flex-1 min-w-[140px] border-border bg-background text-sm"
                                     value={dateTo}
                                     onChange={(e) => setDateTo(e.target.value)}
                                 />

@@ -297,7 +297,7 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
                             </div>
 
                             {/* Date From */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-[150px]">
                                 <label htmlFor="date-from" className="text-sm text-muted-foreground whitespace-nowrap">
                                     From:
                                 </label>
@@ -306,12 +306,12 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
                                     type="date"
                                     value={dateFrom}
                                     onChange={(e) => handleDateFromChange(e.target.value)}
-                                    className="w-[150px]"
+                                    className="flex-1 min-w-[150px]"
                                 />
                             </div>
 
                             {/* Date To */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-[150px]">
                                 <label htmlFor="date-to" className="text-sm text-muted-foreground whitespace-nowrap">
                                     To:
                                 </label>
@@ -320,7 +320,7 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
                                     type="date"
                                     value={dateTo}
                                     onChange={(e) => handleDateToChange(e.target.value)}
-                                    className="w-[150px]"
+                                    className="flex-1 min-w-[150px]"
                                 />
                             </div>
                         </div>
