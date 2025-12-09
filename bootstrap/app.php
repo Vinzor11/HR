@@ -17,9 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance']);
 
-        // Trust all proxies (required for Railway, Heroku, and other platforms behind load balancers)
+        // Trust all hosts/proxies (required for Railway, Heroku, and other platforms behind load balancers)
         // This ensures Laravel correctly detects HTTPS from X-Forwarded-Proto header
-        $middleware->trustProxies(headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO);
+        $middleware->trustHosts(at: ['*']);
 
         $middleware->web(append: [
             AddCacheHeaders::class, // Add cache headers early for static assets
