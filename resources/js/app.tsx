@@ -10,6 +10,44 @@ import { LayoutProvider } from './contexts/LayoutContext';
 import { initializeTheme } from './hooks/use-appearance';
 import { ModalCleanup } from './components/ModalCleanup';
 
+/**
+ * Update the CSRF token in the meta tag and axios defaults
+ * This keeps the token in sync after Inertia navigations
+ */
+const updateCsrfToken = (newToken: string | null | undefined) => {
+    if (!newToken) return;
+    
+    // Update meta tag
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    if (metaTag) {
+        metaTag.setAttribute('content', newToken);
+    }
+    
+    // Update axios default header
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
+};
+
+/**
+ * Get the current CSRF token from multiple sources
+ */
+const getCsrfToken = (): string | null => {
+    // Try meta tag first
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (metaToken) return metaToken;
+    
+    // Try XSRF-TOKEN cookie (Laravel sets this automatically)
+    const cookieMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+    if (cookieMatch) {
+        try {
+            return decodeURIComponent(cookieMatch[1]);
+        } catch {
+            return cookieMatch[1];
+        }
+    }
+    
+    return null;
+};
+
 // URL normalization utilities - MUST run before anything else
 if (typeof window !== 'undefined') {
     const isProduction = import.meta.env.PROD || import.meta.env.VITE_APP_ENV === 'production';
@@ -58,32 +96,56 @@ if (typeof window !== 'undefined') {
         };
         
     // Configure axios
-        axios.defaults.baseURL = window.location.origin;
+    axios.defaults.baseURL = window.location.origin;
+    axios.defaults.withCredentials = true; // Send cookies with requests
+    axios.defaults.withXSRFToken = true; // Automatically include XSRF token
+        
+    // Set initial CSRF token
+    const initialCsrfToken = getCsrfToken();
+    if (initialCsrfToken) {
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = initialCsrfToken;
+    }
         
     // Axios interceptor for URL normalization and CSRF token
-        axios.interceptors.request.use((config) => {
+    axios.interceptors.request.use((config) => {
         // Normalize URLs
-            if (config.url && typeof config.url === 'string') {
+        if (config.url && typeof config.url === 'string') {
             config.url = normalizeUrl(config.url) as string;
-            }
-            if (config.baseURL && typeof config.baseURL === 'string') {
+        }
+        if (config.baseURL && typeof config.baseURL === 'string') {
             config.baseURL = normalizeUrl(config.baseURL) as string;
         }
 
         // Add CSRF token for state-changing requests
-            const method = (config.method || 'get').toLowerCase();
-            if (['post', 'put', 'patch', 'delete'].includes(method)) {
-                if (!config.headers['X-CSRF-TOKEN'] && !config.headers['x-csrf-token']) {
-                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-                    (document.cookie.match(/XSRF-TOKEN=([^;]+)/) ? decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)![1]) : null);
-                    if (csrfToken) {
-                        config.headers['X-CSRF-TOKEN'] = csrfToken;
-                    }
+        const method = (config.method || 'get').toLowerCase();
+        if (['post', 'put', 'patch', 'delete'].includes(method)) {
+            if (!config.headers['X-CSRF-TOKEN'] && !config.headers['x-csrf-token']) {
+                const csrfToken = getCsrfToken();
+                if (csrfToken) {
+                    config.headers['X-CSRF-TOKEN'] = csrfToken;
                 }
             }
+        }
             
-            return config;
-        });
+        return config;
+    });
+    
+    // Listen for Inertia responses and update CSRF token
+    // This keeps the token in sync after page navigations
+    router.on('success', (event) => {
+        const page = event.detail.page;
+        if (page?.props?.csrf) {
+            updateCsrfToken(page.props.csrf as string);
+        }
+    });
+    
+    // Also update on navigate to ensure token is fresh
+    router.on('navigate', (event) => {
+        const page = event.detail.page;
+        if (page?.props?.csrf) {
+            updateCsrfToken(page.props.csrf as string);
+        }
+    });
         
     // Patch XMLHttpRequest
     const originalXHROpen = XMLHttpRequest.prototype.open;
