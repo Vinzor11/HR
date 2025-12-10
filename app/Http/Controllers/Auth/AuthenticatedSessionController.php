@@ -22,6 +22,8 @@ class AuthenticatedSessionController extends Controller
         return Inertia::render('auth/login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => $request->session()->get('status'),
+            // Pass flag to indicate OAuth flow - form should use traditional submission
+            'hasOAuthRedirect' => $request->session()->has('oauth_redirect'),
         ]);
     }
 
@@ -91,12 +93,11 @@ class AuthenticatedSessionController extends Controller
 
         // Redirect to OAuth authorize if that's where they came from
         // This preserves the OAuth authorization flow with all query parameters (state, client_id, etc.)
+        // Note: The login form uses traditional form submission (not XHR) when OAuth is active,
+        // so we can use a regular redirect here - the browser will follow it normally
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
-            // Use Inertia::location() for OAuth redirects to ensure full page redirect
-            // This is critical because OAuth flow may redirect to external URLs which would
-            // cause CORS errors if followed via XHR (Inertia's default behavior)
-            return \Inertia\Inertia::location($oauthRedirect);
+            return redirect($oauthRedirect);
         }
 
         // Ensure HTTPS for redirect URL

@@ -1,6 +1,6 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useRef } from 'react';
 
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
@@ -19,9 +19,13 @@ type LoginForm = {
 interface LoginProps {
     status?: string;
     canResetPassword: boolean;
+    hasOAuthRedirect?: boolean;
 }
 
-export default function Login({ status, canResetPassword }: LoginProps) {
+export default function Login({ status, canResetPassword, hasOAuthRedirect }: LoginProps) {
+    const { csrf } = usePage().props as { csrf: string };
+    const formRef = useRef<HTMLFormElement>(null);
+    
     const { data, setData, post, processing, errors, reset } = useForm<Required<LoginForm>>({
         email: '',
         password: '',
@@ -36,6 +40,13 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             return;
         }
         
+        // If there's an OAuth redirect pending, use traditional form submission
+        // This prevents CORS issues when redirecting to external OAuth callback URLs
+        if (hasOAuthRedirect && formRef.current) {
+            formRef.current.submit();
+            return;
+        }
+        
         post(route('login'), {
             onFinish: () => reset('password'),
         });
@@ -45,13 +56,23 @@ export default function Login({ status, canResetPassword }: LoginProps) {
         <AuthLayout title="Log in to your account" description="Enter your email and password below to log in">
             <Head title="Log in" />
 
-            <form className="flex flex-col gap-6" onSubmit={submit}>
+            <form 
+                ref={formRef}
+                className="flex flex-col gap-6" 
+                onSubmit={submit}
+                method="POST"
+                action={route('login')}
+            >
+                {/* CSRF token for traditional form submission */}
+                <input type="hidden" name="_token" value={csrf} />
+                
                 <div className="grid gap-6">
                     <div className="grid gap-2">
                         <Label htmlFor="email">Email address</Label>
                         <Input
                             id="email"
                             type="email"
+                            name="email"
                             required
                             autoFocus
                             tabIndex={1}
@@ -75,6 +96,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         <Input
                             id="password"
                             type="password"
+                            name="password"
                             required
                             tabIndex={2}
                             autoComplete="current-password"
