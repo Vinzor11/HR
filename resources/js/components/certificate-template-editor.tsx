@@ -239,20 +239,28 @@ export function CertificateTemplateEditor({
      * Renders DOCX with original structure preserved
      */
     const convertDocxToImage = async (file: File): Promise<{ url: string; width: number; height: number } | null> => {
+        let container: HTMLDivElement | null = null;
+        
         try {
+            console.log('Starting DOCX conversion for:', file.name);
             const arrayBuffer = await file.arrayBuffer();
+            console.log('File loaded, size:', arrayBuffer.byteLength);
             
             // Create a temporary container for docx-preview to render into
-            const container = document.createElement('div');
+            container = document.createElement('div');
+            container.id = 'docx-preview-container';
             container.style.cssText = `
-                position: absolute;
-                left: -9999px;
+                position: fixed;
+                left: 0;
                 top: 0;
                 background: white;
+                z-index: -9999;
+                visibility: hidden;
             `;
             document.body.appendChild(container);
             
             // Render DOCX using docx-preview (preserves original structure)
+            console.log('Rendering DOCX with docx-preview...');
             await renderAsync(arrayBuffer, container, undefined, {
                 className: 'docx-preview',
                 inWrapper: true,
@@ -260,18 +268,13 @@ export function CertificateTemplateEditor({
                 ignoreHeight: false,
                 ignoreFonts: false,
                 breakPages: true,
-                ignoreLastRenderedPageBreak: true,
-                experimental: true,
-                trimXmlDeclaration: true,
                 useBase64URL: true,
-                renderHeaders: true,
-                renderFooters: true,
-                renderFootnotes: true,
-                renderEndnotes: true,
             });
+            console.log('DOCX rendered successfully');
             
             // Wait for images to load
             const images = container.querySelectorAll('img');
+            console.log('Found', images.length, 'images in document');
             await Promise.all(Array.from(images).map(img => 
                 img.complete ? Promise.resolve() : new Promise(resolve => {
                     img.onload = resolve;
@@ -279,42 +282,70 @@ export function CertificateTemplateEditor({
                 })
             ));
             
-            // Small delay to ensure rendering is complete
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Longer delay to ensure rendering is complete
+            await new Promise(resolve => setTimeout(resolve, 500));
             
-            // Get the rendered document wrapper
+            // Make container visible temporarily for rendering
+            container.style.visibility = 'visible';
+            container.style.left = '-9999px';
+            
+            // Try different selectors to find the rendered content
+            let targetElement: HTMLElement | null = null;
+            
+            // Try to find the docx-wrapper first
             const docWrapper = container.querySelector('.docx-wrapper') as HTMLElement;
-            if (!docWrapper) {
-                document.body.removeChild(container);
-                return null;
+            console.log('docx-wrapper found:', !!docWrapper);
+            
+            if (docWrapper) {
+                // Try to find section.docx
+                const sections = docWrapper.querySelectorAll('section.docx, section, article, .docx');
+                console.log('Found sections:', sections.length);
+                
+                if (sections.length > 0) {
+                    targetElement = sections[0] as HTMLElement;
+                } else {
+                    // Use the wrapper itself
+                    targetElement = docWrapper;
+                }
+            } else {
+                // Try other selectors
+                const anyContent = container.querySelector('article, section, .docx, div > div') as HTMLElement;
+                console.log('Alternative content found:', !!anyContent);
+                targetElement = anyContent || container;
             }
             
-            // Get the first page/section
-            const firstPage = docWrapper.querySelector('section.docx') as HTMLElement;
-            if (!firstPage) {
-                document.body.removeChild(container);
-                return null;
+            if (!targetElement || targetElement.offsetWidth === 0) {
+                console.error('No valid target element found or element has no width');
+                // Try using the container itself
+                targetElement = container;
             }
             
             // Get dimensions from the rendered document
-            const width = firstPage.offsetWidth || 794; // Default A4 width at 96 DPI
-            const height = firstPage.offsetHeight || 1123; // Default A4 height at 96 DPI
+            const width = targetElement.offsetWidth || 794; // Default A4 width at 96 DPI
+            const height = targetElement.offsetHeight || 1123; // Default A4 height at 96 DPI
+            console.log('Element dimensions:', width, 'x', height);
             
             // Use html2canvas to capture the rendered document as an image
-            // Dynamic import to avoid SSR issues
+            console.log('Loading html2canvas...');
             const { default: html2canvas } = await import('html2canvas');
+            console.log('html2canvas loaded, capturing...');
             
-            const canvas = await html2canvas(firstPage, {
+            const canvas = await html2canvas(targetElement, {
                 scale: 2, // Higher quality
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: '#ffffff',
-                logging: false,
+                logging: true, // Enable logging for debugging
+                width: width,
+                height: height,
             });
+            console.log('Canvas captured:', canvas.width, 'x', canvas.height);
             
             document.body.removeChild(container);
+            container = null;
             
             const dataUrl = canvas.toDataURL('image/png');
+            console.log('Data URL generated, length:', dataUrl.length);
             
             return {
                 url: dataUrl,
@@ -323,6 +354,14 @@ export function CertificateTemplateEditor({
             };
         } catch (error) {
             console.error('DOCX conversion error:', error);
+            console.error('Error details:', error instanceof Error ? error.message : String(error));
+            console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+            
+            // Clean up container if it exists
+            if (container && container.parentNode) {
+                document.body.removeChild(container);
+            }
+            
             return null;
         }
     };
@@ -423,7 +462,10 @@ export function CertificateTemplateEditor({
                     .catch((error) => {
                         setIsConverting(false);
                         console.error('DOCX conversion error:', error);
-                        toast.error('Failed to convert DOCX: ' + error.message);
+                        const errorMsg = error instanceof Error ? error.message : String(error);
+                        toast.error('Failed to convert DOCX: ' + errorMsg);
+                        // Open browser console for more details
+                        console.error('Full error:', error);
                         setPreviewUrl(null);
                     });
             } else {
