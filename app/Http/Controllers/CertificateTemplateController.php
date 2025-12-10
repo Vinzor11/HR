@@ -58,13 +58,53 @@ class CertificateTemplateController extends Controller
     {
         abort_unless($request->user()->can('access-request-types-module'), 403, 'Unauthorized action.');
 
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:pdf,docx', 'max:10240'],
+        // Log incoming request for debugging
+        \Log::info('Certificate preview request', [
+            'has_file' => $request->hasFile('file'),
+            'all_files' => array_keys($request->allFiles()),
+            'content_type' => $request->header('Content-Type'),
+            'file_info' => $request->hasFile('file') ? [
+                'name' => $request->file('file')->getClientOriginalName(),
+                'mime' => $request->file('file')->getMimeType(),
+                'extension' => $request->file('file')->getClientOriginalExtension(),
+                'size' => $request->file('file')->getSize(),
+            ] : null,
         ]);
+
+        // Validate file - use extension check for DOCX since MIME types can vary
+        $file = $request->file('file');
+        if (!$file) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No file was uploaded. Please select a PDF or DOCX file.',
+            ], 422);
+        }
+        
+        $extension = strtolower($file->getClientOriginalExtension());
+        $allowedExtensions = ['pdf', 'docx'];
+        
+        if (!in_array($extension, $allowedExtensions)) {
+            \Log::error('Certificate preview invalid file type', [
+                'extension' => $extension,
+                'mime' => $file->getMimeType(),
+                'name' => $file->getClientOriginalName(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => "Invalid file type. Please upload a PDF or DOCX file. (Got: .{$extension})",
+            ], 422);
+        }
+        
+        // Check file size (10MB max)
+        if ($file->getSize() > 10240 * 1024) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File is too large. Maximum size is 10MB.',
+            ], 422);
+        }
 
         try {
             $converter = new CertificateTemplateConverter();
-            $file = $request->file('file');
             $result = $converter->convertToImage($file);
 
             if (!$result) {
