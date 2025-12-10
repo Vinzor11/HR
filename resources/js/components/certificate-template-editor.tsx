@@ -11,7 +11,7 @@ import { DndContext, DragEndEvent, DragStartEvent, useDraggable, useDroppable, P
 import { toast } from '@/components/custom-toast';
 import InputError from '@/components/input-error';
 import * as pdfjsLib from 'pdfjs-dist';
-import mammoth from 'mammoth';
+import { renderAsync } from 'docx-preview';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -235,32 +235,40 @@ export function CertificateTemplateEditor({
     };
 
     /**
-     * Convert DOCX to image using mammoth.js (client-side)
-     * Renders DOCX as HTML then converts to canvas
+     * Convert DOCX to image using docx-preview (client-side)
+     * Renders DOCX with original structure preserved
      */
     const convertDocxToImage = async (file: File): Promise<{ url: string; width: number; height: number } | null> => {
         try {
             const arrayBuffer = await file.arrayBuffer();
-            const result = await mammoth.convertToHtml({ arrayBuffer });
-            const html = result.value;
             
-            // Create a temporary container to render the HTML
+            // Create a temporary container for docx-preview to render into
             const container = document.createElement('div');
             container.style.cssText = `
                 position: absolute;
                 left: -9999px;
                 top: 0;
-                width: 794px;
-                min-height: 1123px;
-                padding: 72px;
                 background: white;
-                font-family: 'Times New Roman', serif;
-                font-size: 12pt;
-                line-height: 1.5;
-                box-sizing: border-box;
             `;
-            container.innerHTML = html;
             document.body.appendChild(container);
+            
+            // Render DOCX using docx-preview (preserves original structure)
+            await renderAsync(arrayBuffer, container, undefined, {
+                className: 'docx-preview',
+                inWrapper: true,
+                ignoreWidth: false,
+                ignoreHeight: false,
+                ignoreFonts: false,
+                breakPages: true,
+                ignoreLastRenderedPageBreak: true,
+                experimental: true,
+                trimXmlDeclaration: true,
+                useBase64URL: true,
+                renderHeaders: true,
+                renderFooters: true,
+                renderFootnotes: true,
+                renderEndnotes: true,
+            });
             
             // Wait for images to load
             const images = container.querySelectorAll('img');
@@ -271,62 +279,38 @@ export function CertificateTemplateEditor({
                 })
             ));
             
-            // Use html2canvas if available, otherwise create a simple preview
-            // For now, we'll create a canvas with the rendered content
-            const width = container.offsetWidth || 794;
-            const height = Math.max(container.offsetHeight, 1123);
+            // Small delay to ensure rendering is complete
+            await new Promise(resolve => setTimeout(resolve, 100));
             
-            // Create canvas and draw white background
-            const canvas = document.createElement('canvas');
-            const scale = 2; // For better quality
-            canvas.width = width * scale;
-            canvas.height = height * scale;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
+            // Get the rendered document wrapper
+            const docWrapper = container.querySelector('.docx-wrapper') as HTMLElement;
+            if (!docWrapper) {
                 document.body.removeChild(container);
                 return null;
             }
             
-            ctx.scale(scale, scale);
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, width, height);
-            
-            // Draw text content (simplified rendering)
-            ctx.fillStyle = 'black';
-            ctx.font = '12pt Times New Roman';
-            
-            // Get text content and draw it
-            const textContent = container.innerText;
-            const lines = textContent.split('\n');
-            let y = 100;
-            const lineHeight = 20;
-            const maxWidth = width - 144; // Account for padding
-            
-            for (const line of lines) {
-                if (y > height - 72) break;
-                
-                // Word wrap
-                const words = line.split(' ');
-                let currentLine = '';
-                
-                for (const word of words) {
-                    const testLine = currentLine + (currentLine ? ' ' : '') + word;
-                    const metrics = ctx.measureText(testLine);
-                    
-                    if (metrics.width > maxWidth && currentLine) {
-                        ctx.fillText(currentLine, 72, y);
-                        currentLine = word;
-                        y += lineHeight;
-                    } else {
-                        currentLine = testLine;
-                    }
-                }
-                
-                if (currentLine) {
-                    ctx.fillText(currentLine, 72, y);
-                    y += lineHeight;
-                }
+            // Get the first page/section
+            const firstPage = docWrapper.querySelector('section.docx') as HTMLElement;
+            if (!firstPage) {
+                document.body.removeChild(container);
+                return null;
             }
+            
+            // Get dimensions from the rendered document
+            const width = firstPage.offsetWidth || 794; // Default A4 width at 96 DPI
+            const height = firstPage.offsetHeight || 1123; // Default A4 height at 96 DPI
+            
+            // Use html2canvas to capture the rendered document as an image
+            // Dynamic import to avoid SSR issues
+            const { default: html2canvas } = await import('html2canvas');
+            
+            const canvas = await html2canvas(firstPage, {
+                scale: 2, // Higher quality
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+            });
             
             document.body.removeChild(container);
             
@@ -369,13 +353,29 @@ export function CertificateTemplateEditor({
                 // Convert PDF using PDF.js (client-side)
                 setIsConverting(true);
                 convertPdfToImage(backgroundImage)
-                    .then((result) => {
+                    .then(async (result) => {
                         setIsConverting(false);
                         if (result) {
                             setPreviewUrl(result.url);
                             onWidthChange(result.width);
                             onHeightChange(result.height);
-                            toast.success('PDF preview generated successfully!');
+                            
+                            // Convert the data URL to a File object for upload
+                            try {
+                                const response = await fetch(result.url);
+                                const blob = await response.blob();
+                                const convertedFile = new File(
+                                    [blob], 
+                                    backgroundImage.name.replace(/\.pdf$/i, '.png'),
+                                    { type: 'image/png' }
+                                );
+                                // Replace the original PDF with the converted image
+                                onBackgroundImageChange(convertedFile);
+                                toast.success('PDF converted to image successfully!');
+                            } catch (conversionError) {
+                                console.error('Failed to create image file:', conversionError);
+                                toast.success('PDF preview generated (upload may use original file)');
+                            }
                         } else {
                             toast.error('Failed to generate PDF preview');
                             setPreviewUrl(null);
@@ -388,16 +388,33 @@ export function CertificateTemplateEditor({
                         setPreviewUrl(null);
                     });
             } else if (isDocx) {
-                // Convert DOCX using mammoth.js (client-side)
+                // Convert DOCX using docx-preview (client-side) - preserves original structure
                 setIsConverting(true);
                 convertDocxToImage(backgroundImage)
-                    .then((result) => {
+                    .then(async (result) => {
                         setIsConverting(false);
                         if (result) {
                             setPreviewUrl(result.url);
                             onWidthChange(result.width);
                             onHeightChange(result.height);
-                            toast.success('DOCX preview generated successfully!');
+                            
+                            // Convert the data URL to a File object for upload
+                            // This ensures the server gets the exact rendered image
+                            try {
+                                const response = await fetch(result.url);
+                                const blob = await response.blob();
+                                const convertedFile = new File(
+                                    [blob], 
+                                    backgroundImage.name.replace(/\.docx$/i, '.png'),
+                                    { type: 'image/png' }
+                                );
+                                // Replace the original DOCX with the converted image
+                                onBackgroundImageChange(convertedFile);
+                                toast.success('DOCX converted to image successfully! Original structure preserved.');
+                            } catch (conversionError) {
+                                console.error('Failed to create image file:', conversionError);
+                                toast.success('DOCX preview generated (upload may use original file)');
+                            }
                         } else {
                             toast.error('Failed to generate DOCX preview');
                             setPreviewUrl(null);
