@@ -101,53 +101,52 @@ class HandleInertiaRequests extends Middleware
                 'permissions' => $permissions,
             ],
             'ziggy' => function () use ($request): array {
-                // Cache Ziggy routes for 1 hour since they don't change often
-                $cacheKey = 'ziggy_routes';
+                // Determine environment and protocol early
+                $isProduction = config('app.env') === 'production';
+                
+                // Cache Ziggy routes per environment (production vs development)
+                // This ensures we don't serve cached HTTP URLs in production
+                $cacheKey = 'ziggy_routes_' . ($isProduction ? 'prod' : 'dev');
                 
                 $ziggyArray = Cache::remember($cacheKey, 3600, function () {
                     $ziggy = new Ziggy();
                     return $ziggy->toArray();
                 });
                 
-                // Only force HTTPS in production or when request is secure
-                $isProduction = config('app.env') === 'production';
-                $isSecure = $request->secure();
-                $shouldForceHttps = $isProduction || $isSecure;
+                // Get current request info
+                $currentHost = $request->getHost();
+                $currentScheme = $isProduction ? 'https' : $request->getScheme();
                 
-                // Get base URL and current request URL
-                $baseUrl = config('app.url');
+                // Build the correct base URL based on environment
+                $baseUrl = "{$currentScheme}://{$currentHost}";
+                
+                // Get current URL with correct scheme
                 $location = $request->url();
                 
-                // In development, ALWAYS use HTTP (never HTTPS)
-                if (!$shouldForceHttps) {
-                    // Force HTTP in development
-                    if ($baseUrl && str_starts_with($baseUrl, 'https://')) {
-                        $baseUrl = str_replace('https://', 'http://', $baseUrl);
-                    }
-                    if (str_starts_with($location, 'https://')) {
-                        $location = str_replace('https://', 'http://', $location);
-                    }
-                } else {
-                    // Force HTTPS in production - be more aggressive
-                    if ($baseUrl) {
-                        if (str_starts_with($baseUrl, 'http://')) {
-                            $baseUrl = str_replace('http://', 'https://', $baseUrl);
-                        }
-                        // Also ensure the host matches the current request
-                        $currentHost = $request->getHost();
-                        if (parse_url($baseUrl, PHP_URL_HOST) !== $currentHost) {
-                            $baseUrl = str_replace(parse_url($baseUrl, PHP_URL_HOST) ?? '', $currentHost, $baseUrl);
-                        }
-                    }
+                if ($isProduction) {
+                    // ALWAYS force HTTPS in production, regardless of what Laravel detects
                     if (str_starts_with($location, 'http://')) {
                         $location = str_replace('http://', 'https://', $location);
                     }
+                } else {
+                    // Development: use HTTP
+                    if (str_starts_with($location, 'https://')) {
+                        $location = str_replace('https://', 'http://', $location);
+                    }
                 }
+                
+                // Override Ziggy's url to ensure correct protocol
+                $ziggyUrl = $ziggyArray['url'] ?? $baseUrl;
+                if ($isProduction && str_starts_with($ziggyUrl, 'http://')) {
+                    $ziggyUrl = str_replace('http://', 'https://', $ziggyUrl);
+                }
+                // Also ensure the host matches
+                $ziggyUrl = preg_replace('#^(https?://)([^/]+)#', "{$currentScheme}://{$currentHost}", $ziggyUrl);
                 
                 return [
                     ...$ziggyArray,
                     'location' => $location,
-                    'url' => $baseUrl ?: $location,
+                    'url' => $ziggyUrl,
                 ];
             },
             'flash' => [
