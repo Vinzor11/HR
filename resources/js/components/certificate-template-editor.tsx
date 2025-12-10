@@ -216,22 +216,47 @@ export function CertificateTemplateEditor({
                 const formData = new FormData();
                 formData.append('file', backgroundImage);
 
-                // Use fetch for API endpoint (not Inertia route)
-                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
-                                 (window as any).Laravel?.csrfToken || '';
+                // Get CSRF token from meta tag or cookie
+                const getCsrfToken = (): string => {
+                    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                    if (metaToken) return metaToken;
+                    
+                    const cookieMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+                    if (cookieMatch) {
+                        try {
+                            return decodeURIComponent(cookieMatch[1]);
+                        } catch {
+                            return cookieMatch[1];
+                        }
+                    }
+                    return '';
+                };
+                
+                const csrfToken = getCsrfToken();
                 
                 fetch('/certificate-templates/preview', {
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
                         'Accept': 'application/json',
                     },
+                    credentials: 'same-origin',
                     body: formData,
                 })
                     .then((response) => {
                         if (!response.ok) {
                             return response.json().then((err) => {
+                                // Handle validation errors
+                                if (err.errors) {
+                                    const errorMessages = Object.values(err.errors).flat().join(', ');
+                                    throw new Error(errorMessages || 'Validation failed');
+                                }
                                 throw new Error(err.message || 'Conversion failed');
+                            }).catch((parseErr) => {
+                                // If JSON parsing fails, throw generic error
+                                if (parseErr.message) throw parseErr;
+                                throw new Error(`Request failed with status ${response.status}`);
                             });
                         }
                         return response.json();
