@@ -700,14 +700,14 @@ export const EnterpriseEmployeeTable = ({
       const zIndex = isHeader ? 'z-30' : 'z-10';
       const bgColor = isHeader ? 'bg-muted/70 dark:bg-muted-dark/70' : 'bg-card';
       const shadow = colIndex > 0 ? 'shadow-[2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]' : '';
-      return `sticky ${bgColor} ${zIndex} border-r border-border ${shadow}`;
+      return `sticky ${bgColor} ${zIndex} ${shadow}`;
     } else {
       // When expand is enabled: 0 = expand, 1 = row #, 2 = employee ID
       if (colIndex > 2) return '';
       const zIndex = isHeader ? 'z-30' : 'z-10';
       const bgColor = isHeader ? 'bg-muted/70 dark:bg-muted-dark/70' : 'bg-card';
       const shadow = colIndex > 0 ? 'shadow-[2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]' : '';
-      return `sticky ${bgColor} ${zIndex} border-r border-border ${shadow}`;
+      return `sticky ${bgColor} ${zIndex} ${shadow}`;
     }
   };
 
@@ -1031,12 +1031,12 @@ export const EnterpriseEmployeeTable = ({
             <tr>
               {/* Expand/Collapse column */}
               {enableExpand && (
-                <th className="sticky left-0 z-30 bg-muted/70 dark:bg-muted-dark/70 w-12 px-3 py-3 border-r border-border"></th>
+                <th className="sticky left-0 z-30 bg-muted/70 dark:bg-muted-dark/70 w-12 px-3 py-3"></th>
               )}
               
               {/* Row # */}
               <th 
-                className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-30 bg-muted/70 dark:bg-muted-dark/70 px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r border-border ${getStickyClass(enableExpand ? 1 : 0, true)}`}
+                className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-30 bg-muted/70 dark:bg-muted-dark/70 px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider ${getStickyClass(enableExpand ? 1 : 0, true)}`}
                 style={getStickyStyle(enableExpand ? 1 : 0)}
               >
                 #
@@ -1078,7 +1078,7 @@ export const EnterpriseEmployeeTable = ({
               
               {/* Actions column - sticky right */}
               {actionColumn && (
-                <th className="sticky right-0 z-30 bg-muted/70 dark:bg-muted-dark/70 px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider border-l border-border shadow-[-2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[-2px_0_4px_rgba(0,0,0,0.3)]">
+                <th className="sticky right-0 z-30 bg-muted/70 dark:bg-muted-dark/70 px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider shadow-[-2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[-2px_0_4px_rgba(0,0,0,0.3)]">
                   {actionColumn.label}
                 </th>
               )}
@@ -1090,8 +1090,8 @@ export const EnterpriseEmployeeTable = ({
               // Loading skeleton
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={`skeleton-${idx}`} className="hover:bg-muted/30">
-                  <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4 border-r border-border"></td>
-                  <td className="sticky left-12 z-10 bg-card px-4 py-4 border-r border-border">
+                  <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4"></td>
+                  <td className="sticky left-12 z-10 bg-card px-4 py-4">
                     <div className="h-4 w-8 bg-muted rounded animate-pulse"></div>
                   </td>
                   {dataColumns.map((col) => (
@@ -1100,7 +1100,7 @@ export const EnterpriseEmployeeTable = ({
                     </td>
                   ))}
                   {actionColumn && (
-                    <td className="sticky right-0 z-10 bg-card px-4 py-4 border-l border-border">
+                    <td className="sticky right-0 z-10 bg-card px-4 py-4">
                       <div className="h-4 w-16 bg-muted rounded animate-pulse"></div>
                     </td>
                   )}
@@ -1121,7 +1121,7 @@ export const EnterpriseEmployeeTable = ({
                     >
                       {/* Expand/Collapse icon */}
                       {enableExpand && (
-                        <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4 border-r border-border">
+                        <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4">
                           <div className="flex items-center justify-center">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -1134,7 +1134,7 @@ export const EnterpriseEmployeeTable = ({
                       
                       {/* Row # */}
                       <td 
-                        className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-10 bg-card px-4 py-4 text-sm text-muted-foreground border-r border-border ${getStickyClass(enableExpand ? 1 : 0)}`}
+                        className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-10 bg-card px-4 py-4 text-sm text-muted-foreground ${getStickyClass(enableExpand ? 1 : 0)}`}
                         style={getStickyStyle(enableExpand ? 1 : 0)}
                       >
                         {rowNumber}
@@ -1169,7 +1169,7 @@ export const EnterpriseEmployeeTable = ({
                       {/* Actions cell - sticky right */}
                       {actionColumn && (
                         <td 
-                          className="sticky right-0 z-10 bg-card px-4 py-4 border-l border-border"
+                          className="sticky right-0 z-10 bg-card px-4 py-4"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {renderActionButtons(row)}
