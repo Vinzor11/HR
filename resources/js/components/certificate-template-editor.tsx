@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { CustomTextarea } from '@/components/ui/custom-textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Upload, Move, Type, Palette, AlignLeft, AlignCenter, AlignRight, X } from 'lucide-react';
+import { Trash2, Upload, Move, Type, Palette, AlignLeft, AlignCenter, AlignRight, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { DndContext, DragEndEvent, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { toast } from '@/components/custom-toast';
 import InputError from '@/components/input-error';
@@ -178,20 +178,70 @@ export function CertificateTemplateEditor({
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
     const [canvasScale, setCanvasScale] = useState(1);
+    const [userZoom, setUserZoom] = useState(1); // User-controlled zoom multiplier
     const [isConverting, setIsConverting] = useState(false);
     const [activeId, setActiveId] = useState<string | null>(null);
     const [dragStartPos, setDragStartPos] = useState<{ layerId: string; x: number; y: number; mouseX: number; mouseY: number } | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Configure sensors for drag and drop
+    // Configure sensors for drag and drop - lower distance for better accuracy
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 3, // Require 3px of movement before activating drag
+                distance: 1, // Require only 1px of movement - more responsive
             },
         })
     );
+
+    // Keyboard controls for fine-tuning selected layer position
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!selectedLayerId) return;
+            
+            const layer = textLayers.find(l => l.id === selectedLayerId);
+            if (!layer) return;
+            
+            // Arrow keys for moving, with Shift for larger steps
+            const step = e.shiftKey ? 10 : 1;
+            let deltaX = 0;
+            let deltaY = 0;
+            
+            switch (e.key) {
+                case 'ArrowLeft':
+                    deltaX = -step;
+                    break;
+                case 'ArrowRight':
+                    deltaX = step;
+                    break;
+                case 'ArrowUp':
+                    deltaY = -step;
+                    break;
+                case 'ArrowDown':
+                    deltaY = step;
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    // Delete selected layer
+                    if (document.activeElement?.tagName !== 'INPUT' && 
+                        document.activeElement?.tagName !== 'TEXTAREA') {
+                        e.preventDefault();
+                        deleteLayer(selectedLayerId);
+                    }
+                    return;
+                default:
+                    return;
+            }
+            
+            if (deltaX !== 0 || deltaY !== 0) {
+                e.preventDefault();
+                moveLayer(selectedLayerId, deltaX, deltaY);
+            }
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedLayerId, textLayers]);
 
     /**
      * Convert PDF to image using PDF.js (client-side)
@@ -247,17 +297,58 @@ export function CertificateTemplateEditor({
             console.log('File loaded, size:', arrayBuffer.byteLength);
             
             // Create a temporary container for docx-preview to render into
-            container = document.createElement('div');
-            container.id = 'docx-preview-container';
-            container.style.cssText = `
+            // Use iframe to isolate from app's CSS (which uses oklch colors that html2canvas doesn't support)
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = `
                 position: fixed;
-                left: 0;
+                left: -9999px;
                 top: 0;
-                background: white;
-                z-index: -9999;
+                width: 900px;
+                height: 1200px;
+                border: none;
                 visibility: hidden;
             `;
-            document.body.appendChild(container);
+            document.body.appendChild(iframe);
+            
+            // Wait for iframe to be ready
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!iframeDoc) {
+                document.body.removeChild(iframe);
+                throw new Error('Could not access iframe document');
+            }
+            
+            // Write basic HTML to iframe with safe CSS (no oklch)
+            iframeDoc.open();
+            iframeDoc.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        * { box-sizing: border-box; }
+                        body { 
+                            margin: 0; 
+                            padding: 0; 
+                            background: #ffffff !important;
+                            font-family: 'Times New Roman', Times, serif;
+                        }
+                        .docx-wrapper { background: #ffffff !important; }
+                        section { background: #ffffff !important; }
+                    </style>
+                </head>
+                <body>
+                    <div id="docx-container"></div>
+                </body>
+                </html>
+            `);
+            iframeDoc.close();
+            
+            container = iframeDoc.getElementById('docx-container') as HTMLDivElement;
+            if (!container) {
+                document.body.removeChild(iframe);
+                throw new Error('Could not find container in iframe');
+            }
             
             // Render DOCX using docx-preview (preserves original structure)
             console.log('Rendering DOCX with docx-preview...');
@@ -338,10 +429,16 @@ export function CertificateTemplateEditor({
                 logging: true, // Enable logging for debugging
                 width: width,
                 height: height,
+                windowWidth: 900,
+                windowHeight: 1200,
             });
             console.log('Canvas captured:', canvas.width, 'x', canvas.height);
             
-            document.body.removeChild(container);
+            // Clean up iframe
+            const iframeToRemove = document.querySelector('iframe[style*="-9999px"]');
+            if (iframeToRemove) {
+                document.body.removeChild(iframeToRemove);
+            }
             container = null;
             
             const dataUrl = canvas.toDataURL('image/png');
@@ -357,9 +454,10 @@ export function CertificateTemplateEditor({
             console.error('Error details:', error instanceof Error ? error.message : String(error));
             console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
             
-            // Clean up container if it exists
-            if (container && container.parentNode) {
-                document.body.removeChild(container);
+            // Clean up iframe if it exists
+            const iframeCleanup = document.querySelector('iframe[style*="-9999px"]');
+            if (iframeCleanup) {
+                document.body.removeChild(iframeCleanup);
             }
             
             return null;
@@ -514,12 +612,28 @@ export function CertificateTemplateEditor({
         }
     };
 
+    // Zoom control functions
+    const zoomIn = () => {
+        setUserZoom(prev => Math.min(prev + 0.25, 3)); // Max 300% zoom
+    };
+
+    const zoomOut = () => {
+        setUserZoom(prev => Math.max(prev - 0.25, 0.25)); // Min 25% zoom
+    };
+
+    const resetZoom = () => {
+        setUserZoom(1);
+    };
+
+    // Effective scale combines auto-fit scale with user zoom
+    const effectiveScale = canvasScale * userZoom;
+
     const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!canvasRef.current) return;
 
         const rect = canvasRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / canvasScale;
-        const y = (e.clientY - rect.top) / canvasScale;
+        const x = (e.clientX - rect.left) / effectiveScale;
+        const y = (e.clientY - rect.top) / effectiveScale;
 
         // If clicking on empty space, deselect
         setSelectedLayerId(null);
@@ -549,58 +663,34 @@ export function CertificateTemplateEditor({
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
+        const { active, over, delta } = event;
         setActiveId(null);
 
         if (!over || !canvasRef.current) return;
 
         const activeData = active.data.current as { type?: string; fieldKey?: string; layer?: TextLayer };
 
-        // Handle dragging existing layers
+        // Handle dragging existing layers - use delta for accurate positioning
         if (activeData.type === 'layer' && activeData.layer) {
             const layer = activeData.layer;
-            const containerBounds = getImageContainerBounds();
             
-            if (!containerBounds) {
-                return;
-            }
+            // Calculate new position using the drag delta
+            // Delta is in screen pixels, so we need to convert to canvas coordinates
+            const deltaInCanvasX = delta.x / effectiveScale;
+            const deltaInCanvasY = delta.y / effectiveScale;
             
-            // Get the final drop position from the mouse event
-            if (event.activatorEvent && 'clientX' in event.activatorEvent) {
-                const mouseX = event.activatorEvent.clientX;
-                const mouseY = event.activatorEvent.clientY;
-                
-                // Calculate mouse position relative to the image container
-                // This matches how layers are positioned (relative to container, not image)
-                const relativeX = mouseX - containerBounds.left;
-                const relativeY = mouseY - containerBounds.top;
-                
-                // Validate that mouse is within container bounds
-                // If outside, clamp to container edges first
-                const clampedRelativeX = Math.max(0, Math.min(relativeX, containerBounds.width));
-                const clampedRelativeY = Math.max(0, Math.min(relativeY, containerBounds.height));
-                
-                // Convert to canvas coordinates using canvasScale
-                // The container is exactly width * canvasScale by height * canvasScale
-                let canvasX = clampedRelativeX / canvasScale;
-                let canvasY = clampedRelativeY / canvasScale;
-                
-                // Final clamp to ensure it stays within certificate dimensions
-                // This should be redundant but ensures safety
-                canvasX = Math.max(0, Math.min(canvasX, width));
-                canvasY = Math.max(0, Math.min(canvasY, height));
-                
-                updateLayer(layer.id, {
-                    x_position: canvasX,
-                    y_position: canvasY,
-                });
-            } else {
-                // Fallback: keep current position if no mouse event
-                updateLayer(layer.id, {
-                    x_position: Math.max(0, Math.min(layer.x_position, width)),
-                    y_position: Math.max(0, Math.min(layer.y_position, height)),
-                });
-            }
+            // New position = original position + delta
+            let newX = layer.x_position + deltaInCanvasX;
+            let newY = layer.y_position + deltaInCanvasY;
+            
+            // Clamp to canvas bounds
+            newX = Math.max(0, Math.min(newX, width));
+            newY = Math.max(0, Math.min(newY, height));
+            
+            updateLayer(layer.id, {
+                x_position: Math.round(newX), // Round for pixel-perfect positioning
+                y_position: Math.round(newY),
+            });
             return;
         }
 
@@ -610,18 +700,29 @@ export function CertificateTemplateEditor({
             let x = width / 2;
             let y = height / 2;
             
-            if (containerBounds && event.activatorEvent && 'clientX' in event.activatorEvent) {
-                // Calculate position relative to the image container
-                const relativeX = event.activatorEvent.clientX - containerBounds.left;
-                const relativeY = event.activatorEvent.clientY - containerBounds.top;
-                
-                // Convert to canvas coordinates using canvasScale
-                x = relativeX / canvasScale;
-                y = relativeY / canvasScale;
-                
-                // Clamp to valid bounds
-                x = Math.max(0, Math.min(x, width));
-                y = Math.max(0, Math.min(y, height));
+            // Get the over element's bounding rect for accurate drop position
+            if (containerBounds) {
+                // Use the activator event position + delta to get final drop position
+                if (event.activatorEvent && 'clientX' in event.activatorEvent) {
+                    const startX = (event.activatorEvent as MouseEvent).clientX;
+                    const startY = (event.activatorEvent as MouseEvent).clientY;
+                    
+                    // Final mouse position = start position + delta
+                    const finalMouseX = startX + delta.x;
+                    const finalMouseY = startY + delta.y;
+                    
+                    // Calculate position relative to the canvas container
+                    const relativeX = finalMouseX - containerBounds.left;
+                    const relativeY = finalMouseY - containerBounds.top;
+                    
+                    // Convert to canvas coordinates
+                    x = relativeX / effectiveScale;
+                    y = relativeY / effectiveScale;
+                    
+                    // Clamp to valid bounds
+                    x = Math.max(0, Math.min(x, width));
+                    y = Math.max(0, Math.min(y, height));
+                }
             }
 
             const fieldKey = activeData.fieldKey;
@@ -630,8 +731,8 @@ export function CertificateTemplateEditor({
                     id: `layer-${Date.now()}`,
                     name: fieldKey,
                     field_key: fieldKey,
-                    x_position: Math.max(0, Math.min(x, width)),
-                    y_position: Math.max(0, Math.min(y, height)),
+                    x_position: Math.round(Math.max(0, Math.min(x, width))),
+                    y_position: Math.round(Math.max(0, Math.min(y, height))),
                     font_family: 'Arial',
                     font_size: 24,
                     font_color: '#000000',
@@ -779,7 +880,7 @@ export function CertificateTemplateEditor({
                                     {previewUrl ? (
                                         <div 
                                             className="relative" 
-                                            style={{ width: width * canvasScale, height: height * canvasScale }}
+                                            style={{ width: width * effectiveScale, height: height * effectiveScale }}
                                             data-image-container="true"
                                         >
                                             <img
@@ -787,8 +888,8 @@ export function CertificateTemplateEditor({
                                                 alt="Template preview"
                                                 className="w-full h-full object-contain"
                                                 style={{
-                                                    width: width * canvasScale,
-                                                    height: height * canvasScale,
+                                                    width: width * effectiveScale,
+                                                    height: height * effectiveScale,
                                                 }}
                                             />
                                             {textLayers.map((layer) => (
@@ -798,7 +899,7 @@ export function CertificateTemplateEditor({
                                                     onSelect={() => setSelectedLayerId(layer.id)}
                                                     onDelete={() => deleteLayer(layer.id)}
                                                     isSelected={selectedLayerId === layer.id}
-                                                    scale={canvasScale}
+                                                    scale={effectiveScale}
                                                 />
                                             ))}
                                         </div>
@@ -835,9 +936,49 @@ export function CertificateTemplateEditor({
                                 </CanvasDropZone>
                             </div>
                             {previewUrl && (
-                                <p className="text-xs text-muted-foreground mt-2">
-                                    Dimensions: {width} × {height}px | Scale: {(canvasScale * 100).toFixed(0)}%
-                                </p>
+                                <div className="flex items-center justify-between mt-2">
+                                    <p className="text-xs text-muted-foreground">
+                                        Dimensions: {width} × {height}px | Zoom: {(effectiveScale * 100).toFixed(0)}%
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={zoomOut}
+                                            disabled={userZoom <= 0.25}
+                                            className="h-7 w-7 p-0"
+                                            title="Zoom Out"
+                                        >
+                                            <ZoomOut className="h-4 w-4" />
+                                        </Button>
+                                        <span className="text-xs text-muted-foreground min-w-[40px] text-center">
+                                            {(userZoom * 100).toFixed(0)}%
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={zoomIn}
+                                            disabled={userZoom >= 3}
+                                            className="h-7 w-7 p-0"
+                                            title="Zoom In"
+                                        >
+                                            <ZoomIn className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={resetZoom}
+                                            disabled={userZoom === 1}
+                                            className="h-7 w-7 p-0 ml-1"
+                                            title="Reset Zoom"
+                                        >
+                                            <RotateCcw className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -866,6 +1007,48 @@ export function CertificateTemplateEditor({
                                 placeholder="Auto-filled from drag"
                             />
                         </div>
+
+                        <div className="space-y-2">
+                            <Label>X Position</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    max={width}
+                                    value={Math.round(selectedLayer.x_position)}
+                                    onChange={(e) =>
+                                        updateLayer(selectedLayer.id, {
+                                            x_position: Math.max(0, Math.min(parseInt(e.target.value) || 0, width)),
+                                        })
+                                    }
+                                    className="flex-1"
+                                />
+                                <span className="text-sm text-muted-foreground">px</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Y Position</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    max={height}
+                                    value={Math.round(selectedLayer.y_position)}
+                                    onChange={(e) =>
+                                        updateLayer(selectedLayer.id, {
+                                            y_position: Math.max(0, Math.min(parseInt(e.target.value) || 0, height)),
+                                        })
+                                    }
+                                    className="flex-1"
+                                />
+                                <span className="text-sm text-muted-foreground">px</span>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground col-span-2">
+                            💡 Tip: Use arrow keys to move selected field (hold Shift for 10px steps)
+                        </p>
 
                         <div className="space-y-2 col-span-2">
                             <Label>Default Text (optional)</Label>
