@@ -10,6 +10,11 @@ import { Trash2, Upload, Move, Type, Palette, AlignLeft, AlignCenter, AlignRight
 import { DndContext, DragEndEvent, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { toast } from '@/components/custom-toast';
 import InputError from '@/components/input-error';
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface TextLayer {
     id: string;
@@ -188,6 +193,156 @@ export function CertificateTemplateEditor({
         })
     );
 
+    /**
+     * Convert PDF to image using PDF.js (client-side)
+     */
+    const convertPdfToImage = async (file: File): Promise<{ url: string; width: number; height: number } | null> => {
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const page = await pdf.getPage(1); // Get first page
+            
+            // Scale to get good quality (2x for retina)
+            const scale = 2;
+            const viewport = page.getViewport({ scale });
+            
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) return null;
+            
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            // Render page
+            await page.render({
+                canvasContext: context,
+                viewport: viewport,
+            }).promise;
+            
+            // Convert to data URL
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            return {
+                url: dataUrl,
+                width: Math.round(viewport.width / scale),
+                height: Math.round(viewport.height / scale),
+            };
+        } catch (error) {
+            console.error('PDF conversion error:', error);
+            return null;
+        }
+    };
+
+    /**
+     * Convert DOCX to image using mammoth.js (client-side)
+     * Renders DOCX as HTML then converts to canvas
+     */
+    const convertDocxToImage = async (file: File): Promise<{ url: string; width: number; height: number } | null> => {
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.convertToHtml({ arrayBuffer });
+            const html = result.value;
+            
+            // Create a temporary container to render the HTML
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: absolute;
+                left: -9999px;
+                top: 0;
+                width: 794px;
+                min-height: 1123px;
+                padding: 72px;
+                background: white;
+                font-family: 'Times New Roman', serif;
+                font-size: 12pt;
+                line-height: 1.5;
+                box-sizing: border-box;
+            `;
+            container.innerHTML = html;
+            document.body.appendChild(container);
+            
+            // Wait for images to load
+            const images = container.querySelectorAll('img');
+            await Promise.all(Array.from(images).map(img => 
+                img.complete ? Promise.resolve() : new Promise(resolve => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                })
+            ));
+            
+            // Use html2canvas if available, otherwise create a simple preview
+            // For now, we'll create a canvas with the rendered content
+            const width = container.offsetWidth || 794;
+            const height = Math.max(container.offsetHeight, 1123);
+            
+            // Create canvas and draw white background
+            const canvas = document.createElement('canvas');
+            const scale = 2; // For better quality
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                document.body.removeChild(container);
+                return null;
+            }
+            
+            ctx.scale(scale, scale);
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw text content (simplified rendering)
+            ctx.fillStyle = 'black';
+            ctx.font = '12pt Times New Roman';
+            
+            // Get text content and draw it
+            const textContent = container.innerText;
+            const lines = textContent.split('\n');
+            let y = 100;
+            const lineHeight = 20;
+            const maxWidth = width - 144; // Account for padding
+            
+            for (const line of lines) {
+                if (y > height - 72) break;
+                
+                // Word wrap
+                const words = line.split(' ');
+                let currentLine = '';
+                
+                for (const word of words) {
+                    const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                    const metrics = ctx.measureText(testLine);
+                    
+                    if (metrics.width > maxWidth && currentLine) {
+                        ctx.fillText(currentLine, 72, y);
+                        currentLine = word;
+                        y += lineHeight;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                
+                if (currentLine) {
+                    ctx.fillText(currentLine, 72, y);
+                    y += lineHeight;
+                }
+            }
+            
+            document.body.removeChild(container);
+            
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            return {
+                url: dataUrl,
+                width: width,
+                height: height,
+            };
+        } catch (error) {
+            console.error('DOCX conversion error:', error);
+            return null;
+        }
+    };
+
     // Generate preview URL from uploaded file or existing image
     useEffect(() => {
         if (backgroundImage) {
@@ -210,133 +365,49 @@ export function CertificateTemplateEditor({
                 img.src = url;
 
                 return () => URL.revokeObjectURL(url);
-            } else if (isPdf || isDocx) {
-                // For PDF/DOCX, convert via backend API
+            } else if (isPdf) {
+                // Convert PDF using PDF.js (client-side)
                 setIsConverting(true);
-                const formData = new FormData();
-                formData.append('file', backgroundImage);
-
-                // Get CSRF token from meta tag or cookie
-                const getCsrfToken = (): string => {
-                    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                    if (metaToken) return metaToken;
-                    
-                    const cookieMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-                    if (cookieMatch) {
-                        try {
-                            return decodeURIComponent(cookieMatch[1]);
-                        } catch {
-                            return cookieMatch[1];
-                        }
-                    }
-                    return '';
-                };
-                
-                const csrfToken = getCsrfToken();
-                
-                fetch('/certificate-templates/preview', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': csrfToken,
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json',
-                    },
-                    credentials: 'same-origin',
-                    body: formData,
-                })
-                    .then((response) => {
-                        if (!response.ok) {
-                            return response.json().then((err) => {
-                                // Handle validation errors
-                                if (err.errors) {
-                                    const errorMessages = Object.values(err.errors).flat().join(', ');
-                                    throw new Error(errorMessages || 'Validation failed');
-                                }
-                                throw new Error(err.message || 'Conversion failed');
-                            }).catch((parseErr) => {
-                                // If JSON parsing fails, throw generic error
-                                if (parseErr.message) throw parseErr;
-                                throw new Error(`Request failed with status ${response.status}`);
-                            });
-                        }
-                        return response.json();
-                    })
-                    .then((data) => {
+                convertPdfToImage(backgroundImage)
+                    .then((result) => {
                         setIsConverting(false);
-                        if (data.success) {
-                            // Show message if preview not available
-                            if (data.message) {
-                                toast.info(data.message);
-                            }
-                            
-                            // Update dimensions
-                            if (data.width) onWidthChange(data.width);
-                            if (data.height) onHeightChange(data.height);
-                            
-                            // If no preview URL, show placeholder
-                            if (!data.preview_url) {
-                                setPreviewUrl(null);
-                                return;
-                            }
-                            
-                            // Only set preview URL if it's actually an image (not DOCX/PDF)
-                            let url = data.preview_url;
-                            const isImage = url.toLowerCase().endsWith('.png') || 
-                                          url.toLowerCase().endsWith('.jpg') || 
-                                          url.toLowerCase().endsWith('.jpeg') || 
-                                          url.toLowerCase().endsWith('.gif');
-                            
-                            if (isImage) {
-                                // If URL is absolute but uses localhost, convert to relative or use current origin
-                                if (url.startsWith('http://localhost') || url.startsWith('https://localhost')) {
-                                    // Extract the path part and make it relative
-                                    try {
-                                        const urlObj = new URL(url);
-                                        url = urlObj.pathname;
-                                    } catch (e) {
-                                        // If URL parsing fails, try to extract path manually
-                                        const match = url.match(/\/storage\/.*/);
-                                        if (match) {
-                                            url = match[0];
-                                        }
-                                    }
-                                } else if (url.startsWith('http')) {
-                                    // Full URL with correct host - use as is
-                                    // No change needed
-                                } else if (!url.startsWith('/')) {
-                                    // Relative URL without leading slash - add it
-                                    url = '/' + url;
-                                }
-                                
-                                setPreviewUrl(url);
-                                if (data.width && data.height) {
-                                    onWidthChange(data.width);
-                                    onHeightChange(data.height);
-                                }
-                                toast.success('File converted successfully');
-                            } else {
-                                // Conversion failed - returned original file
-                                console.error('Conversion failed - returned non-image file:', url);
-                                setPreviewUrl(null);
-                                toast.warning('Preview unavailable: Conversion tools not installed. File will be saved but preview is disabled.', {
-                                    duration: 5000,
-                                });
-                            }
+                        if (result) {
+                            setPreviewUrl(result.url);
+                            onWidthChange(result.width);
+                            onHeightChange(result.height);
+                            toast.success('PDF preview generated successfully!');
                         } else {
-                            console.error('Conversion failed:', data.message);
+                            toast.error('Failed to generate PDF preview');
                             setPreviewUrl(null);
-                            toast.warning('Preview unavailable: ' + (data.message || 'Conversion tools not installed') + '. File will be saved but preview is disabled.', {
-                                duration: 5000,
-                            });
                         }
                     })
                     .catch((error) => {
                         setIsConverting(false);
-                        console.error('Conversion error:', error);
+                        console.error('PDF conversion error:', error);
+                        toast.error('Failed to convert PDF: ' + error.message);
                         setPreviewUrl(null);
-                        toast.warning('Preview unavailable: Conversion tools may not be installed. File will be saved but preview is disabled.', {
-                            duration: 5000,
-                        });
+                    });
+            } else if (isDocx) {
+                // Convert DOCX using mammoth.js (client-side)
+                setIsConverting(true);
+                convertDocxToImage(backgroundImage)
+                    .then((result) => {
+                        setIsConverting(false);
+                        if (result) {
+                            setPreviewUrl(result.url);
+                            onWidthChange(result.width);
+                            onHeightChange(result.height);
+                            toast.success('DOCX preview generated successfully!');
+                        } else {
+                            toast.error('Failed to generate DOCX preview');
+                            setPreviewUrl(null);
+                        }
+                    })
+                    .catch((error) => {
+                        setIsConverting(false);
+                        console.error('DOCX conversion error:', error);
+                        toast.error('Failed to convert DOCX: ' + error.message);
+                        setPreviewUrl(null);
                     });
             } else {
                 setPreviewUrl(null);
