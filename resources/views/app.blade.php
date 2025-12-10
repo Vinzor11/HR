@@ -4,6 +4,8 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
+        <link rel="icon" type="image/png" href="/images/essu-removebg-preview.png">
+
         {{-- Only force HTTPS in production - in development, use HTTP --}}
         @if(config('app.env') === 'production')
         <script>
