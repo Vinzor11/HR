@@ -146,6 +146,35 @@ if (typeof window !== 'undefined') {
             updateCsrfToken(page.props.csrf as string);
         }
     });
+    
+    // Handle Inertia errors - especially for external redirect CORS issues
+    router.on('error', (event) => {
+        const error = event.detail.error;
+        // If this looks like a CORS error from an external redirect,
+        // the server should have already handled it with Inertia::location()
+        // But as a fallback, we can check the response for external URLs
+        console.error('Inertia navigation error:', error);
+    });
+    
+    // Handle invalid responses (like when server returns a redirect to external URL)
+    router.on('invalid', (event) => {
+        const response = event.detail.response;
+        // Check if this is a redirect to an external URL
+        // If the response URL is external, do a full page redirect
+        if (response?.url) {
+            try {
+                const responseUrl = new URL(response.url);
+                if (responseUrl.origin !== window.location.origin) {
+                    // External URL - do full page redirect
+                    event.preventDefault();
+                    window.location.href = response.url;
+                    return;
+                }
+            } catch {
+                // URL parsing failed - let Inertia handle it
+            }
+        }
+    });
         
     // Patch XMLHttpRequest
     const originalXHROpen = XMLHttpRequest.prototype.open;

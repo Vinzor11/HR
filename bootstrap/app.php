@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AddCacheHeaders;
 use App\Http\Middleware\HandleAppearance;
+use App\Http\Middleware\HandleExternalRedirects;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            HandleExternalRedirects::class, // Convert external redirects to full page redirects for Inertia
         ]);
 
         $middleware->alias([
