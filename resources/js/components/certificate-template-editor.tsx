@@ -263,7 +263,22 @@ export function CertificateTemplateEditor({
                     })
                     .then((data) => {
                         setIsConverting(false);
-                        if (data.success && data.preview_url) {
+                        if (data.success) {
+                            // Show message if preview not available
+                            if (data.message) {
+                                toast.info(data.message);
+                            }
+                            
+                            // Update dimensions
+                            if (data.width) onWidthChange(data.width);
+                            if (data.height) onHeightChange(data.height);
+                            
+                            // If no preview URL, show placeholder
+                            if (!data.preview_url) {
+                                setPreviewUrl(null);
+                                return;
+                            }
+                            
                             // Only set preview URL if it's actually an image (not DOCX/PDF)
                             let url = data.preview_url;
                             const isImage = url.toLowerCase().endsWith('.png') || 

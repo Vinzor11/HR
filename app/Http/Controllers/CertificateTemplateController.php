@@ -108,10 +108,27 @@ class CertificateTemplateController extends Controller
             $result = $converter->convertToImage($file);
 
             if (!$result) {
+                // Conversion not available - store the original file and return default dimensions
+                // This allows the user to still upload DOCX/PDF files even without preview
+                $storedPath = $file->store('certificate-templates/temp', 'public');
+                
+                \Log::warning('Preview conversion not available, storing original file', [
+                    'path' => $storedPath,
+                    'extension' => $extension,
+                ]);
+                
+                // Return success with default A4 dimensions (common for certificates)
+                // The frontend will show a placeholder instead of preview
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to convert file. Please ensure Imagick, Ghostscript, or LibreOffice is installed.',
-                ], 422);
+                    'success' => true,
+                    'preview_url' => null, // No preview available
+                    'original_path' => $storedPath,
+                    'width' => 2480, // A4 at 300 DPI
+                    'height' => 3508, // A4 at 300 DPI
+                    'path' => $storedPath,
+                    'message' => 'File uploaded. Preview not available (LibreOffice/Ghostscript not installed on server). You can still use this template.',
+                    'preview_available' => false,
+                ]);
             }
 
             // Return the preview image URL and dimensions
@@ -124,6 +141,7 @@ class CertificateTemplateController extends Controller
                 'width' => $result['width'],
                 'height' => $result['height'],
                 'path' => $result['path'],
+                'preview_available' => true,
             ]);
         } catch (\Exception $e) {
             \Log::error('Preview conversion failed', [
@@ -131,10 +149,25 @@ class CertificateTemplateController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Conversion failed: ' . $e->getMessage(),
-            ], 422);
+            // Even if conversion fails, try to store the original file
+            try {
+                $storedPath = $file->store('certificate-templates/temp', 'public');
+                return response()->json([
+                    'success' => true,
+                    'preview_url' => null,
+                    'original_path' => $storedPath,
+                    'width' => 2480,
+                    'height' => 3508,
+                    'path' => $storedPath,
+                    'message' => 'File uploaded but preview generation failed: ' . $e->getMessage(),
+                    'preview_available' => false,
+                ]);
+            } catch (\Exception $storeError) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to process file: ' . $e->getMessage(),
+                ], 422);
+            }
         }
     }
 
