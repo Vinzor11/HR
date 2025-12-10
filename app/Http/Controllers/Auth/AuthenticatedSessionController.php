@@ -93,8 +93,10 @@ class AuthenticatedSessionController extends Controller
         // This preserves the OAuth authorization flow with all query parameters (state, client_id, etc.)
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
-            // Use the stored full URL (with query parameters) to resume OAuth flow
-            return redirect($oauthRedirect);
+            // Use Inertia::location() for OAuth redirects to ensure full page redirect
+            // This is critical because OAuth flow may redirect to external URLs which would
+            // cause CORS errors if followed via XHR (Inertia's default behavior)
+            return \Inertia\Inertia::location($oauthRedirect);
         }
 
         // Ensure HTTPS for redirect URL

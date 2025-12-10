@@ -29,8 +29,8 @@ class HandleExternalRedirects
     {
         $response = $next($request);
 
-        // Only process redirect responses for Inertia requests
-        if (!$request->header('X-Inertia') || !($response instanceof RedirectResponse)) {
+        // Only process redirect responses
+        if (!($response instanceof RedirectResponse)) {
             return $response;
         }
 
@@ -38,9 +38,17 @@ class HandleExternalRedirects
         
         // Check if this is an external redirect
         if ($this->isExternalUrl($targetUrl, $request)) {
-            // Use Inertia::location() for external redirects
+            // For Inertia requests, use Inertia::location() for external redirects
             // This tells Inertia to do a full page redirect instead of XHR
-            return Inertia::location($targetUrl);
+            if ($request->header('X-Inertia')) {
+                return Inertia::location($targetUrl);
+            }
+            
+            // For non-Inertia requests that might be followed by Inertia (like OAuth callbacks),
+            // still use Inertia::location() if it's an XHR request
+            if ($request->ajax() || $request->wantsJson()) {
+                return Inertia::location($targetUrl);
+            }
         }
 
         return $response;
