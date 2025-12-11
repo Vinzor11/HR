@@ -124,12 +124,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/trainings/{id}/force-delete', [TrainingController::class, 'forceDelete'])->name('trainings.force-delete')->middleware('permission:force-delete-training');
     Route::get('/api/roles', [RoleController::class, 'getAllRoles'])->name('roles.api');
 
-    // Leave Management Routes
+    // Leave Management Routes (CS Form No. 6 Compliant)
     Route::get('leaves/balance', [LeaveController::class, 'myBalance'])->name('leaves.balance');
     Route::get('leaves/calendar', [LeaveController::class, 'calendar'])->name('leaves.calendar')
         ->middleware('permission:access-leave-calendar');
     Route::get('leaves/history', [LeaveController::class, 'myHistory'])->name('leaves.history');
+    // Leave API endpoints
     Route::get('api/leaves/balance', [LeaveController::class, 'getBalance'])->name('api.leaves.balance');
+    Route::get('api/leaves/credits', [LeaveController::class, 'getLeaveCredits'])->name('api.leaves.credits');
+    Route::get('api/leaves/types', [LeaveController::class, 'getAvailableLeaveTypes'])->name('api.leaves.types');
 
     // OAuth Client Management
     Route::get('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'index'])

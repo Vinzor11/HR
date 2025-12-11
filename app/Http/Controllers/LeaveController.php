@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\Employee;
 use App\Services\LeaveService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -12,6 +13,11 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * LeaveController - CS Form No. 6 Compliant
+ * 
+ * Handles leave-related views and API endpoints
+ */
 class LeaveController extends Controller
 {
     protected LeaveService $leaveService;
@@ -23,6 +29,7 @@ class LeaveController extends Controller
 
     /**
      * Display leave balance for current user
+     * Shows CSC-compliant leave credits (VL, SL, SPL, etc.)
      */
     public function myBalance(Request $request): Response
     {
@@ -37,11 +44,19 @@ class LeaveController extends Controller
 
         $year = $request->integer('year', now()->year);
         $balances = $this->leaveService->getEmployeeBalance($employeeId, $year);
+        
+        // Get forced leave status (CSC requirement)
+        $forcedLeaveStatus = $this->leaveService->getForcedLeaveStatus($employeeId, $year);
+        
+        // Get leave credits as of today for CS Form No. 6 Section 7
+        $leaveCredits = $this->leaveService->getLeaveCreditsAsOfDate($employeeId);
 
         return Inertia::render('leaves/balance', [
             'balances' => $balances,
             'year' => $year,
             'availableYears' => $this->getAvailableYears(),
+            'forcedLeaveStatus' => $forcedLeaveStatus,
+            'leaveCredits' => $leaveCredits,
         ]);
     }
 
@@ -141,6 +156,7 @@ class LeaveController extends Controller
 
     /**
      * Get leave balance API endpoint
+     * Returns CSC-compliant leave credits
      */
     public function getBalance(Request $request)
     {
@@ -153,10 +169,88 @@ class LeaveController extends Controller
 
         $year = $request->integer('year', now()->year);
         $balances = $this->leaveService->getEmployeeBalance($employeeId, $year);
+        
+        // Include forced leave status and leave credits for CS Form No. 6
+        $forcedLeaveStatus = $this->leaveService->getForcedLeaveStatus($employeeId, $year);
+        $leaveCredits = $this->leaveService->getLeaveCreditsAsOfDate($employeeId);
 
         return response()->json([
             'balances' => $balances,
             'year' => $year,
+            'forcedLeaveStatus' => $forcedLeaveStatus,
+            'leaveCredits' => $leaveCredits,
+        ]);
+    }
+
+    /**
+     * Get leave credits certification for CS Form No. 6 Section 7
+     * Returns VL and SL balances as of a specific date
+     */
+    public function getLeaveCredits(Request $request)
+    {
+        $user = $request->user();
+        $employeeId = $request->input('employee_id', $user->employee_id);
+
+        if (!$employeeId) {
+            return response()->json(['error' => 'No employee record found'], 404);
+        }
+
+        // Check if user can view other employee's credits
+        if ($employeeId !== $user->employee_id && !$user->can('access-employees-module')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $asOfDate = $request->input('as_of_date') 
+            ? Carbon::parse($request->input('as_of_date'))
+            : now();
+
+        $credits = $this->leaveService->getLeaveCreditsAsOfDate($employeeId, $asOfDate);
+        $forcedLeaveStatus = $this->leaveService->getForcedLeaveStatus($employeeId, $asOfDate->year);
+
+        // Get employee info for certification
+        $employee = Employee::find($employeeId);
+
+        return response()->json([
+            'employee' => $employee ? [
+                'id' => $employee->id,
+                'name' => trim("{$employee->first_name} {$employee->middle_name} {$employee->surname}"),
+                'position' => $employee->position?->title,
+                'department' => $employee->department?->name,
+            ] : null,
+            'credits' => $credits,
+            'forcedLeaveStatus' => $forcedLeaveStatus,
+            'certifiedBy' => $user->name,
+            'certifiedAt' => now()->format('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Get available leave types for an employee
+     * Filters by gender and eligibility per CSC rules
+     */
+    public function getAvailableLeaveTypes(Request $request)
+    {
+        $user = $request->user();
+        $employeeId = $user->employee_id;
+
+        if (!$employeeId) {
+            // Return all active leave types if no employee record
+            return response()->json([
+                'leaveTypes' => LeaveType::active()->ordered()->get(),
+            ]);
+        }
+
+        $employee = Employee::find($employeeId);
+        if (!$employee) {
+            return response()->json([
+                'leaveTypes' => LeaveType::active()->ordered()->get(),
+            ]);
+        }
+
+        $leaveTypes = $this->leaveService->getAvailableLeaveTypes($employee);
+
+        return response()->json([
+            'leaveTypes' => $leaveTypes,
         ]);
     }
 

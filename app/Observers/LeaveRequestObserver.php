@@ -4,12 +4,21 @@ namespace App\Observers;
 
 use App\Models\RequestSubmission;
 use App\Models\LeaveRequest;
+use App\Models\LeaveType;
+use App\Models\LeaveBalance;
 use App\Models\RequestAnswer;
 use App\Services\LeaveService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * LeaveRequestObserver - CS Form No. 6 Compliant
+ * 
+ * Handles leave request lifecycle events:
+ * - Created: Reserve balance when submitted
+ * - Updated: Deduct balance on approval, release on rejection
+ */
 class LeaveRequestObserver
 {
     protected LeaveService $leaveService;
@@ -83,7 +92,7 @@ class LeaveRequestObserver
                 return;
             }
 
-            $leaveType = \App\Models\LeaveType::where('code', $answers['leave_type'])->first();
+            $leaveType = LeaveType::where('code', $answers['leave_type'])->first();
             if (!$leaveType) {
                 Log::warning('Leave type not found', [
                     'submission_id' => $submission->id,
@@ -96,17 +105,30 @@ class LeaveRequestObserver
             $endDate = Carbon::parse($answers['end_date']);
             $days = $this->leaveService->calculateWorkingDays($startDate, $endDate);
 
-            // Reserve balance
-            $reserved = $this->leaveService->reserveBalance($employeeId, $leaveType->id, $days);
+            // For credit-based leaves or leaves that use other credits
+            $sourceType = $leaveType->getCreditsSource() ?? $leaveType;
             
-            if (!$reserved) {
-                Log::warning('Failed to reserve leave balance', [
-                    'submission_id' => $submission->id,
-                    'employee_id' => $employeeId,
-                    'leave_type_id' => $leaveType->id,
-                    'days' => $days,
-                ]);
+            // Only reserve balance for credit-based leaves
+            if ($leaveType->isCreditBased() || !$leaveType->is_special_leave) {
+                $reserved = $this->leaveService->reserveBalance($employeeId, $sourceType->id, $days);
+                
+                if (!$reserved) {
+                    Log::warning('Failed to reserve leave balance', [
+                        'submission_id' => $submission->id,
+                        'employee_id' => $employeeId,
+                        'leave_type_id' => $leaveType->id,
+                        'source_leave_type_id' => $sourceType->id,
+                        'days' => $days,
+                    ]);
+                }
             }
+
+            Log::info('Leave request submitted', [
+                'submission_id' => $submission->id,
+                'employee_id' => $employeeId,
+                'leave_type' => $leaveType->code,
+                'days' => $days,
+            ]);
         } catch (\Exception $e) {
             Log::error('Error handling leave submission', [
                 'submission_id' => $submission->id,
@@ -137,7 +159,7 @@ class LeaveRequestObserver
                     return;
                 }
 
-                $leaveType = \App\Models\LeaveType::where('code', $answers['leave_type'])->first();
+                $leaveType = LeaveType::where('code', $answers['leave_type'])->first();
                 if (!$leaveType) {
                     Log::warning('Leave type not found on approval', [
                         'submission_id' => $submission->id,
@@ -150,7 +172,10 @@ class LeaveRequestObserver
                 $endDate = Carbon::parse($answers['end_date']);
                 $days = $this->leaveService->calculateWorkingDays($startDate, $endDate);
 
-                // Create or update leave request record
+                // Get current leave credits for CS Form No. 6 Section 7
+                $credits = $this->leaveService->getLeaveCreditsAsOfDate($employeeId);
+
+                // Create or update leave request record with CS Form No. 6 fields
                 $leaveRequest = LeaveRequest::updateOrCreate(
                     ['request_submission_id' => $submission->id],
                     [
@@ -160,19 +185,41 @@ class LeaveRequestObserver
                         'end_date' => $endDate,
                         'days' => $days,
                         'reason' => $answers['reason'] ?? null,
+                        // CS Form No. 6 Section 6 fields
+                        'location' => $answers['leave_location'] ?? null,
+                        'location_details' => $answers['location_details'] ?? null,
+                        'sick_leave_type' => $answers['sick_leave_type'] ?? null,
+                        'illness_description' => $answers['illness_description'] ?? null,
+                        'women_special_illness' => $answers['women_special_illness'] ?? null,
+                        'study_leave_type' => $answers['study_leave_type'] ?? null,
+                        'study_leave_details' => $answers['study_leave_details'] ?? null,
+                        'other_leave_type' => $answers['other_purpose_type'] ?? null,
+                        // Commutation
+                        'commutation_requested' => ($answers['commutation_requested'] ?? 'not_requested') === 'requested',
+                        // Leave credits at time of filing (Section 7)
+                        'vacation_leave_balance' => $credits['vacation_leave']['balance'] ?? 0,
+                        'sick_leave_balance' => $credits['sick_leave']['balance'] ?? 0,
+                        // Status
                         'status' => 'approved',
                         'approved_at' => now(),
                         'approved_by' => auth()->id(),
+                        // Default to all days with pay
+                        'days_with_pay' => $days,
+                        'days_without_pay' => 0,
                     ]
                 );
 
-                // Deduct balance (moves from pending to used)
-                $this->leaveService->deductBalance($employeeId, $leaveType->id, $days);
+                // For credit-based leaves, deduct balance
+                $sourceType = $leaveType->getCreditsSource() ?? $leaveType;
+                if ($leaveType->isCreditBased() || !$leaveType->is_special_leave) {
+                    $this->leaveService->deductBalance($employeeId, $sourceType->id, $days);
+                }
 
                 Log::info('Leave request approved and balance deducted', [
                     'submission_id' => $submission->id,
                     'leave_request_id' => $leaveRequest->id,
                     'employee_id' => $employeeId,
+                    'leave_type' => $leaveType->code,
                     'days' => $days,
                 ]);
             } catch (\Exception $e) {
@@ -207,7 +254,7 @@ class LeaveRequestObserver
                         return;
                     }
 
-                    $leaveType = \App\Models\LeaveType::where('code', $answers['leave_type'])->first();
+                    $leaveType = LeaveType::where('code', $answers['leave_type'])->first();
                     if (!$leaveType) {
                         return;
                     }
@@ -216,28 +263,47 @@ class LeaveRequestObserver
                     $endDate = Carbon::parse($answers['end_date']);
                     $days = $this->leaveService->calculateWorkingDays($startDate, $endDate);
 
-                    // Release reserved balance
-                    $this->leaveService->releaseBalance($employeeId, $leaveType->id, $days);
+                    // For credit-based leaves, release reserved balance
+                    $sourceType = $leaveType->getCreditsSource() ?? $leaveType;
+                    if ($leaveType->isCreditBased() || !$leaveType->is_special_leave) {
+                        $this->leaveService->releaseBalance($employeeId, $sourceType->id, $days);
+                    }
+
+                    // Create rejected leave request record
+                    LeaveRequest::create([
+                        'request_submission_id' => $submission->id,
+                        'employee_id' => $employeeId,
+                        'leave_type_id' => $leaveType->id,
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'days' => $days,
+                        'reason' => $answers['reason'] ?? null,
+                        'status' => 'rejected',
+                        'rejected_at' => now(),
+                        'rejected_by' => auth()->id(),
+                        'rejection_reason' => $this->getRejectionReason($submission),
+                    ]);
                     return;
                 }
 
-                // Update leave request status
+                // Update existing leave request status
                 $leaveRequest->update([
                     'status' => 'rejected',
                     'rejected_at' => now(),
                     'rejected_by' => auth()->id(),
-                    'rejection_reason' => $submission->approvalActions()
-                        ->where('status', 'rejected')
-                        ->latest()
-                        ->first()?->notes,
+                    'rejection_reason' => $this->getRejectionReason($submission),
                 ]);
 
-                // Release reserved balance
-                $this->leaveService->releaseBalance(
-                    $leaveRequest->employee_id,
-                    $leaveRequest->leave_type_id,
-                    $leaveRequest->days
-                );
+                // Release reserved balance for credit-based leaves
+                $leaveType = $leaveRequest->leaveType;
+                $sourceType = $leaveType->getCreditsSource() ?? $leaveType;
+                if ($leaveType->isCreditBased() || !$leaveType->is_special_leave) {
+                    $this->leaveService->releaseBalance(
+                        $leaveRequest->employee_id,
+                        $sourceType->id,
+                        $leaveRequest->days
+                    );
+                }
 
                 Log::info('Leave request rejected and balance released', [
                     'submission_id' => $submission->id,
@@ -254,7 +320,19 @@ class LeaveRequestObserver
     }
 
     /**
+     * Get rejection reason from approval actions
+     */
+    protected function getRejectionReason(RequestSubmission $submission): ?string
+    {
+        return $submission->approvalActions()
+            ->where('status', 'rejected')
+            ->latest()
+            ->first()?->notes;
+    }
+
+    /**
      * Get leave request answers from submission
+     * Maps CS Form No. 6 fields
      */
     protected function getLeaveRequestAnswers(RequestSubmission $submission): ?array
     {
@@ -269,8 +347,33 @@ class LeaveRequestObserver
             return null;
         }
 
+        // Map all CS Form No. 6 field keys
+        $fieldKeys = [
+            // Required fields
+            'leave_type',
+            'start_date',
+            'end_date',
+            'total_days',
+            'reason',
+            // Section 6 - Details of Leave
+            'leave_location',
+            'location_details',
+            'sick_leave_type',
+            'illness_description',
+            'women_special_illness',
+            'study_leave_type',
+            'study_leave_details',
+            'other_purpose_type',
+            'other_leave_specify',
+            // Commutation
+            'commutation_requested',
+            // Contact info
+            'contact_number',
+            'contact_address',
+        ];
+
         $result = [];
-        foreach (['leave_type', 'start_date', 'end_date', 'reason'] as $key) {
+        foreach ($fieldKeys as $key) {
             if ($answers->has($key)) {
                 $result[$key] = $answers[$key]->value;
             }
@@ -279,6 +382,3 @@ class LeaveRequestObserver
         return $result;
     }
 }
-
-
-
