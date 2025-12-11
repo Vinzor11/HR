@@ -6,13 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\UserActivity;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use PragmaRX\Google2FA\Google2FA;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class TwoFactorVerificationController extends Controller
 {
@@ -32,7 +30,7 @@ class TwoFactorVerificationController extends Controller
     /**
      * Handle the two factor authentication verification.
      */
-    public function store(Request $request): RedirectResponse|SymfonyResponse
+    public function store(Request $request): RedirectResponse
     {
         $request->validate([
             'code' => ['required', 'string'],
@@ -115,10 +113,12 @@ class TwoFactorVerificationController extends Controller
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
             
-            // CRITICAL: For ANY XHR/Inertia request, we MUST break the redirect chain
-            // to prevent CORS errors. Return an HTML page that does a JavaScript redirect.
-            if ($request->header('X-Inertia') || $request->ajax() || $request->wantsJson()) {
-                return $this->createFullPageRedirectResponse($oauthRedirect);
+            // CRITICAL: If this is an Inertia XHR request, we MUST use Inertia::location()
+            // to force a full page redirect. Otherwise, Inertia will follow the redirect
+            // via XHR, which will eventually hit an external OAuth callback URL and cause
+            // CORS errors (browser XHR can't redirect to external domains).
+            if ($request->header('X-Inertia')) {
+                return Inertia::location($oauthRedirect);
             }
             
             return redirect($oauthRedirect);
@@ -130,43 +130,5 @@ class TwoFactorVerificationController extends Controller
             $dashboardUrl = str_replace('http://', 'https://', $dashboardUrl);
         }
         return redirect()->intended($dashboardUrl);
-    }
-
-    /**
-     * Create an HTML response that forces a full page redirect.
-     */
-    protected function createFullPageRedirectResponse(string $url): HttpResponse
-    {
-        $escapedUrl = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
-        $jsUrl = json_encode($url);
-        
-        $html = <<<HTML
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0;url={$escapedUrl}">
-    <title>Redirecting...</title>
-    <style>
-        body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
-        .loader { text-align: center; }
-        .spinner { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
-</head>
-<body>
-    <div class="loader">
-        <div class="spinner"></div>
-        <p>Redirecting...</p>
-    </div>
-    <script>window.location.replace({$jsUrl});</script>
-</body>
-</html>
-HTML;
-
-        return new HttpResponse($html, 200, [
-            'Content-Type' => 'text/html; charset=UTF-8',
-            'Cache-Control' => 'no-cache, no-store, must-revalidate',
-        ]);
     }
 }
