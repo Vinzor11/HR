@@ -161,11 +161,10 @@ class SuperAdminSeeder extends Seeder
         $superAdminRole->syncPermissions(Permission::all());
 
         // 5. Create the Super Admin user
-        $user = User::updateOrCreate(
-            ['email' => 'arvinnegrillo14@gmail.com'],
+        $user = User::firstOrCreate(
+            ['email' => 'arvinnegrillo4@gmail.com'],
             [
                 'name' => 'Super Admin',
-                // Keep password resettable by reruns to stay idempotent
                 'password' => bcrypt('password'), 
             ]
         );
