@@ -33,10 +33,14 @@ export default function Login({ status, canResetPassword, hasOAuthRedirect }: Lo
         remember: false,
     });
 
-    // Also check URL for OAuth indicators as a fallback
+    // Check for OAuth indicators - use multiple methods to ensure we catch it
     // This ensures we use traditional form submission even if the prop wasn't passed correctly
     const shouldUseTraditionalSubmit = hasOAuthRedirect || 
-        (typeof window !== 'undefined' && document.referrer.includes('/oauth/authorize'));
+        (typeof window !== 'undefined' && (
+            document.referrer.includes('/oauth/authorize') ||
+            window.location.search.includes('oauth') ||
+            sessionStorage.getItem('oauth_redirect')
+        ));
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -46,13 +50,27 @@ export default function Login({ status, canResetPassword, hasOAuthRedirect }: Lo
             return;
         }
         
-        // If there's an OAuth redirect pending, use traditional form submission
+        // If there's an OAuth redirect pending, ALWAYS use traditional form submission
         // This prevents CORS issues when redirecting to external OAuth callback URLs
-        // The server-side HandleExternalRedirects middleware also handles this,
-        // but using traditional submission is more reliable for OAuth flows
+        // Traditional form submission bypasses Inertia entirely, preventing XHR redirect chains
         if (shouldUseTraditionalSubmit && formRef.current) {
             setIsSubmitting(true);
-            formRef.current.submit();
+            const form = formRef.current;
+            
+            // Ensure all form values are properly set in the DOM for traditional submission
+            // React controlled components sync values, but we set them explicitly to be safe
+            const emailInput = form.querySelector<HTMLInputElement>('input[name="email"]');
+            const passwordInput = form.querySelector<HTMLInputElement>('input[name="password"]');
+            const rememberInput = form.querySelector<HTMLInputElement>('input[name="remember"]');
+            
+            if (emailInput) emailInput.value = data.email;
+            if (passwordInput) passwordInput.value = data.password;
+            if (rememberInput) rememberInput.checked = data.remember;
+            
+            // Submit the form directly - this bypasses Inertia completely
+            // The server-side HandleExternalRedirects middleware will also handle
+            // any redirects to /oauth/authorize by converting them to full page redirects
+            form.submit();
             return;
         }
         
