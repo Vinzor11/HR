@@ -19,11 +19,28 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(Request $request): Response
     {
+        // Check multiple indicators for OAuth flow
+        $hasOAuthRedirect = $request->session()->has('oauth_redirect');
+        
+        // Also check if intended URL is an OAuth authorize URL
+        $intendedUrl = $request->session()->get('url.intended', '');
+        $isOAuthIntended = str_contains($intendedUrl, '/oauth/authorize');
+        
+        // Check referrer for OAuth flow
+        $referrer = $request->header('Referer', '');
+        $isOAuthReferrer = str_contains($referrer, '/oauth/authorize');
+        
+        // If intended URL is OAuth authorize, preserve it in oauth_redirect
+        if ($isOAuthIntended && !$hasOAuthRedirect) {
+            $request->session()->put('oauth_redirect', $intendedUrl);
+            $hasOAuthRedirect = true;
+        }
+        
         return Inertia::render('auth/login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => $request->session()->get('status'),
             // Pass flag to indicate OAuth flow - form should use traditional submission
-            'hasOAuthRedirect' => $request->session()->has('oauth_redirect'),
+            'hasOAuthRedirect' => $hasOAuthRedirect || $isOAuthIntended || $isOAuthReferrer,
         ]);
     }
 

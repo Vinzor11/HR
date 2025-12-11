@@ -1,5 +1,5 @@
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, useForm, usePage } from '@inertiajs/react';
+import { FormEventHandler, useRef, useMemo } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,36 @@ import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/auth-layout';
 import { Shield } from 'lucide-react';
 
-export default function TwoFactorChallenge() {
+interface TwoFactorChallengeProps {
+    hasOAuthRedirect?: boolean;
+}
+
+export default function TwoFactorChallenge({ hasOAuthRedirect }: TwoFactorChallengeProps) {
+    const { csrf } = usePage().props as { csrf: string };
+    const formRef = useRef<HTMLFormElement>(null);
+    
+    // Detect OAuth flow from multiple sources
+    const isOAuthFlow = useMemo(() => {
+        // Server-side detection
+        if (hasOAuthRedirect) return true;
+        
+        // Client-side fallback detection
+        if (typeof window !== 'undefined') {
+            // Check referrer
+            const referrer = document.referrer || '';
+            if (referrer.includes('/oauth/authorize') || referrer.includes('/login')) return true;
+            
+            // Check sessionStorage for OAuth indicator
+            try {
+                if (sessionStorage.getItem('oauth_flow') === 'true') return true;
+            } catch {
+                // sessionStorage might not be available
+            }
+        }
+        
+        return false;
+    }, [hasOAuthRedirect]);
+    
     const { data, setData, post, processing, errors } = useForm({
         code: '',
     });
@@ -17,6 +46,13 @@ export default function TwoFactorChallenge() {
         
         // Prevent double submission
         if (processing) {
+            return;
+        }
+        
+        // If there's an OAuth redirect pending, use traditional form submission
+        // This prevents CORS issues when redirecting to external OAuth callback URLs
+        if (isOAuthFlow && formRef.current) {
+            formRef.current.submit();
             return;
         }
         
@@ -30,7 +66,9 @@ export default function TwoFactorChallenge() {
         >
             <Head title="Two Factor Authentication" />
 
-            <form className="flex flex-col gap-6" onSubmit={submit}>
+            <form ref={formRef} className="flex flex-col gap-6" onSubmit={submit} method="POST" action={route('two-factor.verify')}>
+                {/* CSRF token for traditional form submission */}
+                <input type="hidden" name="_token" value={csrf} />
                 <div className="grid gap-6">
                     <div className="flex items-center justify-center">
                         <div className="rounded-full bg-primary/10 p-3">
@@ -42,6 +80,7 @@ export default function TwoFactorChallenge() {
                         <Label htmlFor="code">Authentication Code or Recovery Code</Label>
                         <Input
                             id="code"
+                            name="code"
                             type="text"
                             required
                             autoFocus

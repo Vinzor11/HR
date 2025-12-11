@@ -24,7 +24,10 @@ class TwoFactorVerificationController extends Controller
             return redirect()->route('login');
         }
 
-        return Inertia::render('auth/two-factor-challenge');
+        return Inertia::render('auth/two-factor-challenge', [
+            // Pass flag to indicate OAuth flow - form should use traditional submission
+            'hasOAuthRedirect' => $request->session()->has('oauth_redirect'),
+        ]);
     }
 
     /**

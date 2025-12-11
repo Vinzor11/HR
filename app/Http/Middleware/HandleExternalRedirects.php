@@ -44,9 +44,17 @@ class HandleExternalRedirects
                 return Inertia::location($targetUrl);
             }
             
-            // For non-Inertia requests that might be followed by Inertia (like OAuth callbacks),
-            // still use Inertia::location() if it's an XHR request
+            // For XHR/AJAX requests, use Inertia::location() to force full page redirect
+            // This prevents CORS errors when browser follows redirect chain
             if ($request->ajax() || $request->wantsJson()) {
+                return Inertia::location($targetUrl);
+            }
+            
+            // For regular requests during OAuth flow, check if this might be followed by XHR
+            // If the request came from an Inertia page (has X-Inertia-Version header or
+            // Accept header includes application/json), use Inertia::location()
+            $acceptHeader = $request->header('Accept', '');
+            if (str_contains($acceptHeader, 'application/json') || $request->header('X-Inertia-Version')) {
                 return Inertia::location($targetUrl);
             }
         }

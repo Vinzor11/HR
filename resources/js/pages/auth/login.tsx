@@ -1,6 +1,6 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
-import { FormEventHandler, useRef } from 'react';
+import { FormEventHandler, useRef, useMemo } from 'react';
 
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
@@ -26,6 +26,32 @@ export default function Login({ status, canResetPassword, hasOAuthRedirect }: Lo
     const { csrf } = usePage().props as { csrf: string };
     const formRef = useRef<HTMLFormElement>(null);
     
+    // Detect OAuth flow from multiple sources
+    const isOAuthFlow = useMemo(() => {
+        // Server-side detection
+        if (hasOAuthRedirect) return true;
+        
+        // Client-side fallback detection
+        if (typeof window !== 'undefined') {
+            // Check referrer
+            const referrer = document.referrer || '';
+            if (referrer.includes('/oauth/authorize')) return true;
+            
+            // Check if we came from an OAuth flow (URL might have oauth-related params)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('oauth') || urlParams.has('client_id')) return true;
+            
+            // Check sessionStorage for OAuth indicator
+            try {
+                if (sessionStorage.getItem('oauth_flow') === 'true') return true;
+            } catch {
+                // sessionStorage might not be available
+            }
+        }
+        
+        return false;
+    }, [hasOAuthRedirect]);
+    
     const { data, setData, post, processing, errors, reset } = useForm<Required<LoginForm>>({
         email: '',
         password: '',
@@ -42,7 +68,7 @@ export default function Login({ status, canResetPassword, hasOAuthRedirect }: Lo
         
         // If there's an OAuth redirect pending, use traditional form submission
         // This prevents CORS issues when redirecting to external OAuth callback URLs
-        if (hasOAuthRedirect && formRef.current) {
+        if (isOAuthFlow && formRef.current) {
             formRef.current.submit();
             return;
         }
