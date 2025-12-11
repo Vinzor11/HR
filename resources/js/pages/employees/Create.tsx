@@ -3270,6 +3270,68 @@ export default function CreateEmployee({ employee, departments, positions, facul
   };
 
   const getError = (field: string) => {
+    // Limit error visibility to the current step/tab
+    const fieldStepTabMap: Record<string, { step: number; tab?: string }> = {
+      // Step 1 - Basic tab
+      id: { step: 1, tab: 'basic' },
+      surname: { step: 1, tab: 'basic' },
+      first_name: { step: 1, tab: 'basic' },
+      middle_name: { step: 1, tab: 'basic' },
+      name_extension: { step: 1, tab: 'basic' },
+      birth_date: { step: 1, tab: 'basic' },
+      birth_place: { step: 1, tab: 'basic' },
+      sex: { step: 1, tab: 'basic' },
+      civil_status: { step: 1, tab: 'basic' },
+      faculty_id: { step: 1, tab: 'basic' },
+      department_id: { step: 1, tab: 'basic' },
+      position_id: { step: 1, tab: 'basic' },
+      salary: { step: 1, tab: 'basic' },
+      employee_type: { step: 1, tab: 'basic' },
+      status: { step: 1, tab: 'basic' },
+      employment_status: { step: 1, tab: 'basic' },
+      date_hired: { step: 1, tab: 'basic' },
+      date_regularized: { step: 1, tab: 'basic' },
+      citizenship: { step: 1, tab: 'basic' },
+      email_address: { step: 1, tab: 'basic' },
+      mobile_no: { step: 1, tab: 'basic' },
+      telephone_no: { step: 1, tab: 'basic' },
+      // Step 1 - Address tab
+      res_city: { step: 1, tab: 'address' },
+      res_province: { step: 1, tab: 'address' },
+      res_zip_code: { step: 1, tab: 'address' },
+      res_house_no: { step: 1, tab: 'address' },
+      res_street: { step: 1, tab: 'address' },
+      res_subdivision: { step: 1, tab: 'address' },
+      res_barangay: { step: 1, tab: 'address' },
+      perm_city: { step: 1, tab: 'address' },
+      perm_province: { step: 1, tab: 'address' },
+      perm_zip_code: { step: 1, tab: 'address' },
+      perm_house_no: { step: 1, tab: 'address' },
+      perm_street: { step: 1, tab: 'address' },
+      perm_subdivision: { step: 1, tab: 'address' },
+      perm_barangay: { step: 1, tab: 'address' },
+      // Step 1 - Government tab
+      gsis_id_no: { step: 1, tab: 'government' },
+      pagibig_id_no: { step: 1, tab: 'government' },
+      philhealth_no: { step: 1, tab: 'government' },
+      sss_no: { step: 1, tab: 'government' },
+      tin_no: { step: 1, tab: 'government' },
+    };
+
+    const cfg = fieldStepTabMap[field];
+    if (cfg) {
+      if (cfg.step !== currentStep) {
+        return undefined;
+      }
+      if (cfg.tab) {
+        if (cfg.step === 1) {
+          if (cfg.tab === 'basic' && step1Tab !== 'basic') return undefined;
+          if (cfg.tab === 'address' && step1Tab !== 'address') return undefined;
+          if (cfg.tab === 'government' && step1Tab !== 'government') return undefined;
+        }
+      }
+    }
+
     // Show both required and format errors in form fields
     return requiredErrors[field] || formatErrors[field] || errors[field];
   };
