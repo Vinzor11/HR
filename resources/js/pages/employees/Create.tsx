@@ -310,7 +310,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
 
     if (currentStep === 1) {
       if (step1Tab === 'basic') {
-        // Required fields: id, surname, first_name, birth_date, birth_place, sex, civil_status, department_id, position_id
+        // Required fields: id, surname, first_name, birth_date, birth_place, sex, civil_status, department_id, position_id, salary, date_regularized
         if (!data.id || data.id.trim() === '') {
           missingFields.push('Employee ID');
           newClientErrors['id'] = 'Employee ID is required';
@@ -354,6 +354,14 @@ export default function CreateEmployee({ employee, departments, positions, facul
         if (!data.position_id) {
           missingFields.push('Position');
           newClientErrors['position_id'] = 'Position is required';
+        }
+        if (!data.salary || String(data.salary).trim() === '') {
+          missingFields.push('Salary');
+          newClientErrors['salary'] = 'Salary is required';
+        }
+        if (!data.date_regularized) {
+          missingFields.push('Date Regularized');
+          newClientErrors['date_regularized'] = 'Date Regularized is required';
         }
         // Validate telephone and mobile length if provided
         if (data.telephone_no && data.telephone_no.trim() !== '') {
@@ -531,6 +539,14 @@ export default function CreateEmployee({ employee, departments, positions, facul
       if (!data.position_id) {
         allMissingFields.push('Position');
         allErrors['position_id'] = 'Position is required';
+      }
+      if (!data.salary || String(data.salary).trim() === '') {
+        allMissingFields.push('Salary');
+        allErrors['salary'] = 'Salary is required';
+      }
+      if (!data.date_regularized) {
+        allMissingFields.push('Date Regularized');
+        allErrors['date_regularized'] = 'Date Regularized is required';
       }
       // Address tab
       if (!data.res_city || data.res_city.trim() === '') {
@@ -2155,7 +2171,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
     }
     
     // Define which fields belong to which step/tab
-    const step1BasicFields = ['id', 'surname', 'first_name', 'middle_name', 'name_extension', 'birth_date', 'birth_place', 'sex', 'civil_status', 'faculty_id', 'department_id', 'position_id', 'email_address', 'mobile_no', 'telephone_no', 'employee_type', 'status', 'employment_status', 'date_hired', 'date_regularized', 'citizenship'];
+    const step1BasicFields = ['id', 'surname', 'first_name', 'middle_name', 'name_extension', 'birth_date', 'birth_place', 'sex', 'civil_status', 'faculty_id', 'department_id', 'position_id', 'salary', 'email_address', 'mobile_no', 'telephone_no', 'employee_type', 'status', 'employment_status', 'date_hired', 'date_regularized', 'citizenship'];
     const step1AddressFields = ['res_city', 'res_province', 'res_zip_code', 'res_house_no', 'res_street', 'res_subdivision', 'res_barangay', 'perm_city', 'perm_province', 'perm_zip_code', 'perm_house_no', 'perm_street', 'perm_subdivision', 'perm_barangay'];
     const step1GovernmentFields = ['gsis_id_no', 'pagibig_id_no', 'philhealth_no', 'sss_no', 'tin_no'];
     
@@ -3742,7 +3758,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
 
                           <div>
                             <Label htmlFor="salary" className="text-sm font-medium mb-2 block">
-                              Salary (Monthly) <span className="text-muted-foreground">(decimal)</span>
+                              Salary (Monthly) <span className="text-destructive">*</span> <span className="text-muted-foreground">(decimal)</span>
                             </Label>
                             <Input
                               id="salary"

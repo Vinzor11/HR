@@ -2061,9 +2061,9 @@ class EmployeeController extends Controller
                     }
                 },
             ],
-            'salary' => ['nullable', 'numeric', 'between:0,9999999999.99'],
+            'salary' => ['required', 'numeric', 'between:0,9999999999.99'],
             'date_hired' => ['required', 'date', new DateNotFuture()],
-            'date_regularized' => ['nullable', 'date', 'after_or_equal:date_hired', new DateNotFuture()],
+            'date_regularized' => ['required', 'date', 'after_or_equal:date_hired', new DateNotFuture()],
             
             // Physical Attributes
             'height_m' => 'required|numeric|between:0,999.99',
