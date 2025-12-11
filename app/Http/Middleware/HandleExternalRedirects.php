@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -39,15 +40,24 @@ class HandleExternalRedirects
 
         $targetUrl = $response->getTargetUrl();
         
-        // External redirect? Always break XHR chains with an HTML/JS redirect.
+        // Check if this is an external redirect
         if ($this->isExternalUrl($targetUrl, $request)) {
-            return $this->createJavaScriptRedirectResponse($targetUrl);
-        }
-
-        // OAuth authorize is an internal URL but will eventually redirect externally.
-        // If the current request is XHR/Inertia, break the chain now with an HTML/JS redirect
-        // so the browser performs a full navigation instead of XHR following redirects.
-        if ($this->isOAuthAuthorizeRedirect($targetUrl) && ($request->header('X-Inertia') || $request->ajax() || $request->wantsJson())) {
+            // For Inertia requests with the header, use Inertia::location()
+            // This is the cleanest approach when we know it's an Inertia request
+            if ($request->header('X-Inertia')) {
+                return Inertia::location($targetUrl);
+            }
+            
+            // For ALL other requests (including XHR that lost headers during redirect chain),
+            // return an HTML page that does a JavaScript redirect.
+            // This ensures the browser does a full page navigation instead of XHR.
+            // 
+            // This handles the case where:
+            // 1. Login submits via Inertia XHR
+            // 2. Server redirects to /oauth/authorize (XHR follows)
+            // 3. /oauth/authorize redirects to external callback (XHR would follow, causing CORS)
+            // 4. This middleware intercepts and returns HTML with JS redirect
+            // 5. Browser executes JS redirect as full page navigation - no CORS!
             return $this->createJavaScriptRedirectResponse($targetUrl);
         }
 
@@ -72,17 +82,6 @@ class HandleExternalRedirects
         
         // Compare hosts (case-insensitive)
         return strcasecmp($parsed['host'], $currentHost) !== 0;
-    }
-
-    /**
-     * Check if redirect is to the OAuth authorize endpoint
-     */
-    protected function isOAuthAuthorizeRedirect(string $url): bool
-    {
-        $parsed = parse_url($url);
-        $path = $parsed['path'] ?? '';
-
-        return str_contains($path, '/oauth/authorize');
     }
 
     /**
