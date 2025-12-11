@@ -1,8 +1,10 @@
 import { Head } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useState, useEffect, useRef } from 'react';
 import {
   User,
   Briefcase,
@@ -21,6 +23,7 @@ import {
   Baby,
   HeartHandshake,
   CalendarDays,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Employee {
@@ -32,6 +35,7 @@ interface Employee {
   status: string;
   employment_status?: string;
   employee_type: string;
+  salary?: number | string;
   date_hired?: string;
   date_regularized?: string;
   department?: { faculty_name?: string; name?: string; type?: string };
@@ -107,6 +111,13 @@ const formatDate = (dateString: string | null | undefined): string => {
   }
 };
 
+const formatCurrency = (amount: number | string | undefined): string => {
+  if (amount === undefined || amount === null || amount === '') return 'N/A';
+  const numeric = Number(amount);
+  if (Number.isNaN(numeric)) return String(amount);
+  return `₱${numeric.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 const formatAddress = (employee: Employee, type: 'res' | 'perm'): string => {
   const parts = [];
   if (type === 'res') {
@@ -157,6 +168,93 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
     { title: 'Employees', href: '/employees' },
     { title: fullName, href: '#' },
   ];
+
+  const hasGovernmentIds = Boolean(
+    employee.gsis_id_no ||
+      employee.pagibig_id_no ||
+      employee.philhealth_no ||
+      employee.sss_no ||
+      employee.tin_no ||
+      employee.agency_employee_no ||
+      employee.government_issued_id ||
+      employee.id_number ||
+      employee.id_date_issued ||
+      employee.id_place_of_issue ||
+      employee.pwd_id_no ||
+      employee.solo_parent_id_no
+  );
+  const hasFamilyBackground = Boolean(employee.family_background && employee.family_background.length > 0);
+  const hasChildren = Boolean(employee.children && employee.children.length > 0);
+  const hasEducation = Boolean(employee.educational_background && employee.educational_background.length > 0);
+  const hasEligibility = Boolean(employee.civil_service_eligibility && employee.civil_service_eligibility.length > 0);
+  const hasWorkExperience = Boolean(employee.work_experience && employee.work_experience.length > 0);
+  const hasVoluntaryWork = Boolean(employee.voluntary_work && employee.voluntary_work.length > 0);
+  const hasLearningDevelopment = Boolean(employee.learning_development && employee.learning_development.length > 0);
+  const hasOtherInformation = Boolean(
+    employee.other_information &&
+      (employee.other_information.skill_or_hobby ||
+        employee.other_information.non_academic_distinctions ||
+        employee.other_information.memberships)
+  );
+  const hasReferences = Boolean(employee.references && employee.references.length > 0);
+  const quickLinks = [
+    { id: 'personal-information', label: 'Personal Information', icon: User, show: true },
+    { id: 'contact-information', label: 'Contact Information', icon: Phone, show: true },
+    { id: 'government-ids', label: 'Government IDs', icon: CreditCard, show: hasGovernmentIds },
+    { id: 'family-background', label: 'Family Background', icon: Users, show: hasFamilyBackground },
+    { id: 'children', label: 'Children', icon: Baby, show: hasChildren },
+    { id: 'education', label: 'Educational Background', icon: GraduationCap, show: hasEducation },
+    { id: 'civil-service', label: 'Civil Service Eligibility', icon: Award, show: hasEligibility },
+    { id: 'work-experience', label: 'Work Experience', icon: Briefcase, show: hasWorkExperience },
+    { id: 'voluntary-work', label: 'Voluntary Work', icon: HeartHandshake, show: hasVoluntaryWork },
+    { id: 'learning-development', label: 'Learning & Development', icon: BookOpen, show: hasLearningDevelopment },
+    { id: 'other-information', label: 'Other Information', icon: FileText, show: hasOtherInformation },
+    { id: 'references', label: 'References', icon: UserCircle, show: hasReferences },
+  ].filter((link) => link.show);
+
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Track scroll position to toggle between fixed and relative positioning
+  const quickOverviewRef = useRef<HTMLDivElement>(null);
+  const [isFixed, setIsFixed] = useState(false);
+  const [initialTop, setInitialTop] = useState(0);
+
+  useEffect(() => {
+    // Get the initial position of the Quick Overview relative to the document
+    const updateInitialPosition = () => {
+      const personalInfoCard = document.getElementById('personal-information');
+      if (personalInfoCard) {
+        const rect = personalInfoCard.getBoundingClientRect();
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        setInitialTop(rect.top + scrollTop);
+      }
+    };
+
+    // Small delay to ensure DOM is ready
+    setTimeout(updateInitialPosition, 100);
+    window.addEventListener('resize', updateInitialPosition);
+
+    return () => window.removeEventListener('resize', updateInitialPosition);
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      // Add offset for header (80px)
+      const threshold = initialTop - 80;
+      setIsFixed(scrollTop > threshold && threshold > 0);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // Check initial state
+
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [initialTop]);
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -237,6 +335,17 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
                           </div>
                         </div>
                       )}
+                      {employee.salary !== undefined && employee.salary !== null && employee.salary !== '' && (
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+                          <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                            <CreditCard className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">Salary</p>
+                            <p className="text-sm font-semibold text-foreground">{formatCurrency(employee.salary)}</p>
+                          </div>
+                        </div>
+                      )}
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
                         <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
                           <CalendarDays className="h-5 w-5 text-orange-600 dark:text-orange-400" />
@@ -288,11 +397,11 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
         </div>
 
         {/* Main Content Grid - Improved spacing */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-4 sm:px-6 lg:px-8 items-start">
           {/* Left Column - Main Info */}
           <div className="lg:col-span-2 space-y-6">
             {/* Personal Information */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm" id="personal-information">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
@@ -357,7 +466,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
             </Card>
 
             {/* Contact Information */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm" id="contact-information">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
@@ -410,8 +519,8 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
             </Card>
 
             {/* Government IDs */}
-            {(employee.gsis_id_no || employee.pagibig_id_no || employee.philhealth_no || employee.sss_no || employee.tin_no || employee.agency_employee_no) && (
-              <Card className="shadow-sm">
+            {hasGovernmentIds && (
+              <Card className="shadow-sm" id="government-ids">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
@@ -486,7 +595,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Family Background */}
             {employee.family_background && employee.family_background.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="family-background">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-pink-100 dark:bg-pink-900/30">
@@ -543,7 +652,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Children */}
             {employee.children && employee.children.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="children">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/30">
@@ -579,7 +688,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Educational Background */}
             {employee.educational_background && employee.educational_background.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="education">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
@@ -625,7 +734,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Civil Service Eligibility */}
             {employee.civil_service_eligibility && employee.civil_service_eligibility.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="civil-service">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
@@ -665,7 +774,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Work Experience */}
             {employee.work_experience && employee.work_experience.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="work-experience">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/30">
@@ -718,7 +827,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Voluntary Work */}
             {employee.voluntary_work && employee.voluntary_work.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="voluntary-work">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
@@ -752,7 +861,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Learning and Development */}
             {employee.learning_development && employee.learning_development.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="learning-development">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/30">
@@ -785,7 +894,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* Other Information */}
             {employee.other_information && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="other-information">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-900/30">
@@ -819,7 +928,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
 
             {/* References */}
             {employee.references && employee.references.length > 0 && (
-              <Card className="shadow-sm">
+              <Card className="shadow-sm" id="references">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/30">
@@ -848,103 +957,62 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
           </div>
 
           {/* Right Column - Quick Stats */}
-          <div className="space-y-6">
-            {/* Quick Stats Card */}
-            <Card className="shadow-sm lg:sticky lg:top-24">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl">Quick Overview</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Employee ID</span>
-                  <span className="font-semibold">{employee.id}</span>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <StatusBadge status={employee.status} />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Type</span>
-                  <span className="font-semibold">{employee.employee_type || 'N/A'}</span>
-                </div>
-                <Separator />
-                {employee.birth_date && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Age</span>
-                      <span className="font-semibold">
-                        {new Date().getFullYear() - new Date(employee.birth_date).getFullYear()} years
-                      </span>
-                    </div>
-                    <Separator />
-                  </>
-                )}
-                {employee.educational_background && employee.educational_background.length > 0 && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Education</span>
-                      <span className="font-semibold">
-                        {employee.educational_background.length} record{employee.educational_background.length > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <Separator />
-                  </>
-                )}
-                {employee.work_experience && employee.work_experience.length > 0 && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Experience</span>
-                      <span className="font-semibold">
-                        {employee.work_experience.length} position{employee.work_experience.length > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <Separator />
-                  </>
-                )}
-                {employee.children && employee.children.length > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Children</span>
-                    <span className="font-semibold">{employee.children.length}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Additional Info Card */}
-            {(employee.indigenous_group || employee.government_issued_id) && (
-              <Card className="shadow-sm">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-xl">Additional Information</CardTitle>
+          <div className="lg:col-span-1">
+            {/* Desktop: Fixed sidebar that stays visible at top while scrolling */}
+            <div className="hidden lg:block fixed right-8 top-20 w-80 z-40">
+              <Card className="shadow-sm max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <CardHeader className="pb-3 space-y-1">
+                  <CardTitle className="text-xl">Quick Overview</CardTitle>
+                  <CardDescription>Jump to key sections</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {employee.indigenous_group && (
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Indigenous Group</label>
-                      <p className="mt-1 text-sm font-medium">{employee.indigenous_group}</p>
-                    </div>
-                  )}
-                  {employee.government_issued_id && (
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Government ID</label>
-                      <p className="mt-1 text-sm font-medium">{employee.government_issued_id}</p>
-                      {employee.id_number && (
-                        <p className="mt-1 text-xs text-muted-foreground">No: {employee.id_number}</p>
-                      )}
-                      {employee.id_date_issued && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Issued: {formatDate(employee.id_date_issued)}
-                        </p>
-                      )}
-                      {employee.id_place_of_issue && (
-                        <p className="mt-1 text-xs text-muted-foreground">Place: {employee.id_place_of_issue}</p>
-                      )}
-                    </div>
-                  )}
+                <CardContent className="space-y-2">
+                  {quickLinks.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <Button
+                        key={link.id}
+                        variant="ghost"
+                        className="w-full justify-between rounded-lg border border-transparent px-3 py-2 hover:border-border"
+                        onClick={() => scrollToSection(link.id)}
+                      >
+                        <span className="flex items-center gap-3">
+                          <Icon className="h-4 w-4 text-primary" />
+                          <span className="font-medium">{link.label}</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    );
+                  })}
                 </CardContent>
               </Card>
-            )}
+            </div>
+
+            {/* Mobile/Tablet: Inline version that scrolls with content */}
+            <Card className="shadow-sm lg:hidden">
+              <CardHeader className="pb-3 space-y-1">
+                <CardTitle className="text-xl">Quick Overview</CardTitle>
+                <CardDescription>Jump to key sections</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {quickLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <Button
+                      key={link.id}
+                      variant="ghost"
+                      className="w-full justify-between rounded-lg border border-transparent px-3 py-2 hover:border-border"
+                      onClick={() => scrollToSection(link.id)}
+                    >
+                      <span className="flex items-center gap-3">
+                        <Icon className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{link.label}</span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  );
+                })}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

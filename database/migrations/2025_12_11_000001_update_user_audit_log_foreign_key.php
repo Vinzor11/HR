@@ -12,6 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Skip on SQLite (syntax differences and dev/testing use SQLite)
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Make user_id nullable and switch FK to ON DELETE SET NULL
         Schema::table('user_audit_log', function (Blueprint $table) {
             // Drop existing constraint to change behaviour
@@ -35,6 +40,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         Schema::table('user_audit_log', function (Blueprint $table) {
             $table->dropForeign(['user_id']);
         });

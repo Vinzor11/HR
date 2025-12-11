@@ -1287,7 +1287,7 @@ class EmployeeController extends Controller
 
         // Get base employee data without relationships
         $baseData = $employee->only([
-            'id', 'surname', 'first_name', 'middle_name', 'name_extension', 'status', 'employment_status', 'employee_type',
+            'id', 'surname', 'first_name', 'middle_name', 'name_extension', 'status', 'employment_status', 'employee_type', 'salary',
             'department_id', 'position_id', 'birth_date', 'birth_place', 'sex', 'civil_status',
             'height_m', 'weight_kg', 'blood_type', 'gsis_id_no', 'pagibig_id_no', 'philhealth_no',
             'sss_no', 'tin_no', 'agency_employee_no', 'citizenship', 'dual_citizenship', 'citizenship_type',
