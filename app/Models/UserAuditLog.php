@@ -21,6 +21,7 @@ class UserAuditLog extends Model
         'field_changed',
         'old_value',
         'new_value',
+        'snapshot',
         'action_date',
         'performed_by',
     ];
@@ -30,6 +31,13 @@ class UserAuditLog extends Model
         static::creating(function (UserAuditLog $log): void {
             if (empty($log->reference_number)) {
                 $log->reference_number = self::generateReferenceNumber();
+            }
+
+            if (empty($log->snapshot) && $log->user_id) {
+                $user = User::withTrashed()->find($log->user_id);
+                if ($user) {
+                    $log->snapshot = $user->toArray(); // hidden fields stay hidden
+                }
             }
         });
     }
@@ -42,6 +50,7 @@ class UserAuditLog extends Model
     protected $casts = [
         'old_value' => 'array',
         'new_value' => 'array',
+        'snapshot' => 'array',
         'action_date' => 'datetime',
     ];
 

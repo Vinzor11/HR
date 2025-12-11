@@ -22,6 +22,7 @@ class OrganizationalAuditLog extends Model
         'field_changed',
         'old_value',
         'new_value',
+        'snapshot',
         'action_date',
         'performed_by',
     ];
@@ -31,6 +32,10 @@ class OrganizationalAuditLog extends Model
         static::creating(function (OrganizationalAuditLog $log): void {
             if (empty($log->reference_number)) {
                 $log->reference_number = self::generateReferenceNumber($log->unit_type);
+            }
+
+            if (empty($log->snapshot) && $log->unit_type && $log->unit_id) {
+                $log->snapshot = self::buildSnapshot($log->unit_type, $log->unit_id);
             }
         });
     }
@@ -51,6 +56,7 @@ class OrganizationalAuditLog extends Model
     protected $casts = [
         'old_value' => 'array',
         'new_value' => 'array',
+        'snapshot' => 'array',
         'action_date' => 'datetime',
     ];
 
@@ -112,5 +118,20 @@ class OrganizationalAuditLog extends Model
             'DELETE' => 'Deleted',
             default => $this->action_type,
         };
+    }
+
+    /**
+    * Build a snapshot for the given unit type/id.
+    */
+    protected static function buildSnapshot(string $unitType, int|string $unitId): ?array
+    {
+        $model = match($unitType) {
+            'faculty' => Faculty::withTrashed()->find($unitId),
+            'department', 'office' => Department::withTrashed()->find($unitId),
+            'position' => Position::withTrashed()->find($unitId),
+            default => null,
+        };
+
+        return $model ? $model->toArray() : null;
     }
 }

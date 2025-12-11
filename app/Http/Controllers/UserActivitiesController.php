@@ -17,7 +17,9 @@ class UserActivitiesController extends Controller
     {
         abort_unless($request->user()->can('view-user-activities'), 403, 'Unauthorized action.');
 
-        $activities = UserActivity::with('user:id,name,email')
+        $activities = UserActivity::with(['user' => function ($query) {
+                $query->withTrashed()->select('id', 'name', 'email');
+            }])
             ->orderBy('created_at', 'desc')
             ->limit(500)
             ->get()
@@ -25,8 +27,8 @@ class UserActivitiesController extends Controller
                 return [
                     'id' => $activity->id,
                     'user_id' => $activity->user_id,
-                    'user_name' => $activity->user?->name ?? 'Unknown',
-                    'user_email' => $activity->user?->email ?? 'Unknown',
+                    'user_name' => $activity->user?->name ?? "User #{$activity->user_id} (record permanently deleted)",
+                    'user_email' => $activity->user?->email ?? '—',
                     'activity_type' => $activity->activity_type,
                     'ip_address' => $activity->ip_address,
                     'device' => $activity->device,

@@ -21,6 +21,7 @@ class EmployeeAuditLog extends Model
         'field_changed',
         'old_value',
         'new_value',
+        'snapshot',
         'action_date',
         'performed_by',
     ];
@@ -30,6 +31,13 @@ class EmployeeAuditLog extends Model
         static::creating(function (EmployeeAuditLog $log): void {
             if (empty($log->reference_number)) {
                 $log->reference_number = self::generateReferenceNumber();
+            }
+
+            if (empty($log->snapshot) && $log->employee_id) {
+                $employee = Employee::withTrashed()->find($log->employee_id);
+                if ($employee) {
+                    $log->snapshot = $employee->toArray();
+                }
             }
         });
     }
@@ -42,6 +50,7 @@ class EmployeeAuditLog extends Model
     protected $casts = [
         'old_value' => 'array',
         'new_value' => 'array',
+        'snapshot' => 'array',
         'action_date' => 'datetime',
     ];
 
@@ -50,7 +59,7 @@ class EmployeeAuditLog extends Model
      */
     public function employee()
     {
-        return $this->belongsTo(Employee::class, 'employee_id', 'id');
+        return $this->belongsTo(Employee::class, 'employee_id', 'id')->withTrashed();
     }
 
     /**

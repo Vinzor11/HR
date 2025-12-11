@@ -25,12 +25,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 interface EmployeeLog {
   record_id: number;
-  employee_id: string;
+  employee_id: string | null;
   reference_number?: string;
   action_type: 'CREATE' | 'UPDATE' | 'DELETE';
   field_changed?: string;
   old_value?: any;
   new_value?: any;
+  snapshot?: any;
   action_date: string;
   performed_by: string;
   employee?: {
@@ -85,6 +86,17 @@ export default function EmployeeLogs() {
     const [filterAction, setFilterAction] = useState<string>('all');
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
+
+    const getEmployeeId = (log: EmployeeLog) => log.employee_id ?? log.snapshot?.id ?? '—';
+    const getEmployeeName = (log: EmployeeLog) => {
+        if (log.employee) {
+            return `${log.employee.first_name} ${log.employee.middle_name || ''} ${log.employee.surname}`.trim();
+        }
+        if (log.snapshot?.first_name || log.snapshot?.surname) {
+            return `${log.snapshot.first_name || ''} ${log.snapshot.middle_name || ''} ${log.snapshot.surname || ''}`.trim();
+        }
+        return log.employee_id ? `${log.employee_id} (record permanently deleted)` : 'Employee (record permanently deleted)';
+    };
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
@@ -145,15 +157,13 @@ export default function EmployeeLogs() {
         
         if (log.action_type === 'DELETE') {
             // Extract employee ID from log
-            const employeeId = log.employee_id;
+            const employeeId = getEmployeeId(log);
             const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
             const isPermanentDelete = newValueStr.includes('Permanently Deleted');
             
             // Extract employee name if available
-            let employeeName = null;
-            if (!isPermanentDelete && log.employee) {
-                employeeName = `${log.employee.first_name} ${log.employee.middle_name || ''} ${log.employee.surname}`.trim();
-            } else if (newValueStr) {
+            let employeeName = getEmployeeName(log);
+            if (!employeeName && newValueStr) {
                 // Extract name from format like "Employee Record Permanently Deleted: {name}"
                 const match = newValueStr.match(/:\s*(.+)$/);
                 if (match) {
@@ -192,9 +202,7 @@ export default function EmployeeLogs() {
         // UPDATE action
         // RESTORE action (UPDATE with field_changed === 'restored')
         if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
-            const employeeName = log.employee 
-                ? `${log.employee.first_name} ${log.employee.middle_name || ''} ${log.employee.surname}`.trim()
-                : log.employee_id;
+            const employeeName = getEmployeeName(log);
             
             return (
                 <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50 dark:border-border-dark/50">
@@ -208,9 +216,9 @@ export default function EmployeeLogs() {
                         <div className="text-xs">
                             <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground font-medium">Employee ID:</span>
-                                <span className="font-semibold text-foreground">{log.employee_id}</span>
+                                <span className="font-semibold text-foreground">{getEmployeeId(log)}</span>
                             </div>
-                            {log.employee && (
+                            {employeeName && (
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-muted-foreground font-medium">Name:</span>
                                     <span className="font-semibold text-foreground">{employeeName}</span>
@@ -257,13 +265,14 @@ export default function EmployeeLogs() {
 
     // Filter logs
     const filteredLogs = logs.filter((log) => {
+        const employeeIdStr = (getEmployeeId(log) ?? '').toString().toLowerCase();
+        const employeeNameStr = getEmployeeName(log)?.toLowerCase() || '';
         const matchesSearch = !searchTerm || 
-            log.employee_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            employeeIdStr.includes(searchTerm.toLowerCase()) ||
             log.reference_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.field_changed?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.performed_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.employee?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.employee?.surname?.toLowerCase().includes(searchTerm.toLowerCase());
+            employeeNameStr.includes(searchTerm.toLowerCase());
 
         // Handle restore and permanent delete as separate action types for filtering
         let effectiveActionType = log.action_type;
@@ -345,24 +354,18 @@ export default function EmployeeLogs() {
             return String(value);
         };
 
-        const rows = filteredLogs.map(log => {
-            const employeeName = log.employee 
-                ? `${log.employee.first_name} ${log.employee.middle_name || ''} ${log.employee.surname}`.trim()
-                : '';
-            
-            return [
-                log.record_id,
-                log.reference_number || '',
-                log.employee_id,
-                employeeName,
-                log.action_type,
-                log.field_changed || '',
-                formatValueForCSV(log.old_value),
-                formatValueForCSV(log.new_value),
-                formatDate(log.action_date),
-                log.performed_by
-            ];
-        });
+        const rows = filteredLogs.map(log => [
+            log.record_id,
+            log.reference_number || '',
+            getEmployeeId(log),
+            getEmployeeName(log),
+            log.action_type,
+            log.field_changed || '',
+            formatValueForCSV(log.old_value),
+            formatValueForCSV(log.new_value),
+            formatDate(log.action_date),
+            log.performed_by
+        ]);
 
         const csvContent = [
             headers.join(','),
@@ -501,9 +504,8 @@ export default function EmployeeLogs() {
                                                                         <Badge variant="outline" className={`text-xs ${config.bgColor} ${config.color} border-0`}>
                                                                             {config.label}
                                                                         </Badge>
-                                                                        <span className="text-sm font-medium text-foreground">
-                                                                            {log.employee_id}
-                                                                        </span>
+                                                                        <span className="text-xs text-muted-foreground">ID: {getEmployeeId(log)}</span>
+                                                                        {/* Name shown in body; omit here to avoid repetition */}
                                                                         {log.reference_number && (
                                                                             <span className="text-xs text-muted-foreground">Ref: {log.reference_number}</span>
                                                                         )}

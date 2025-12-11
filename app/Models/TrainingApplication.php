@@ -24,12 +24,12 @@ class TrainingApplication extends Model
 
     public function training()
     {
-        return $this->belongsTo(Training::class, 'training_id', 'training_id');
+        return $this->belongsTo(Training::class, 'training_id', 'training_id')->withTrashed();
     }
 
     public function employee()
     {
-        return $this->belongsTo(Employee::class, 'employee_id', 'id');
+        return $this->belongsTo(Employee::class, 'employee_id', 'id')->withTrashed();
     }
 
     public function requestSubmission()

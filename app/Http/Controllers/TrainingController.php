@@ -696,7 +696,7 @@ class TrainingController extends Controller
         }
 
         $history = $employee
-            ? TrainingApplication::with('training')
+            ? TrainingApplication::with(['training' => fn ($q) => $q->withTrashed()])
                 ->where('employee_id', $employee->id)
                 ->when($statusFilter, function ($query) use ($statusFilter) {
                     // Filter by status, but handle dynamic statuses
@@ -746,18 +746,23 @@ class TrainingController extends Controller
                         $dynamicStatus = $application->status === 'Signed Up' ? 'Completed' : $application->status;
                     }
 
+                    $trainingTitle = $training?->training_title ?? ($application->training_id ? "Training #{$application->training_id} (record permanently deleted)" : 'Training (record permanently deleted)');
+                    $venue = $training?->venue ?? '(record permanently deleted)';
+                    $facilitator = $training?->facilitator ?? '(record permanently deleted)';
+                    $remarks = $training?->remarks ?? '(record permanently deleted)';
+
                     return [
                         'id' => $application->apply_id,
-                        'training_title' => $training?->training_title,
+                        'training_title' => $trainingTitle,
                         'status' => $dynamicStatus,
                         'original_status' => $application->status,
                         'attendance' => $application->attendance,
                         'date_from' => $training?->date_from?->toDateString(),
                         'date_to' => $training?->date_to?->toDateString(),
                         'hours' => $training?->hours,
-                        'venue' => $training?->venue,
-                        'facilitator' => $training?->facilitator,
-                        'remarks' => $training?->remarks,
+                        'venue' => $venue,
+                        'facilitator' => $facilitator,
+                        'remarks' => $remarks,
                         'capacity' => $training?->capacity,
                         'certificate_path' => $application->certificate_path,
                         'sign_up_date' => optional($application->sign_up_date)->toDateTimeString(),

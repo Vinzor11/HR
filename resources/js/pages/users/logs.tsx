@@ -25,12 +25,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 interface UserLog {
   record_id: number;
-  user_id: number;
+  user_id: number | null;
   reference_number?: string;
   action_type: 'CREATE' | 'UPDATE' | 'DELETE';
   field_changed?: string;
   old_value?: any;
   new_value?: any;
+  snapshot?: any;
   action_date: string;
   performed_by: string;
   user?: {
@@ -84,6 +85,13 @@ export default function UserLogs() {
     const [filterAction, setFilterAction] = useState<string>('all');
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
+
+    const getUserId = (log: UserLog) => log.user_id ?? log.snapshot?.id ?? '—';
+    const getUserName = (log: UserLog) =>
+        log.user?.name ||
+        log.snapshot?.name ||
+        (log.user_id ? `User #${log.user_id} (record permanently deleted)` : 'User (record permanently deleted)');
+    const getUserEmail = (log: UserLog) => log.user?.email || log.snapshot?.email || '';
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
@@ -175,15 +183,13 @@ export default function UserLogs() {
         
         if (log.action_type === 'DELETE') {
             // Extract user ID from log
-            const userId = log.user_id;
+            const userId = getUserId(log);
             const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
             const isPermanentDelete = newValueStr.includes('Permanently Deleted');
             
             // Extract user name if available
-            let userName = null;
-            if (!isPermanentDelete && log.user) {
-                userName = log.user.name || log.user.email;
-            } else if (newValueStr) {
+            let userName = getUserName(log);
+            if (!userName && newValueStr) {
                 // Extract name from format like "User Record Permanently Deleted: {name}"
                 const match = newValueStr.match(/:\s*(.+)$/);
                 if (match) {
@@ -202,18 +208,7 @@ export default function UserLogs() {
                                 ? 'This record has been permanently deleted and cannot be recovered.'
                                 : 'This record is now inactive and recoverable.'}
                         </div>
-                        <div className="text-xs">
-                            <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground font-medium">User ID:</span>
-                                <span className="font-semibold text-foreground">{userId}</span>
-                            </div>
-                            {userName && (
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-muted-foreground font-medium">Name:</span>
-                                    <span className="font-semibold text-foreground">{userName}</span>
-                                </div>
-                            )}
-                        </div>
+                        {/* ID/Name already shown in header line; omit here to avoid repetition */}
                     </div>
                 </div>
             );
@@ -222,9 +217,7 @@ export default function UserLogs() {
         // UPDATE action
         // RESTORE action (UPDATE with field_changed === 'restored')
         if (log.action_type === 'UPDATE' && log.field_changed === 'restored') {
-            const userName = log.user 
-                ? (log.user.name || log.user.email)
-                : `User #${log.user_id}`;
+            const userName = getUserName(log);
             
             return (
                 <div className="mt-2 p-3 bg-muted/30 rounded-lg border border-border/50 dark:border-border-dark/50">
@@ -238,9 +231,9 @@ export default function UserLogs() {
                         <div className="text-xs">
                             <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground font-medium">User ID:</span>
-                                <span className="font-semibold text-foreground">{log.user_id}</span>
+                                <span className="font-semibold text-foreground">{getUserId(log)}</span>
                             </div>
-                            {log.user && (
+                            {userName && (
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-muted-foreground font-medium">Name:</span>
                                     <span className="font-semibold text-foreground">{userName}</span>
@@ -287,13 +280,14 @@ export default function UserLogs() {
 
     // Filter logs
     const filteredLogs = logs.filter((log) => {
+        const userIdStr = (getUserId(log) ?? '').toString();
         const matchesSearch = !searchTerm || 
-            log.user_id.toString().includes(searchTerm) ||
+            userIdStr.includes(searchTerm) ||
             log.reference_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.field_changed?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.performed_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.user?.email?.toLowerCase().includes(searchTerm.toLowerCase());
+            getUserName(log)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            getUserEmail(log)?.toLowerCase().includes(searchTerm.toLowerCase());
 
         // Handle restore and permanent delete as separate action types for filtering
         let effectiveActionType = log.action_type;
@@ -376,24 +370,19 @@ export default function UserLogs() {
             return String(value);
         };
 
-        const rows = filteredLogs.map(log => {
-            const userName = log.user?.name || '';
-            const userEmail = log.user?.email || '';
-            
-            return [
-                log.record_id,
-                log.reference_number || '',
-                log.user_id,
-                userName,
-                userEmail,
-                log.action_type,
-                log.field_changed || '',
-                formatValueForCSV(log.old_value),
-                formatValueForCSV(log.new_value),
-                formatDate(log.action_date),
-                log.performed_by
-            ];
-        });
+        const rows = filteredLogs.map(log => [
+            log.record_id,
+            log.reference_number || '',
+            getUserId(log),
+            getUserName(log),
+            getUserEmail(log),
+            log.action_type,
+            log.field_changed || '',
+            formatValueForCSV(log.old_value),
+            formatValueForCSV(log.new_value),
+            formatDate(log.action_date),
+            log.performed_by
+        ]);
 
         const csvContent = [
             headers.join(','),
@@ -532,9 +521,8 @@ export default function UserLogs() {
                                                                         <Badge variant="outline" className={`text-xs ${config.bgColor} ${config.color} border-0`}>
                                                                             {config.label}
                                                                         </Badge>
-                                                                        <span className="text-sm font-medium text-foreground">
-                                                                            {log.user?.name || log.user?.email || `User #${log.user_id}`}
-                                                                        </span>
+                                                                        <span className="text-xs text-muted-foreground">ID: {getUserId(log)}</span>
+                                                                        {/* Name shown in body; omit here to avoid repetition */}
                                                                         {log.reference_number && (
                                                                             <span className="text-xs text-muted-foreground">Ref: {log.reference_number}</span>
                                                                         )}

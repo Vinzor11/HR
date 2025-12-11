@@ -26,12 +26,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 interface OrganizationalLog {
   record_id: number;
   unit_type: 'faculty' | 'department' | 'office' | 'position';
-  unit_id: number;
+  unit_id: number | null;
   reference_number?: string;
   action_type: 'CREATE' | 'UPDATE' | 'DELETE';
   field_changed?: string;
   old_value?: any;
   new_value?: any;
+  snapshot?: any;
   action_date: string;
   performed_by: string;
   unit_name?: string;
@@ -105,6 +106,14 @@ export default function OrganizationalLogs() {
     const [filterUnitType, setFilterUnitType] = useState<string>('all');
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
+
+    const getUnitId = (log: OrganizationalLog) => log.unit_id ?? log.snapshot?.id ?? '—';
+    const getUnitName = (log: OrganizationalLog) => {
+        if (log.unit_name) return log.unit_name;
+        if (log.snapshot?.name) return log.snapshot.name;
+        if (log.snapshot?.pos_name) return log.snapshot.pos_name;
+        return log.unit_id ? `ID: ${log.unit_id} (record permanently deleted)` : 'Record permanently deleted';
+    };
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
@@ -212,7 +221,7 @@ export default function OrganizationalLogs() {
             const unitLabel = unitConfig.label;
             
             // Extract name from new_value if unit_name is not available
-            let recordName = log.unit_name;
+            let recordName = getUnitName(log);
             const newValueStr = typeof log.new_value === 'string' ? log.new_value : (log.new_value ? JSON.stringify(log.new_value) : '');
             const isPermanentDelete = newValueStr.includes('Permanently Deleted');
             
@@ -258,7 +267,7 @@ export default function OrganizationalLogs() {
             const unitLabel = unitConfig.label;
             
             // Extract name from new_value if unit_name is not available
-            let recordName = log.unit_name;
+            let recordName = getUnitName(log);
             if (!recordName && typeof log.new_value === 'object' && log.new_value) {
                 // Try to get name from the unit if available
             }
@@ -324,12 +333,14 @@ export default function OrganizationalLogs() {
 
     // Filter logs
     const filteredLogs = logs.filter((log) => {
+        const unitIdStr = (getUnitId(log) ?? '').toString().toLowerCase();
+        const unitNameStr = getUnitName(log)?.toLowerCase() || '';
         const matchesSearch = !searchTerm || 
-            String(log.unit_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+            unitIdStr.includes(searchTerm.toLowerCase()) ||
             log.reference_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.field_changed?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.performed_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.unit_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            unitNameStr.includes(searchTerm.toLowerCase()) ||
             log.unit_code?.toLowerCase().includes(searchTerm.toLowerCase());
 
         // Handle restore and permanent delete as separate action types for filtering
@@ -591,9 +602,8 @@ export default function OrganizationalLogs() {
                                                                         <Badge variant="outline" className={`text-xs ${config.bgColor} ${config.color} border-0`}>
                                                                             {config.label}
                                                                         </Badge>
-                                                                        <span className="text-sm font-medium text-foreground">
-                                                                            {log.unit_name || log.unit_code || `ID: ${log.unit_id}`}
-                                                                        </span>
+                                                                        <span className="text-xs text-muted-foreground">ID: {getUnitId(log)}</span>
+                                                                        {/* Name/title shown in body; omit here to avoid repetition */}
                                                                         {log.reference_number && (
                                                                             <span className="text-xs text-muted-foreground">Ref: {log.reference_number}</span>
                                                                         )}
