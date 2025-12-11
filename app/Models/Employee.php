@@ -25,6 +25,7 @@ class Employee extends Model
         'employee_type',
         'department_id',
         'position_id',
+        'salary',
         'date_hired',
         'date_regularized',
         'birth_date',
@@ -76,6 +77,7 @@ class Employee extends Model
         'dual_citizenship' => 'boolean',
         'date_hired' => 'date',
         'date_regularized' => 'date',
+        'salary' => 'decimal:2',
     ];
 
     public function department()

@@ -17,7 +17,7 @@ import { ShieldCheck, Sparkles } from 'lucide-react';
 import { useMemo, useCallback } from 'react';
 
 interface RequestCreateProps {
-    requestType: RequestTypeResource;
+    requestType: RequestTypeResource & { prefill_answers?: Record<string, unknown> };
 }
 
 const breadcrumbs = (requestType: RequestTypeResource): BreadcrumbItem[] => [
@@ -25,19 +25,22 @@ const breadcrumbs = (requestType: RequestTypeResource): BreadcrumbItem[] => [
     { title: requestType.name, href: route('requests.create', requestType.id) },
 ];
 
-const buildInitialAnswers = (fields: RequestFieldDefinition[]) =>
+const buildInitialAnswers = (fields: RequestFieldDefinition[], prefill?: Record<string, unknown>) =>
     fields.reduce<Record<string, unknown>>((acc, field) => {
+        const key = field.field_key ?? `field-${field.id}`;
+        const defaultValue = prefill && prefill[key] !== undefined ? prefill[key] : undefined;
+
         if (field.field_type === 'checkbox') {
-            acc[field.field_key ?? `field-${field.id}`] = false;
+            acc[key] = typeof defaultValue === 'boolean' ? defaultValue : false;
         } else {
-            acc[field.field_key ?? `field-${field.id}`] = '';
+            acc[key] = defaultValue ?? '';
         }
         return acc;
     }, {});
 
 export default function RequestCreate({ requestType }: RequestCreateProps) {
     const { data, setData, post, processing, errors, reset } = useForm<{ answers: Record<string, unknown> }>({
-        answers: buildInitialAnswers(requestType.fields),
+        answers: buildInitialAnswers(requestType.fields, requestType.prefill_answers),
     });
 
     const handleInputChange = (fieldKey: string, value: unknown) => {
@@ -71,6 +74,11 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
     const fieldKey = (field: RequestFieldDefinition) => field.field_key ?? `field-${field.id}`;
 
     const selectedLeaveType = data.answers?.leave_type as string | undefined;
+
+    const readOnlyKeys = useMemo(
+        () => new Set(['employee_name', 'department_office', 'position_title', 'salary', 'date_of_filing']),
+        [],
+    );
 
     const shouldShowField = useCallback(
         (field: RequestFieldDefinition) => {
@@ -170,6 +178,8 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
                         const value = data.answers[key];
                         const error = fieldError(key);
 
+                        const isReadOnly = readOnlyKeys.has(key);
+
                         if (['text', 'number', 'date'].includes(field.field_type)) {
                             return (
                                 <div key={field.clientKey ?? key}>
@@ -179,6 +189,7 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
                                         value={(value as string) ?? ''}
                                         onChange={(event) => handleInputChange(key, event.target.value)}
                                         required={field.is_required}
+                                        disabled={isReadOnly}
                                         helperText={field.description ?? undefined}
                                         error={error}
                                     />

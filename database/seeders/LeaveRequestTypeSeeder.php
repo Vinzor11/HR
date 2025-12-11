@@ -90,7 +90,47 @@ class LeaveRequestTypeSeeder extends Seeder
     protected function fieldDefinitions(): array
     {
         return [
-            // ===== Section 1-4: Employee Information (Auto-filled from profile) =====
+            // ===== Header / Employee Information (Auto-filled from profile) =====
+            [
+                'field_key' => 'employee_name',
+                'label' => 'Employee Name (Auto-filled)',
+                'field_type' => 'text',
+                'is_required' => true,
+                'description' => 'Auto-filled from your employee profile.',
+                'options' => null,
+            ],
+            [
+                'field_key' => 'department_office',
+                'label' => 'Department/Office (Auto-filled)',
+                'field_type' => 'text',
+                'is_required' => true,
+                'description' => 'Auto-filled from your employee record.',
+                'options' => null,
+            ],
+            [
+                'field_key' => 'position_title',
+                'label' => 'Position Title (Auto-filled)',
+                'field_type' => 'text',
+                'is_required' => true,
+                'description' => 'Auto-filled from your employee record.',
+                'options' => null,
+            ],
+            [
+                'field_key' => 'salary',
+                'label' => 'Salary (Auto-filled)',
+                'field_type' => 'text',
+                'is_required' => false,
+                'description' => 'Auto-filled from your employee record.',
+                'options' => null,
+            ],
+            [
+                'field_key' => 'date_of_filing',
+                'label' => 'Date of Filing (Auto-filled)',
+                'field_type' => 'text',
+                'is_required' => true,
+                'description' => 'Auto-filled with today\'s date.',
+                'options' => null,
+            ],
             
             // ===== Section 5: Type of Leave to be Availed Of =====
             [

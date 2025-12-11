@@ -265,7 +265,9 @@ class EmployeeController extends Controller
 
     public function logs(Request $request)
     {
-        $logs = EmployeeAuditLog::with('employee:id,first_name,surname,middle_name')
+        $logs = EmployeeAuditLog::with(['employee' => function ($query) {
+                $query->withTrashed()->select('id', 'first_name', 'surname', 'middle_name');
+            }])
             ->orderBy('action_date', 'desc')
             ->limit(500)
             ->get();
@@ -2059,6 +2061,7 @@ class EmployeeController extends Controller
                     }
                 },
             ],
+            'salary' => ['nullable', 'numeric', 'between:0,9999999999.99'],
             'date_hired' => ['required', 'date', new DateNotFuture()],
             'date_regularized' => ['nullable', 'date', 'after_or_equal:date_hired', new DateNotFuture()],
             

@@ -112,6 +112,31 @@ class RequestSubmissionController extends Controller
 
         $requestType->load(['fields' => fn ($query) => $query->orderBy('sort_order')]);
 
+        // Prefill CS Form 6 header fields for Leave Request
+        $prefill = [];
+        if ($requestType->name === 'Leave Request') {
+            $employee = request()->user()?->employee()
+                ->with(['department', 'position'])
+                ->first();
+
+            if ($employee) {
+                $fullName = trim("{$employee->first_name} {$employee->middle_name} {$employee->surname}");
+                $departmentName = $employee->department?->faculty_name ?? $employee->department?->name ?? null;
+                $positionName = $employee->position?->pos_name ?? null;
+
+                $prefill = array_filter([
+                    'employee_name' => $fullName ?: null,
+                    'department_office' => $departmentName,
+                    'position_title' => $positionName,
+                    'salary' => $employee->salary !== null ? number_format((float) $employee->salary, 2, '.', '') : null,
+                    'date_of_filing' => now()->format('Y-m-d'),
+                ], fn ($value) => $value !== null);
+            } else {
+                // Even without employee record, provide date of filing
+                $prefill['date_of_filing'] = now()->format('Y-m-d');
+            }
+        }
+
         return Inertia::render('requests/create', [
             'requestType' => [
                 'id' => $requestType->id,
@@ -127,6 +152,7 @@ class RequestSubmissionController extends Controller
                     'description' => $field->description,
                     'options' => $field->options,
                 ]),
+                'prefill_answers' => $prefill,
             ],
         ]);
     }

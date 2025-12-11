@@ -1005,6 +1005,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
     position_id: employee?.position_id 
       ? String(employee.position_id) 
       : (employee?.position?.id ? String(employee.position.id) : ''),
+  salary: employee?.salary ? String(employee.salary) : '',
     date_hired: formatDate(employee?.date_hired || ''),
     date_regularized: formatDate(employee?.date_regularized || ''),
     birth_date: formatDate(employee?.birth_date || ''),
@@ -3738,6 +3739,30 @@ export default function CreateEmployee({ employee, departments, positions, facul
                                 </p>
                               )}
                             </div>
+
+                          <div>
+                            <Label htmlFor="salary" className="text-sm font-medium mb-2 block">
+                              Salary (Monthly) <span className="text-muted-foreground">(decimal)</span>
+                            </Label>
+                            <Input
+                              id="salary"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={data.salary || ''}
+                              onChange={(e) => setData('salary', e.target.value)}
+                              className="h-12"
+                              disabled={isView}
+                            />
+                            {getError('salary') && (
+                              <p
+                                className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
+                                onClick={() => handleErrorClick('salary')}
+                              >
+                                {getError('salary')}
+                              </p>
+                            )}
+                          </div>
 
                             <div>
                               <Label htmlFor="position_id" className="text-sm font-medium mb-2 block">

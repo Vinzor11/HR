@@ -95,6 +95,7 @@ export interface FormData {
   faculty_id: string;
   department_id: string;
   position_id: string;
+  salary: string;
   date_hired: string;
   date_regularized: string;
   birth_date: string;
