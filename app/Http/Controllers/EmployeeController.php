@@ -1313,7 +1313,30 @@ class EmployeeController extends Controller
             'family_background' => $employee->familyBackground->isEmpty() ? [
                 [ 'relation' => 'Father', 'surname' => '', 'first_name' => '', 'middle_name' => '', 'name_extension' => '', 'occupation' => '', 'employer' => '', 'business_address' => '', 'telephone_no' => '' ],
                 [ 'relation' => 'Mother', 'surname' => '', 'first_name' => '', 'middle_name' => '', 'name_extension' => '', 'occupation' => '', 'employer' => '', 'business_address' => '', 'telephone_no' => '' ]
-            ] : $employee->familyBackground->toArray(),
+            ] : $employee->familyBackground->map(function ($member) {
+                // Combine name fields into fullname
+                $nameParts = array_filter([
+                    $member->surname ?? '',
+                    $member->first_name ?? '',
+                    $member->middle_name ?? '',
+                    $member->name_extension ?? ''
+                ]);
+                $fullname = implode(' ', $nameParts);
+                
+                return [
+                    'id' => $member->id,
+                    'relation' => $member->relation,
+                    'fullname' => $fullname,
+                    'surname' => $member->surname ?? '',
+                    'first_name' => $member->first_name ?? '',
+                    'middle_name' => $member->middle_name ?? '',
+                    'name_extension' => $member->name_extension ?? '',
+                    'occupation' => $member->occupation ?? '',
+                    'employer' => $member->employer ?? '',
+                    'business_address' => $member->business_address ?? '',
+                    'telephone_no' => $member->telephone_no ?? '',
+                ];
+            })->toArray(),
             'children' => $employee->children->map(function ($child) {
                 // Map database fields - children table has full_name, Profile expects it
                 return [
@@ -1386,7 +1409,16 @@ class EmployeeController extends Controller
                 ['question_number' => 401, 'answer' => false, 'details' => ''], // 40a
                 ['question_number' => 402, 'answer' => false, 'details' => ''], // 40b
                 ['question_number' => 403, 'answer' => false, 'details' => ''], // 40c
-            ] : $employee->questionnaire->toArray(),
+            ] : $employee->questionnaire->map(function ($q) {
+                return [
+                    'id' => $q->id,
+                    'question_number' => $q->question_number,
+                    'answer' => $q->answer,
+                    'details' => $q->details ?? '',
+                    'date_filed' => $q->date_filed ? $q->date_filed->format('Y-m-d') : null,
+                    'status_of_case' => $q->status_of_case ?? null,
+                ];
+            })->toArray(),
             'references' => $employee->references->map(function ($ref) {
                 // Combine first_name, middle_initial, and surname into fullname
                 $nameParts = array_filter([

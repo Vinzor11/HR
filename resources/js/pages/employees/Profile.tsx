@@ -24,6 +24,7 @@ import {
   HeartHandshake,
   CalendarDays,
   ChevronRight,
+  Landmark,
 } from 'lucide-react';
 
 interface Employee {
@@ -169,6 +170,12 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
     { title: fullName, href: '#' },
   ];
 
+  const facultyName =
+    employee.department?.faculty_name ||
+    employee.department?.name ||
+    (employee.department?.type === 'administrative' ? 'Office' : 'Department') ||
+    'N/A';
+
   const hasGovernmentIds = Boolean(
     employee.gsis_id_no ||
       employee.pagibig_id_no ||
@@ -197,6 +204,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
         employee.other_information.memberships)
   );
   const hasReferences = Boolean(employee.references && employee.references.length > 0);
+  const hasQuestionnaire = Boolean(employee.questionnaire && employee.questionnaire.length > 0 && employee.questionnaire.some((q: any) => q.answer === true || q.details));
   const quickLinks = [
     { id: 'personal-information', label: 'Personal Information', icon: User, show: true },
     { id: 'contact-information', label: 'Contact Information', icon: Phone, show: true },
@@ -209,6 +217,7 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
     { id: 'voluntary-work', label: 'Voluntary Work', icon: HeartHandshake, show: hasVoluntaryWork },
     { id: 'learning-development', label: 'Learning & Development', icon: BookOpen, show: hasLearningDevelopment },
     { id: 'other-information', label: 'Other Information', icon: FileText, show: hasOtherInformation },
+    { id: 'questionnaire', label: 'Questionnaire', icon: FileText, show: hasQuestionnaire },
     { id: 'references', label: 'References', icon: UserCircle, show: hasReferences },
   ].filter((link) => link.show);
 
@@ -329,6 +338,15 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
                           <p className="text-sm font-semibold text-foreground">{employee.employee_type || 'N/A'}</p>
                         </div>
                       </div>
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+                      <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                        <Landmark className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Faculty / Office</p>
+                        <p className="text-sm font-semibold text-foreground truncate">{facultyName}</p>
+                      </div>
+                    </div>
                       {employee.employment_status && (
                         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
                           <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
@@ -612,7 +630,8 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
                 <CardContent className="pt-6">
                   <div className="space-y-5">
                     {employee.family_background.map((member: any, idx: number) => {
-                      const name = [member.surname, member.first_name, member.middle_name]
+                      // Use fullname from backend, fallback to combining fields for backward compatibility
+                      const name = member.fullname || [member.surname, member.first_name, member.middle_name, member.name_extension]
                         .filter(Boolean)
                         .join(' ');
                       if (!name && !member.occupation) return null;
@@ -927,6 +946,73 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
                       <p className="mt-1 text-sm font-medium">{employee.other_information.memberships}</p>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Questionnaire */}
+            {employee.questionnaire && employee.questionnaire.length > 0 && employee.questionnaire.some((q: any) => q.answer === true || q.details) && (
+              <Card className="shadow-sm" id="questionnaire">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                      <FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <CardTitle className="text-xl">Questionnaire</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-4">
+                    {employee.questionnaire.map((q: any, idx: number) => {
+                      // Only show questions that have been answered (answer === true) or have details
+                      if (q.answer !== true && !q.details) return null;
+
+                      const getQuestionText = () => {
+                        switch (q.question_number) {
+                          case 341: return '34. a. Are you related by consanguinity or affinity to the appointing or recommending authority, or to the chief of bureau or office or to the person who has immediate supervision over you in the Office, Bureau or Department where you will be appointed, within the third degree?';
+                          case 342: return '34. b. Are you related by consanguinity or affinity to the appointing or recommending authority, or to the chief of bureau or office or to the person who has immediate supervision over you in the Office, Bureau or Department where you will be appointed, within the fourth degree (for Local Government Unit - Career Employees)?';
+                          case 351: return '35. a. Have you ever been found guilty of any administrative offense?';
+                          case 352: return '35. b. Have you been criminally charged before any court?';
+                          case 36: return '36. Have you ever been convicted of any crime or violation of any law, decree, ordinance or regulation by any court or tribunal?';
+                          case 37: return '37. Have you ever been separated from the service in any of the following modes: resignation, retirement, dropped from the rolls, dismissal, termination, end of term, finished contract or phased out (abolition) in the public or private sector?';
+                          case 381: return '38. a. Have you ever been a candidate in a national or local election held within the last year (except Barangay election)?';
+                          case 382: return '38. b. Have you resigned from the government service during the three (3)-month period before the last election to promote/actively campaign for a national or local candidate?';
+                          case 39: return '39. Have you acquired the status of an immigrant or permanent resident of another country?';
+                          case 401: return '40. a. Are you a member of any indigenous group?';
+                          case 402: return '40. b. Are you a person with disability?';
+                          case 403: return '40. c. Are you a solo parent?';
+                          default: return `Question ${q.question_number}`;
+                        }
+                      };
+
+                      return (
+                        <div key={idx} className="border border-border rounded-lg p-4 bg-muted/30">
+                          <p className="font-medium text-sm mb-2">{getQuestionText()}</p>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant={q.answer === true ? 'default' : 'secondary'}>
+                              {q.answer === true ? 'Yes' : 'No'}
+                            </Badge>
+                            {q.date_filed && (
+                              <span className="text-xs text-muted-foreground">
+                                Filed: {formatDate(q.date_filed)}
+                              </span>
+                            )}
+                            {q.status_of_case && (
+                              <span className="text-xs text-muted-foreground">
+                                Status: {q.status_of_case}
+                              </span>
+                            )}
+                          </div>
+                          {q.details && (
+                            <div className="mt-2">
+                              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Details</label>
+                              <p className="mt-1 text-sm font-medium">{q.details}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             )}
