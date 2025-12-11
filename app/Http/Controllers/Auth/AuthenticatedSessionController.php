@@ -108,6 +108,13 @@ class AuthenticatedSessionController extends Controller
         // Store activity ID in session for logout tracking
         $request->session()->put('last_activity_id', $activity->id);
 
+        // Unverified users must verify before continuing
+        if ($user && ! $user->hasVerifiedEmail()) {
+            return redirect()
+                ->route('verification.notice')
+                ->with('status', 'must-verify-email');
+        }
+
         // Redirect to OAuth authorize if that's where they came from
         // This preserves the OAuth authorization flow with all query parameters (state, client_id, etc.)
         // Note: The login form uses traditional form submission (not XHR) when OAuth is active,

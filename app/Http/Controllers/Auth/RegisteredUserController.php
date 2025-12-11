@@ -68,6 +68,6 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return to_route('dashboard');
+        return to_route('verification.notice')->with('status', 'verification-link-sent');
     }
 }
