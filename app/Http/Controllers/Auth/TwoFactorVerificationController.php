@@ -112,15 +112,6 @@ class TwoFactorVerificationController extends Controller
         // Redirect to OAuth authorize if that's where they came from
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
-            
-            // CRITICAL: If this is an Inertia XHR request, we MUST use Inertia::location()
-            // to force a full page redirect. Otherwise, Inertia will follow the redirect
-            // via XHR, which will eventually hit an external OAuth callback URL and cause
-            // CORS errors (browser XHR can't redirect to external domains).
-            if ($request->header('X-Inertia')) {
-                return Inertia::location($oauthRedirect);
-            }
-            
             return redirect($oauthRedirect);
         }
 
