@@ -7,10 +7,12 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Models\UserActivity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -30,7 +32,7 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request): RedirectResponse|SymfonyResponse
     {
         try {
             $request->authenticate();
@@ -96,15 +98,15 @@ class AuthenticatedSessionController extends Controller
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
             
-            // CRITICAL: If this is an Inertia XHR request, we MUST use Inertia::location()
-            // to force a full page redirect. Otherwise, Inertia will follow the redirect
-            // via XHR, which will eventually hit an external OAuth callback URL and cause
-            // CORS errors (browser XHR can't redirect to external domains).
+            // CRITICAL: For ANY XHR/Inertia request, we MUST break the redirect chain
+            // to prevent CORS errors. The OAuth flow will eventually redirect to an
+            // external callback URL, and XHR cannot follow cross-origin redirects.
             //
-            // Inertia::location() returns a 409 response with X-Inertia-Location header,
-            // which tells Inertia's client-side code to do a full page navigation instead.
-            if ($request->header('X-Inertia')) {
-                return Inertia::location($oauthRedirect);
+            // Return an HTML page that does a JavaScript redirect - this CANNOT be
+            // followed by XHR (XHR receives HTML, not a redirect response).
+            // The browser will then render the HTML and execute the JS redirect.
+            if ($request->header('X-Inertia') || $request->ajax() || $request->wantsJson()) {
+                return $this->createFullPageRedirectResponse($oauthRedirect);
             }
             
             // For traditional form submissions (non-Inertia), use regular redirect
@@ -179,5 +181,48 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    /**
+     * Create an HTML response that forces a full page redirect.
+     * 
+     * This is used when we need to break an XHR redirect chain.
+     * By returning HTML instead of a 302 redirect, the XHR receives
+     * HTML content (not a redirect), which breaks the chain.
+     * Inertia will see this as an unexpected response and do a full page reload.
+     */
+    protected function createFullPageRedirectResponse(string $url): HttpResponse
+    {
+        $escapedUrl = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+        $jsUrl = json_encode($url);
+        
+        $html = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="0;url={$escapedUrl}">
+    <title>Redirecting...</title>
+    <style>
+        body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+        .loader { text-align: center; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="loader">
+        <div class="spinner"></div>
+        <p>Redirecting...</p>
+    </div>
+    <script>window.location.replace({$jsUrl});</script>
+</body>
+</html>
+HTML;
+
+        return new HttpResponse($html, 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
     }
 }
