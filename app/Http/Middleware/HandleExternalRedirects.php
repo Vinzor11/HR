@@ -17,6 +17,10 @@ use Symfony\Component\HttpFoundation\Response;
  * 
  * This middleware detects external redirects and converts them to Inertia::location()
  * responses, which tell Inertia to do a full page redirect instead of XHR.
+ * 
+ * IMPORTANT: When a browser follows redirects from an XHR request automatically,
+ * headers like X-Inertia and X-Requested-With are NOT preserved. Therefore, we
+ * ALWAYS convert external redirects to full page redirects, regardless of headers.
  */
 class HandleExternalRedirects
 {
@@ -38,17 +42,16 @@ class HandleExternalRedirects
         
         // Check if this is an external redirect
         if ($this->isExternalUrl($targetUrl, $request)) {
-            // For Inertia requests, use Inertia::location() for external redirects
-            // This tells Inertia to do a full page redirect instead of XHR
-            if ($request->header('X-Inertia')) {
-                return Inertia::location($targetUrl);
-            }
-            
-            // For non-Inertia requests that might be followed by Inertia (like OAuth callbacks),
-            // still use Inertia::location() if it's an XHR request
-            if ($request->ajax() || $request->wantsJson()) {
-                return Inertia::location($targetUrl);
-            }
+            // ALWAYS use Inertia::location() for external redirects
+            // This prevents CORS errors when:
+            // 1. Inertia requests follow redirects (X-Inertia header present)
+            // 2. Browser XHR follows redirects (headers are lost after first redirect)
+            // 3. OAuth callbacks redirect to external URLs
+            //
+            // For non-JS requests, Inertia::location() returns a standard redirect
+            // which the browser handles normally. For Inertia/XHR requests, it returns
+            // a 409 with X-Inertia-Location header triggering a full page redirect.
+            return Inertia::location($targetUrl);
         }
 
         return $response;
