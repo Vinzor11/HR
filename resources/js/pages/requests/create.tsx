@@ -14,7 +14,7 @@ import type { BreadcrumbItem } from '@/types';
 import type { RequestFieldDefinition, RequestTypeResource } from '@/types/requests';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ShieldCheck, Sparkles } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 
 interface RequestCreateProps {
     requestType: RequestTypeResource;
@@ -70,6 +70,59 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
 
     const fieldKey = (field: RequestFieldDefinition) => field.field_key ?? `field-${field.id}`;
 
+    const selectedLeaveType = data.answers?.leave_type as string | undefined;
+
+    const shouldShowField = useCallback(
+        (field: RequestFieldDefinition) => {
+            const key = fieldKey(field);
+
+            // Always show core/common fields
+            const always = [
+                'leave_type',
+                'start_date',
+                'end_date',
+                'total_days',
+                'reason',
+                'contact_number',
+                'contact_address',
+                'supporting_documents',
+                'medical_certificate',
+                'declaration',
+            ];
+            if (always.includes(key)) return true;
+
+            // Hide conditional fields until leave type is selected
+            if (!selectedLeaveType) return false;
+
+            // Conditional visibility by leave type (CS Form No. 6)
+            switch (key) {
+                case 'other_leave_specify':
+                    return selectedLeaveType === 'OTHER';
+                case 'leave_location':
+                case 'location_details':
+                    // Vacation, Special Privilege, Forced Leave
+                    return ['VL', 'SPL', 'FL'].includes(selectedLeaveType);
+                case 'sick_leave_type':
+                case 'illness_description':
+                    return selectedLeaveType === 'SL';
+                case 'women_special_illness':
+                    return selectedLeaveType === 'WSL';
+                case 'study_leave_type':
+                case 'study_leave_details':
+                    return selectedLeaveType === 'Study';
+                case 'other_purpose_type':
+                    // Monetization / Terminal leave choices
+                    return ['TL', 'OTHER'].includes(selectedLeaveType);
+                case 'commutation_requested':
+                    // Relevant for VL/SL and monetization/terminal requests
+                    return ['VL', 'SL', 'OTHER'].includes(selectedLeaveType);
+                default:
+                    return true;
+            }
+        },
+        [selectedLeaveType],
+    );
+
     const formPreviewDescription = useMemo(
         () =>
             requestType.description ??
@@ -103,6 +156,10 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
 
                 <Card className="p-5 space-y-6">
                     {requestType.fields.map((field) => {
+                        if (!shouldShowField(field)) {
+                            return null;
+                        }
+
                         const key = fieldKey(field);
                         const value = data.answers[key];
                         const error = fieldError(key);
