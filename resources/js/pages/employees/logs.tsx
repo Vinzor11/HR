@@ -145,11 +145,28 @@ export default function EmployeeLogs() {
 
     const renderFieldChange = (log: EmployeeLog) => {
         if (log.action_type === 'CREATE') {
+            // Try to get employee name from snapshot, employee relation, or new_value message
+            let employeeName = getEmployeeName(log);
+            
+            // If no name from relation/snapshot, try to extract from new_value message
+            if (!employeeName && log.new_value) {
+                const newValueStr = typeof log.new_value === 'string' ? log.new_value : JSON.stringify(log.new_value);
+                // Check if it matches "Created a New Employee Record: {name}"
+                const match = newValueStr.match(/Created a New Employee Record:\s*(.+)/i);
+                if (match) {
+                    employeeName = match[1].trim();
+                } else if (newValueStr && !newValueStr.includes('Created a New Employee Record')) {
+                    // If it's just a plain string that doesn't match the pattern, it might be old data
+                    // Use the snapshot or employee_id as fallback
+                    employeeName = employeeName || log.employee_id || 'Employee';
+                }
+            }
+            
             return (
                 <div className="mt-2 p-2 bg-muted/30 rounded text-xs">
                     <div className="font-medium text-muted-foreground mb-1">New Record:</div>
                     <div className="text-foreground">
-                        {renderValue(log.new_value)}
+                        {employeeName ? `Created a New Employee Record: ${employeeName}` : renderValue(log.new_value)}
                     </div>
                 </div>
             );

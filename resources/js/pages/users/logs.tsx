@@ -171,11 +171,27 @@ export default function UserLogs() {
 
     const renderFieldChange = (log: UserLog) => {
         if (log.action_type === 'CREATE') {
+            // Try to get user name from snapshot, user relation, or new_value message
+            let userName = getUserName(log);
+            
+            // If no name from relation/snapshot, try to extract from new_value message
+            if (!userName && log.new_value) {
+                const newValueStr = typeof log.new_value === 'string' ? log.new_value : JSON.stringify(log.new_value);
+                // Check if it matches "Created a New User Record: {name}"
+                const match = newValueStr.match(/Created a New User Record:\s*(.+)/i);
+                if (match) {
+                    userName = match[1].trim();
+                } else if (newValueStr && !newValueStr.includes('Created a New User Record')) {
+                    // If it's just a plain string that doesn't match the pattern, use fallback
+                    userName = userName || `User #${getUserId(log)}`;
+                }
+            }
+            
             return (
                 <div className="mt-2 p-2 bg-muted/30 rounded text-xs">
                     <div className="font-medium text-muted-foreground mb-1">New Record:</div>
                     <div className="text-foreground">
-                        {renderValue(log.new_value)}
+                        {userName ? `Created a New User Record: ${userName}` : renderValue(log.new_value)}
                     </div>
                 </div>
             );

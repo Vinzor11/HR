@@ -1105,10 +1105,8 @@ class EmployeeController extends Controller
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
             
-            // Log position assignment if position is set
-            if ($employee->position_id) {
-                $this->logPositionAssignment($employee, null, $employee->position_id);
-            }
+            // Don't log position assignment during creation - it's already part of the CREATE log
+            // Position assignment logging only happens during updates
 
             // Initialize leave balances for new employee
             $this->initializeLeaveBalances($employee);
