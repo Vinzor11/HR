@@ -300,7 +300,7 @@ const isRequiredField = (key: string): boolean => {
     'id', 'surname', 'first_name', 'birth_date', 'birth_place', 'sex', 'civil_status',
     'email_address', 'mobile_no', 'res_city', 'res_province', 'res_zip_code',
     'faculty_id', 'department_id', 'position_id', 'employee_type', 'status', 'employment_status',
-    'date_hired', 'citizenship'
+    'date_hired', 'date_regularized', 'salary', 'citizenship'
   ];
   return requiredFields.includes(key);
 };
@@ -506,7 +506,9 @@ export const validateEmployeeData = (data: Record<string, any>, positions?: Arra
     }
   }
 
-  if (data.date_regularized) {
+  if (!data.date_regularized || data.date_regularized.trim() === '') {
+    requiredErrors.date_regularized = 'Date regularized is required';
+  } else {
     const dateRegularizedError = validateDateNotFuture(data.date_regularized, 'Date regularized');
     if (dateRegularizedError) {
       formatErrors.date_regularized = `Date regularized ${dateRegularizedError}`;
@@ -517,6 +519,18 @@ export const validateEmployeeData = (data: Record<string, any>, positions?: Arra
       if (rangeError) {
         formatErrors.date_regularized = 'Date of regularization must be the same as or later than Date Hired';
       }
+    }
+  }
+
+  // Salary required & numeric
+  if (data.salary === undefined || data.salary === null || String(data.salary).trim() === '') {
+    requiredErrors.salary = 'Salary is required';
+  } else {
+    const numeric = Number(data.salary);
+    if (Number.isNaN(numeric)) {
+      formatErrors.salary = 'Salary must be a number';
+    } else if (numeric < 0) {
+      formatErrors.salary = 'Salary must be zero or greater';
     }
   }
 

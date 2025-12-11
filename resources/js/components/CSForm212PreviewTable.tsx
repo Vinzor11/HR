@@ -184,7 +184,8 @@ const previewFields: PreviewField[] = [
     ]
   },
   { label: 'Date Hired', key: 'date_hired', group: 'employment', required: true, type: 'date', format: formatDate },
-  { label: 'Date Regularized', key: 'date_regularized', group: 'employment', required: false, type: 'date', format: formatDate },
+  { label: 'Date Regularized', key: 'date_regularized', group: 'employment', required: true, type: 'date', format: formatDate },
+  { label: 'Salary (Monthly)', key: 'salary', group: 'employment', required: true, type: 'text' },
   
   // Optional Additional Fields
   { label: 'Agency Employee No', key: 'agency_employee_no', group: 'optional', required: false, type: 'text' },
