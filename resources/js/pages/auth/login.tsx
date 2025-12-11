@@ -1,6 +1,6 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
-import { FormEventHandler, useRef, useEffect, useState } from 'react';
+import { FormEventHandler, useRef } from 'react';
 
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
@@ -25,7 +25,6 @@ interface LoginProps {
 export default function Login({ status, canResetPassword, hasOAuthRedirect }: LoginProps) {
     const { csrf } = usePage().props as { csrf: string };
     const formRef = useRef<HTMLFormElement>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     
     const { data, setData, post, processing, errors, reset } = useForm<Required<LoginForm>>({
         email: '',
@@ -33,25 +32,17 @@ export default function Login({ status, canResetPassword, hasOAuthRedirect }: Lo
         remember: false,
     });
 
-    // Also check URL for OAuth indicators as a fallback
-    // This ensures we use traditional form submission even if the prop wasn't passed correctly
-    const shouldUseTraditionalSubmit = hasOAuthRedirect || 
-        (typeof window !== 'undefined' && document.referrer.includes('/oauth/authorize'));
-
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         
         // Prevent double submission
-        if (processing || isSubmitting) {
+        if (processing) {
             return;
         }
         
         // If there's an OAuth redirect pending, use traditional form submission
         // This prevents CORS issues when redirecting to external OAuth callback URLs
-        // The server-side HandleExternalRedirects middleware also handles this,
-        // but using traditional submission is more reliable for OAuth flows
-        if (shouldUseTraditionalSubmit && formRef.current) {
-            setIsSubmitting(true);
+        if (hasOAuthRedirect && formRef.current) {
             formRef.current.submit();
             return;
         }
@@ -127,8 +118,8 @@ export default function Login({ status, canResetPassword, hasOAuthRedirect }: Lo
                         <Label htmlFor="remember">Remember me</Label>
                     </div>
 
-                    <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing || isSubmitting}>
-                        {(processing || isSubmitting) && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing}>
+                        {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
                         Log in
                     </Button>
                 </div>
