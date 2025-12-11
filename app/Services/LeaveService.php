@@ -28,15 +28,18 @@ class LeaveService
 {
     // CSC Monthly accrual rate (15 days / 12 months = 1.25 days/month)
     public const MONTHLY_ACCRUAL_RATE = 1.25;
+    public const CARRY_OVER_CAP_DAYS = 30; // cap per type (VL/SL)
+    public const ACCRUAL_CUTOFF_DAY = 15; // hired before this day accrues
     
-    // Minimum VL credits required for mandatory/forced leave
-    public const MIN_VL_FOR_FORCED_LEAVE = 10;
-    
-    // Mandatory/Forced leave days per year
+    // Forced leave rules (org-configured)
+    public const MIN_VL_FOR_FORCED_LEAVE = 25; // trigger when VL balance exceeds this in December
     public const FORCED_LEAVE_DAYS = 5;
     
-    // Days requiring medical certificate for sick leave
-    public const SICK_LEAVE_MEDICAL_CERT_DAYS = 5;
+    // Sick leave proof threshold (>2 consecutive days)
+    public const SICK_LEAVE_MEDICAL_CERT_DAYS = 3;
+    
+    // Minimum remaining VL after a request (org policy)
+    public const MIN_REMAINING_VL_AFTER_REQUEST = 5;
     /**
      * Calculate working days between two dates (excluding weekends and holidays)
      */
@@ -293,7 +296,7 @@ class LeaveService
             return false;
         }
 
-        // For credit-based leaves (VL, SL), check balance
+        // For credit-based leaves (VL, SL), check balance and org policies
         if ($leaveType->isCreditBased() || !$leaveType->is_special_leave) {
             // Check if leave uses credits from another type (e.g., Forced Leave uses VL)
             $sourceType = $leaveType->getCreditsSource() ?? $leaveType;
@@ -303,6 +306,16 @@ class LeaveService
                 $available = $balance ? $balance->balance : 0;
                 $error = "Insufficient {$sourceType->name} balance. Available: {$available} days";
                 return false;
+            }
+
+            // Enforce minimum remaining VL after request (policy), skip for Forced Leave
+            if ($sourceType->code === LeaveType::CODE_VACATION && $leaveType->code !== LeaveType::CODE_MANDATORY_FORCED) {
+                $balance = LeaveBalance::getCurrentYearBalance($employeeId, $sourceType->id);
+                $available = $balance ? $balance->balance : 0;
+                if (($available - $days) < self::MIN_REMAINING_VL_AFTER_REQUEST) {
+                    $error = "At least " . self::MIN_REMAINING_VL_AFTER_REQUEST . " VL days must remain after this request.";
+                    return false;
+                }
             }
         }
 
@@ -345,7 +358,7 @@ class LeaveService
 
     /**
      * Process monthly leave accrual for an employee
-     * CSC Rule: VL and SL accrue at 1.25 days per month
+     * CSC Rule: VL and SL accrue at 1.25 days per month (with proration/cutoff and caps)
      */
     public function processMonthlyAccrual(string $employeeId, Carbon $month): void
     {
@@ -357,7 +370,23 @@ class LeaveService
         }
 
         $year = $month->year;
-        $accrualDate = $month->endOfMonth();
+        $accrualDate = $month->copy()->endOfMonth();
+
+        // Skip if hired after this month
+        if ($employee->date_hired && $employee->date_hired->gt($accrualDate)) {
+            return;
+        }
+
+        $hireDate = $employee->date_hired ? $employee->date_hired->copy() : null;
+        $isHireMonth = $hireDate && $hireDate->isSameMonth($accrualDate) && $hireDate->isSameYear($accrualDate);
+        $eligibleThisMonth = !$hireDate || !$isHireMonth || $hireDate->day < self::ACCRUAL_CUTOFF_DAY;
+        $daysInMonth = $accrualDate->daysInMonth;
+        $daysEmployed = $hireDate
+            ? ($isHireMonth ? $hireDate->diffInDays($accrualDate) + 1 : $daysInMonth)
+            : $daysInMonth;
+        $proratedRate = $eligibleThisMonth
+            ? round(($daysEmployed / $daysInMonth) * self::MONTHLY_ACCRUAL_RATE, 2)
+            : 0.0;
 
         // Accrue VL and SL
         $leaveTypeCodes = [LeaveType::CODE_VACATION, LeaveType::CODE_SICK];
@@ -368,17 +397,27 @@ class LeaveService
                 continue;
             }
 
-            $this->addAccrual(
-                $employeeId,
-                $leaveType->id,
-                self::MONTHLY_ACCRUAL_RATE,
-                'monthly',
-                "Monthly accrual for {$month->format('F Y')}",
-                $year,
-                null
-            );
+            if ($proratedRate > 0) {
+                $this->addAccrual(
+                    $employeeId,
+                    $leaveType->id,
+                    $proratedRate,
+                    'monthly',
+                    "Monthly accrual for {$month->format('F Y')} (prorated)",
+                    $year,
+                    null
+                );
+            }
 
-            // Record in credits history
+            // Enforce carry-over cap
+            $balance = LeaveBalance::getOrCreateBalance($employeeId, $leaveType->id, $year);
+            $excess = max(0, $balance->balance - self::CARRY_OVER_CAP_DAYS);
+            if ($excess > 0) {
+                $balance->entitled = max(0, $balance->entitled - $excess);
+                $balance->recalculateBalance();
+            }
+
+            // Record in credits history after cap
             $this->recordCreditsHistory($employeeId, $leaveType->id, $month);
         }
     }
@@ -405,7 +444,7 @@ class LeaveService
 
     /**
      * Check if employee needs to take mandatory/forced leave
-     * CSC Rule: Employees with 10+ VL credits must take 5 days forced leave
+     * Org Rule: If VL > threshold in December, must take forced leave
      */
     public function needsForcedLeave(string $employeeId, ?int $year = null): bool
     {
@@ -418,7 +457,12 @@ class LeaveService
 
         $balance = LeaveBalance::getOrCreateBalance($employeeId, $vlType->id, $year);
         
-        return $balance->balance >= self::MIN_VL_FOR_FORCED_LEAVE;
+        // Only evaluate in December
+        if (now()->month !== 12) {
+            return false;
+        }
+
+        return $balance->balance > self::MIN_VL_FOR_FORCED_LEAVE;
     }
 
     /**
