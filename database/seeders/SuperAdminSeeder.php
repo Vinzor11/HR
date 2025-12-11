@@ -166,7 +166,7 @@ class SuperAdminSeeder extends Seeder
             [
                 'name' => 'Super Admin',
                 // Keep password resettable by reruns to stay idempotent
-                'password' => bcrypt('password'), // ⚠️ Change this in production!
+                'password' => bcrypt('password'), 
             ]
         );
 

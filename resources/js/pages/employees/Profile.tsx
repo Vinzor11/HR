@@ -223,15 +223,20 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
   const quickOverviewRef = useRef<HTMLDivElement>(null);
   const [isFixed, setIsFixed] = useState(false);
   const [initialTop, setInitialTop] = useState(0);
+  const [cardWidth, setCardWidth] = useState(0);
 
   useEffect(() => {
-    // Get the initial position of the Quick Overview relative to the document
+    // Get the initial position and width of the Quick Overview
     const updateInitialPosition = () => {
       const personalInfoCard = document.getElementById('personal-information');
       if (personalInfoCard) {
         const rect = personalInfoCard.getBoundingClientRect();
         const scrollTop = window.scrollY || document.documentElement.scrollTop;
         setInitialTop(rect.top + scrollTop);
+      }
+      // Capture the original width of the column
+      if (quickOverviewRef.current) {
+        setCardWidth(quickOverviewRef.current.offsetWidth);
       }
     };
 
@@ -957,10 +962,13 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
           </div>
 
           {/* Right Column - Quick Stats */}
-          <div className="lg:col-span-1">
-            {/* Desktop: Fixed sidebar that stays visible at top while scrolling */}
-            <div className="hidden lg:block fixed right-8 top-20 w-80 z-40">
-              <Card className="shadow-sm max-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div className="lg:col-span-1" ref={quickOverviewRef}>
+            {/* Desktop: Toggles between relative and fixed based on scroll */}
+            <div
+              className={`hidden lg:block z-40 ${isFixed ? 'fixed right-8 top-16' : ''}`}
+              style={isFixed && cardWidth ? { width: cardWidth } : undefined}
+            >
+              <Card className={`shadow-sm overflow-y-auto ${isFixed ? 'max-h-[calc(100vh-5rem)]' : ''}`}>
                 <CardHeader className="pb-3 space-y-1">
                   <CardTitle className="text-xl">Quick Overview</CardTitle>
                   <CardDescription>Jump to key sections</CardDescription>
