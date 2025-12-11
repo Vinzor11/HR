@@ -85,8 +85,6 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
                 'reason',
                 'contact_number',
                 'contact_address',
-                'supporting_documents',
-                'medical_certificate',
                 'declaration',
             ];
             if (always.includes(key)) return true;
@@ -116,6 +114,14 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
                 case 'commutation_requested':
                     // Relevant for VL/SL and monetization/terminal requests
                     return ['VL', 'SL', 'OTHER'].includes(selectedLeaveType);
+                case 'medical_certificate':
+                    // Only for sick leave or medically justified leaves
+                    return ['SL', 'WSL', 'ML', 'VAWC', 'Rehab'].includes(selectedLeaveType);
+                case 'supporting_documents':
+                    // Show only for leaves that typically need attachments
+                    return ['ML', 'PL', 'SoloP', 'VAWC', 'Study', 'Rehab', 'CL', 'Adopt', 'OTHER'].includes(
+                        selectedLeaveType,
+                    );
                 default:
                     return true;
             }
