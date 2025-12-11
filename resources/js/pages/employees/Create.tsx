@@ -363,21 +363,8 @@ export default function CreateEmployee({ employee, departments, positions, facul
           missingFields.push('Date Regularized');
           newClientErrors['date_regularized'] = 'Date Regularized is required';
         }
-        // Validate telephone and mobile length if provided
-        if (data.telephone_no && data.telephone_no.trim() !== '') {
-          const telLength = data.telephone_no.replace(/\D/g, '').length;
-          if (telLength < 7 || telLength > 10) {
-            newClientErrors['telephone_no'] = 'Telephone number must be 7-10 characters';
-          }
-        }
-        if (data.mobile_no && data.mobile_no.trim() !== '') {
-          const mobileLength = data.mobile_no.replace(/\D/g, '').length;
-          if (mobileLength !== 11) {
-            newClientErrors['mobile_no'] = 'Mobile number must be exactly 11 characters';
-          }
-        }
       } else if (step1Tab === 'address') {
-        // Required fields: res_city, res_province
+        // Required fields: res_city, res_province, email_address, mobile_no
         if (!data.res_city || data.res_city.trim() === '') {
           missingFields.push('Residential City/Municipality');
           newClientErrors['res_city'] = 'Residential City/Municipality is required';
@@ -396,6 +383,28 @@ export default function CreateEmployee({ employee, departments, positions, facul
           if (!data.perm_province || data.perm_province.trim() === '') {
             missingFields.push('Permanent Province');
             newClientErrors['perm_province'] = 'Permanent Province is required';
+          }
+        }
+        // Contact info - required fields on address tab
+        if (!data.email_address || data.email_address.trim() === '') {
+          missingFields.push('Email Address');
+          newClientErrors['email_address'] = 'Email Address is required';
+        }
+        if (!data.mobile_no || data.mobile_no.trim() === '') {
+          missingFields.push('Mobile Number');
+          newClientErrors['mobile_no'] = 'Mobile Number is required';
+        }
+        // Validate telephone and mobile length if provided
+        if (data.telephone_no && data.telephone_no.trim() !== '') {
+          const telLength = data.telephone_no.replace(/\D/g, '').length;
+          if (telLength < 7 || telLength > 10) {
+            newClientErrors['telephone_no'] = 'Telephone number must be 7-10 characters';
+          }
+        }
+        if (data.mobile_no && data.mobile_no.trim() !== '') {
+          const mobileLength = data.mobile_no.replace(/\D/g, '').length;
+          if (mobileLength !== 11) {
+            newClientErrors['mobile_no'] = 'Mobile number must be exactly 11 characters';
           }
         }
       }
@@ -561,7 +570,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
         allMissingFields.push('Residential ZIP Code');
         allErrors['res_zip_code'] = 'Residential ZIP Code is required';
       }
-      // Contact info (from basic tab but required)
+      // Contact info (on address tab)
       if (!data.email_address || data.email_address.trim() === '') {
         allMissingFields.push('Email Address');
         allErrors['email_address'] = 'Email Address is required';
@@ -2171,8 +2180,8 @@ export default function CreateEmployee({ employee, departments, positions, facul
     }
     
     // Define which fields belong to which step/tab
-    const step1BasicFields = ['id', 'surname', 'first_name', 'middle_name', 'name_extension', 'birth_date', 'birth_place', 'sex', 'civil_status', 'faculty_id', 'department_id', 'position_id', 'salary', 'email_address', 'mobile_no', 'telephone_no', 'employee_type', 'status', 'employment_status', 'date_hired', 'date_regularized', 'citizenship'];
-    const step1AddressFields = ['res_city', 'res_province', 'res_zip_code', 'res_house_no', 'res_street', 'res_subdivision', 'res_barangay', 'perm_city', 'perm_province', 'perm_zip_code', 'perm_house_no', 'perm_street', 'perm_subdivision', 'perm_barangay'];
+    const step1BasicFields = ['id', 'surname', 'first_name', 'middle_name', 'name_extension', 'birth_date', 'birth_place', 'sex', 'civil_status', 'faculty_id', 'department_id', 'position_id', 'salary', 'employee_type', 'status', 'employment_status', 'date_hired', 'date_regularized', 'citizenship', 'height_m', 'weight_kg', 'blood_type'];
+    const step1AddressFields = ['res_city', 'res_province', 'res_zip_code', 'res_house_no', 'res_street', 'res_subdivision', 'res_barangay', 'perm_city', 'perm_province', 'perm_zip_code', 'perm_house_no', 'perm_street', 'perm_subdivision', 'perm_barangay', 'email_address', 'mobile_no', 'telephone_no'];
     const step1GovernmentFields = ['gsis_id_no', 'pagibig_id_no', 'philhealth_no', 'sss_no', 'tin_no'];
     
     // Get fields for current step/tab
@@ -2836,9 +2845,6 @@ export default function CreateEmployee({ employee, departments, positions, facul
         'faculty_id': { step: 1, tab: 'basic' },
         'department_id': { step: 1, tab: 'basic' },
         'position_id': { step: 1, tab: 'basic' },
-        'email_address': { step: 1, tab: 'basic' },
-        'mobile_no': { step: 1, tab: 'basic' },
-        'telephone_no': { step: 1, tab: 'basic' },
         'employee_type': { step: 1, tab: 'basic' },
         'status': { step: 1, tab: 'basic' },
         'employment_status': { step: 1, tab: 'basic' },
@@ -2856,6 +2862,9 @@ export default function CreateEmployee({ employee, departments, positions, facul
         'perm_city': { step: 1, tab: 'address' },
         'perm_province': { step: 1, tab: 'address' },
         'perm_zip_code': { step: 1, tab: 'address' },
+        'email_address': { step: 1, tab: 'address' },
+        'mobile_no': { step: 1, tab: 'address' },
+        'telephone_no': { step: 1, tab: 'address' },
         // Step 1 - Government tab
         'gsis_id_no': { step: 1, tab: 'government' },
         'pagibig_id_no': { step: 1, tab: 'government' },
@@ -3292,10 +3301,10 @@ export default function CreateEmployee({ employee, departments, positions, facul
       date_hired: { step: 1, tab: 'basic' },
       date_regularized: { step: 1, tab: 'basic' },
       citizenship: { step: 1, tab: 'basic' },
-      email_address: { step: 1, tab: 'basic' },
-      mobile_no: { step: 1, tab: 'basic' },
-      telephone_no: { step: 1, tab: 'basic' },
-      // Step 1 - Address tab
+      height_m: { step: 1, tab: 'basic' },
+      weight_kg: { step: 1, tab: 'basic' },
+      blood_type: { step: 1, tab: 'basic' },
+      // Step 1 - Address tab (includes contact info)
       res_city: { step: 1, tab: 'address' },
       res_province: { step: 1, tab: 'address' },
       res_zip_code: { step: 1, tab: 'address' },
@@ -3310,6 +3319,9 @@ export default function CreateEmployee({ employee, departments, positions, facul
       perm_street: { step: 1, tab: 'address' },
       perm_subdivision: { step: 1, tab: 'address' },
       perm_barangay: { step: 1, tab: 'address' },
+      email_address: { step: 1, tab: 'address' },
+      mobile_no: { step: 1, tab: 'address' },
+      telephone_no: { step: 1, tab: 'address' },
       // Step 1 - Government tab
       gsis_id_no: { step: 1, tab: 'government' },
       pagibig_id_no: { step: 1, tab: 'government' },
