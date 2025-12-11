@@ -93,10 +93,21 @@ class AuthenticatedSessionController extends Controller
 
         // Redirect to OAuth authorize if that's where they came from
         // This preserves the OAuth authorization flow with all query parameters (state, client_id, etc.)
-        // Note: The login form uses traditional form submission (not XHR) when OAuth is active,
-        // so we can use a regular redirect here - the browser will follow it normally
         if ($request->session()->has('oauth_redirect')) {
             $oauthRedirect = $request->session()->pull('oauth_redirect');
+            
+            // CRITICAL: If this is an Inertia XHR request, we MUST use Inertia::location()
+            // to force a full page redirect. Otherwise, Inertia will follow the redirect
+            // via XHR, which will eventually hit an external OAuth callback URL and cause
+            // CORS errors (browser XHR can't redirect to external domains).
+            //
+            // Inertia::location() returns a 409 response with X-Inertia-Location header,
+            // which tells Inertia's client-side code to do a full page navigation instead.
+            if ($request->header('X-Inertia')) {
+                return Inertia::location($oauthRedirect);
+            }
+            
+            // For traditional form submissions (non-Inertia), use regular redirect
             return redirect($oauthRedirect);
         }
 
