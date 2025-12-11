@@ -17,8 +17,10 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $authUser     = Auth::user();
-        $authUserRole = $authUser->roles->first()?->name;
+        $authUser = Auth::user();
+        $rolePriority = ['super-admin', 'admin', 'editor', 'user'];
+        $authRoles = $authUser->getRoleNames()->map(fn ($r) => strtolower($r))->toArray();
+        $authUserRole = collect($rolePriority)->first(fn ($r) => in_array($r, $authRoles));
 
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
@@ -26,7 +28,7 @@ class UserController extends Controller
 
         $userQuery = User::with('roles');
 
-        if (! in_array($authUserRole, ['super-admin', 'admin', 'editor', 'user'])) {
+        if (! $authUserRole) {
             abort(403, 'Unauthorized Access Prevented');
         }
 

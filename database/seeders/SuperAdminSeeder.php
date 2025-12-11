@@ -165,6 +165,7 @@ class SuperAdminSeeder extends Seeder
             ['email' => 'arvinnegrillo4@gmail.com'],
             [
                 'name' => 'Super Admin',
+                // Keep password resettable by reruns to stay idempotent
                 'password' => bcrypt('password'), 
             ]
         );
