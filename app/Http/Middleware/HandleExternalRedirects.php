@@ -54,11 +54,14 @@ class HandleExternalRedirects
             return Inertia::location($targetUrl);
         }
 
-        // Note: We don't convert internal redirects to /oauth/authorize because:
-        // 1. They are internal redirects, so no CORS issues
-        // 2. The authorize page needs to load normally to show the approval UI
-        // 3. The external redirect (to callback URL) happens AFTER approval,
-        //    and that external redirect will be caught by the check above
+        // Special handling for OAuth flow: If this is an XHR/Inertia request and we're
+        // redirecting to /oauth/authorize, ALWAYS use full page redirect because OAuth
+        // will eventually redirect to an external callback URL, causing CORS errors if
+        // followed via XHR. This prevents the XHR redirect chain issue.
+        if (($request->header('X-Inertia') || $request->ajax() || $request->wantsJson()) 
+            && $this->isOAuthAuthorizeRedirect($targetUrl)) {
+            return Inertia::location($targetUrl);
+        }
 
         return $response;
     }
@@ -83,5 +86,18 @@ class HandleExternalRedirects
         return strcasecmp($parsed['host'], $currentHost) !== 0;
     }
 
+    /**
+     * Check if this redirect is to the OAuth authorize endpoint
+     * 
+     * OAuth authorize will eventually redirect to an external callback URL,
+     * so we need to prevent XHR redirect chains for this endpoint.
+     */
+    protected function isOAuthAuthorizeRedirect(string $url): bool
+    {
+        $parsed = parse_url($url);
+        $path = $parsed['path'] ?? '';
+        
+        return str_contains($path, '/oauth/authorize');
+    }
 }
 
