@@ -2355,6 +2355,11 @@ class EmployeeController extends Controller
 
     /**
      * Initialize leave balances for a new employee
+     * 
+     * Based on CSC Omnibus Rules on Leave:
+     * - Vacation Leave (VL): 15 days/year (1.25 days/month)
+     * - Sick Leave (SL): 15 days/year (1.25 days/month)
+     * - Special Privilege Leave (SPL): 3 days/year
      */
     protected function initializeLeaveBalances(Employee $employee): void
     {
@@ -2367,13 +2372,13 @@ class EmployeeController extends Controller
             $leaveService = app(LeaveService::class);
             $year = now()->year;
 
-            // Default entitlements per leave type
+            // CSC Standard Entitlements per leave type
+            // Based on Omnibus Rules on Leave (CSC MC No. 41, s. 1998)
             $entitlements = [
-                'VAC' => 15.0,  // Vacation Leave - 15 days
-                'SICK' => 15.0, // Sick Leave - 15 days
-                'PER' => 5.0,   // Personal Leave - 5 days
-                'EMER' => 5.0,  // Emergency Leave - 5 days
-                // Maternity and Paternity are not auto-initialized (granted when needed)
+                'VL' => 15.0,    // Vacation Leave - 15 days/year
+                'SL' => 15.0,    // Sick Leave - 15 days/year
+                'SPL' => 3.0,    // Special Privilege Leave - 3 days/year
+                // Other leaves (maternity, paternity, etc.) are granted on-demand
             ];
 
             $leaveTypes = LeaveType::active()->get()->keyBy('code');
@@ -2386,13 +2391,18 @@ class EmployeeController extends Controller
                     continue;
                 }
 
+                // Check if leave type is available for this employee (gender restriction)
+                if (!$leaveType->isAvailableFor($employee)) {
+                    continue;
+                }
+
                 try {
                     $leaveService->addAccrual(
                         $employee->id,
                         $leaveType->id,
                         $days,
                         'annual',
-                        "Initial leave entitlement for {$year}",
+                        "CSC annual leave entitlement for {$year}",
                         $year,
                         auth()->id()
                     );

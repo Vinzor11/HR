@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\LeaveBalance;
+use App\Models\LeaveCreditsHistory;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\Holiday;
@@ -11,8 +12,31 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * LeaveService - CSC Compliant
+ * 
+ * Based on Civil Service Commission (CSC) Omnibus Rules on Leave
+ * and CS Form No. 6 (Revised 2020)
+ * 
+ * Key CSC Rules:
+ * - VL/SL accrue at 1.25 days per month (15 days/year)
+ * - Mandatory/Forced Leave: 5 days from VL for those with 10+ VL credits
+ * - Sick leave 5+ days requires medical certificate
+ * - VL requires 5 days advance filing; SL can be filed immediately
+ */
 class LeaveService
 {
+    // CSC Monthly accrual rate (15 days / 12 months = 1.25 days/month)
+    public const MONTHLY_ACCRUAL_RATE = 1.25;
+    
+    // Minimum VL credits required for mandatory/forced leave
+    public const MIN_VL_FOR_FORCED_LEAVE = 10;
+    
+    // Mandatory/Forced leave days per year
+    public const FORCED_LEAVE_DAYS = 5;
+    
+    // Days requiring medical certificate for sick leave
+    public const SICK_LEAVE_MEDICAL_CERT_DAYS = 5;
     /**
      * Calculate working days between two dates (excluding weekends and holidays)
      */
@@ -239,6 +263,13 @@ class LeaveService
     public function validateLeaveRequest(string $employeeId, int $leaveTypeId, Carbon $startDate, Carbon $endDate, ?string &$error = null): bool
     {
         $leaveType = LeaveType::findOrFail($leaveTypeId);
+        $employee = Employee::findOrFail($employeeId);
+
+        // Check if leave type is available for employee (gender restriction)
+        if (!$leaveType->isAvailableFor($employee)) {
+            $error = "{$leaveType->name} is not available for this employee";
+            return false;
+        }
 
         // Check minimum notice
         $noticeDays = now()->diffInDays($startDate);
@@ -262,14 +293,225 @@ class LeaveService
             return false;
         }
 
-        // Check balance
-        if (!$this->hasSufficientBalance($employeeId, $leaveTypeId, $days)) {
-            $balance = LeaveBalance::getCurrentYearBalance($employeeId, $leaveTypeId);
-            $error = "Insufficient leave balance. Available: {$balance->balance} days";
-            return false;
+        // For credit-based leaves (VL, SL), check balance
+        if ($leaveType->isCreditBased() || !$leaveType->is_special_leave) {
+            // Check if leave uses credits from another type (e.g., Forced Leave uses VL)
+            $sourceType = $leaveType->getCreditsSource() ?? $leaveType;
+            
+            if (!$this->hasSufficientBalance($employeeId, $sourceType->id, $days)) {
+                $balance = LeaveBalance::getCurrentYearBalance($employeeId, $sourceType->id);
+                $available = $balance ? $balance->balance : 0;
+                $error = "Insufficient {$sourceType->name} balance. Available: {$available} days";
+                return false;
+            }
         }
 
         return true;
+    }
+
+    /**
+     * Get leave credits for CS Form No. 6 Section 7
+     * Returns VL and SL balances as of filing date
+     */
+    public function getLeaveCreditsAsOfDate(string $employeeId, ?Carbon $asOfDate = null): array
+    {
+        $asOfDate = $asOfDate ?? now();
+        $year = $asOfDate->year;
+
+        $vlType = LeaveType::where('code', LeaveType::CODE_VACATION)->first();
+        $slType = LeaveType::where('code', LeaveType::CODE_SICK)->first();
+
+        $vlBalance = $vlType 
+            ? LeaveBalance::getOrCreateBalance($employeeId, $vlType->id, $year)
+            : null;
+        $slBalance = $slType 
+            ? LeaveBalance::getOrCreateBalance($employeeId, $slType->id, $year)
+            : null;
+
+        return [
+            'vacation_leave' => [
+                'total_earned' => $vlBalance?->entitled ?? 0,
+                'less_used' => $vlBalance?->used ?? 0,
+                'balance' => $vlBalance?->balance ?? 0,
+            ],
+            'sick_leave' => [
+                'total_earned' => $slBalance?->entitled ?? 0,
+                'less_used' => $slBalance?->used ?? 0,
+                'balance' => $slBalance?->balance ?? 0,
+            ],
+            'as_of_date' => $asOfDate->format('Y-m-d'),
+        ];
+    }
+
+    /**
+     * Process monthly leave accrual for an employee
+     * CSC Rule: VL and SL accrue at 1.25 days per month
+     */
+    public function processMonthlyAccrual(string $employeeId, Carbon $month): void
+    {
+        $employee = Employee::findOrFail($employeeId);
+        
+        // Only active employees accrue leave
+        if ($employee->status !== 'active') {
+            return;
+        }
+
+        $year = $month->year;
+        $accrualDate = $month->endOfMonth();
+
+        // Accrue VL and SL
+        $leaveTypeCodes = [LeaveType::CODE_VACATION, LeaveType::CODE_SICK];
+        
+        foreach ($leaveTypeCodes as $code) {
+            $leaveType = LeaveType::where('code', $code)->first();
+            if (!$leaveType) {
+                continue;
+            }
+
+            $this->addAccrual(
+                $employeeId,
+                $leaveType->id,
+                self::MONTHLY_ACCRUAL_RATE,
+                'monthly',
+                "Monthly accrual for {$month->format('F Y')}",
+                $year,
+                null
+            );
+
+            // Record in credits history
+            $this->recordCreditsHistory($employeeId, $leaveType->id, $month);
+        }
+    }
+
+    /**
+     * Record leave credits history for audit trail
+     */
+    public function recordCreditsHistory(string $employeeId, int $leaveTypeId, Carbon $period): void
+    {
+        $year = $period->year;
+        $balance = LeaveBalance::getOrCreateBalance($employeeId, $leaveTypeId, $year);
+
+        LeaveCreditsHistory::create([
+            'employee_id' => $employeeId,
+            'leave_type_id' => $leaveTypeId,
+            'earned' => $balance->entitled,
+            'used' => $balance->used,
+            'balance' => $balance->balance,
+            'abs_undertime_deduction' => 0, // To be implemented if needed
+            'period' => $period->format('F Y'),
+            'as_of_date' => $period->endOfMonth(),
+        ]);
+    }
+
+    /**
+     * Check if employee needs to take mandatory/forced leave
+     * CSC Rule: Employees with 10+ VL credits must take 5 days forced leave
+     */
+    public function needsForcedLeave(string $employeeId, ?int $year = null): bool
+    {
+        $year = $year ?? now()->year;
+        
+        $vlType = LeaveType::where('code', LeaveType::CODE_VACATION)->first();
+        if (!$vlType) {
+            return false;
+        }
+
+        $balance = LeaveBalance::getOrCreateBalance($employeeId, $vlType->id, $year);
+        
+        return $balance->balance >= self::MIN_VL_FOR_FORCED_LEAVE;
+    }
+
+    /**
+     * Get forced leave status for an employee
+     */
+    public function getForcedLeaveStatus(string $employeeId, ?int $year = null): array
+    {
+        $year = $year ?? now()->year;
+        
+        $flType = LeaveType::where('code', LeaveType::CODE_MANDATORY_FORCED)->first();
+        if (!$flType) {
+            return [
+                'required' => false,
+                'days_required' => 0,
+                'days_taken' => 0,
+                'days_remaining' => 0,
+            ];
+        }
+
+        $needsForced = $this->needsForcedLeave($employeeId, $year);
+        
+        // Get forced leave taken this year
+        $daysTaken = LeaveRequest::where('employee_id', $employeeId)
+            ->where('leave_type_id', $flType->id)
+            ->whereYear('start_date', $year)
+            ->where('status', 'approved')
+            ->sum('days');
+
+        return [
+            'required' => $needsForced,
+            'days_required' => $needsForced ? self::FORCED_LEAVE_DAYS : 0,
+            'days_taken' => (float) $daysTaken,
+            'days_remaining' => $needsForced ? max(0, self::FORCED_LEAVE_DAYS - $daysTaken) : 0,
+        ];
+    }
+
+    /**
+     * Check if medical certificate is required for sick leave
+     * CSC Rule: SL of 5+ days requires medical certificate
+     */
+    public function requiresMedicalCertificate(LeaveType $leaveType, float $days): bool
+    {
+        if ($leaveType->isSickLeave() && $days >= self::SICK_LEAVE_MEDICAL_CERT_DAYS) {
+            return true;
+        }
+
+        return $leaveType->requires_medical_certificate;
+    }
+
+    /**
+     * Get available leave types for an employee based on gender and eligibility
+     */
+    public function getAvailableLeaveTypes(Employee $employee): \Illuminate\Database\Eloquent\Collection
+    {
+        $gender = strtolower($employee->sex ?? 'all');
+        
+        return LeaveType::active()
+            ->ordered()
+            ->where(function ($query) use ($gender) {
+                $query->where('gender_restriction', 'all')
+                    ->orWhere('gender_restriction', $gender);
+            })
+            ->get();
+    }
+
+    /**
+     * Calculate leave monetization value
+     * CSC Rule: VL and SL can be monetized upon separation (Terminal Leave)
+     */
+    public function calculateMonetization(string $employeeId, float $dailyRate): array
+    {
+        $year = now()->year;
+        
+        $vlType = LeaveType::where('code', LeaveType::CODE_VACATION)->first();
+        $slType = LeaveType::where('code', LeaveType::CODE_SICK)->first();
+
+        $vlBalance = $vlType 
+            ? LeaveBalance::getOrCreateBalance($employeeId, $vlType->id, $year)->balance 
+            : 0;
+        $slBalance = $slType 
+            ? LeaveBalance::getOrCreateBalance($employeeId, $slType->id, $year)->balance 
+            : 0;
+
+        $totalDays = $vlBalance + $slBalance;
+        $totalValue = $totalDays * $dailyRate;
+
+        return [
+            'vacation_leave_days' => $vlBalance,
+            'sick_leave_days' => $slBalance,
+            'total_days' => $totalDays,
+            'daily_rate' => $dailyRate,
+            'total_value' => $totalValue,
+        ];
     }
 }
 
