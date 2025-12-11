@@ -69,7 +69,10 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
         });
     };
 
-    const fieldError = (fieldKey: string) => (errors as Record<string, string | undefined>)[`answers.${fieldKey}`];
+    const fieldError = (fieldKey: string) => {
+        const raw = (errors as Record<string, string | undefined>)[`answers.${fieldKey}`];
+        return typeof raw === 'string' && raw.trim().length > 0 ? raw : undefined;
+    };
 
     const fieldKey = (field: RequestFieldDefinition) => field.field_key ?? `field-${field.id}`;
 
