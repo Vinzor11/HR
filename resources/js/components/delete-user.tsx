@@ -58,6 +58,7 @@ export default function DeleteUser() {
                                 <Input
                                     id="password"
                                     type="password"
+                                    showPasswordToggle
                                     name="password"
                                     ref={passwordInput}
                                     value={data.password}

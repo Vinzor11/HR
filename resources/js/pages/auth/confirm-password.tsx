@@ -41,6 +41,7 @@ export default function ConfirmPassword() {
                         <Input
                             id="password"
                             type="password"
+                            showPasswordToggle
                             name="password"
                             placeholder="Password"
                             autoComplete="current-password"

@@ -12,6 +12,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'sqlite') {
+            // SQLite used in tests doesn't support the MySQL-specific FK drops below
+            return;
+        }
+
         // Training applications act as training logs/history; keep rows when parents are deleted
         if (Schema::hasTable('apply_training')) {
             // Drop FK on training_id if present
@@ -74,6 +80,12 @@ return new class extends Migration
      */
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'sqlite') {
+            // No-op for SQLite; there are no FKs to restore
+            return;
+        }
+
         if (Schema::hasTable('apply_training')) {
             // Drop nullable FKs
             DB::unprepared("

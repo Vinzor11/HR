@@ -12,6 +12,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'sqlite') {
+            // SQLite used in tests doesn't support the MySQL-specific FK drops below
+            return;
+        }
+
         // Employee audit log: keep records even if employee is deleted
         if (Schema::hasTable('employee_audit_log')) {
             // Drop FK if it exists
@@ -80,6 +86,12 @@ return new class extends Migration
      */
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'sqlite') {
+            // No-op for SQLite; there are no FKs to restore
+            return;
+        }
+
         // Employee audit log: restore NOT NULL + restrict delete
         if (Schema::hasTable('employee_audit_log')) {
             DB::unprepared("

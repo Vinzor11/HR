@@ -98,6 +98,7 @@ export default function Register() {
                         <Input
                             id="password"
                             type="password"
+                            showPasswordToggle
                             required
                             tabIndex={4}
                             autoComplete="new-password"
@@ -114,6 +115,7 @@ export default function Register() {
                         <Input
                             id="password_confirmation"
                             type="password"
+                            showPasswordToggle
                             required
                             tabIndex={5}
                             autoComplete="new-password"

@@ -67,6 +67,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                         <Input
                             id="password"
                             type="password"
+                            showPasswordToggle
                             name="password"
                             autoComplete="new-password"
                             value={data.password}
@@ -83,6 +84,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                         <Input
                             id="password_confirmation"
                             type="password"
+                            showPasswordToggle
                             name="password_confirmation"
                             autoComplete="new-password"
                             value={data.password_confirmation}

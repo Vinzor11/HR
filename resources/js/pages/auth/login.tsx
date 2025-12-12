@@ -122,6 +122,7 @@ export default function Login({ status, canResetPassword, hasOAuthRedirect }: Lo
                         <Input
                             id="password"
                             type="password"
+                            showPasswordToggle
                             name="password"
                             required
                             tabIndex={2}

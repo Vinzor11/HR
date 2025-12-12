@@ -36,8 +36,8 @@ return new class extends Migration
 
             // Indexes for performance
             $table->index(['employee_id', 'action_date'], 'idx_employee_date');
-            $table->index('action_type', 'idx_action_type');
-            $table->index('reference_number', 'idx_reference_number');
+            $table->index('action_type', 'idx_employee_audit_action_type_v1');
+            $table->index('reference_number', 'idx_employee_audit_reference_number_v1');
         });
     }
 

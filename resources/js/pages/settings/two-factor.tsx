@@ -201,6 +201,7 @@ export default function TwoFactor({ qrCode, secret, enabled, recoveryCodes, stat
                                         <Input
                                             id="regenerate_password"
                                             type="password"
+                                        showPasswordToggle
                                             value={regenerateForm.data.password}
                                             onChange={(e) => regenerateForm.setData('password', e.target.value)}
                                             className="mt-2"
@@ -218,6 +219,7 @@ export default function TwoFactor({ qrCode, secret, enabled, recoveryCodes, stat
                                         <Input
                                             id="disable_password"
                                             type="password"
+                                        showPasswordToggle
                                             value={disableForm.data.password}
                                             onChange={(e) => disableForm.setData('password', e.target.value)}
                                             className="mt-2"
