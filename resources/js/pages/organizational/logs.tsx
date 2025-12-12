@@ -226,8 +226,8 @@ export default function OrganizationalLogs() {
             const isPermanentDelete = newValueStr.includes('Permanently Deleted');
             
             if (!recordName && newValueStr) {
-                // Extract name from format like "Position Record Deleted: {name}" or "{Label} Record Permanently Deleted: {name}"
-                const match = newValueStr.match(/:\s*(.+)$/);
+                // Extract name from format like "Permanently Deleted: {name}" or "Soft Deleted: {name}"
+                const match = newValueStr.match(/(?:Permanently Deleted|Soft Deleted):\s*(.+)$/);
                 if (match) {
                     recordName = match[1].trim();
                 }

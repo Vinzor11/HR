@@ -181,8 +181,8 @@ export default function EmployeeLogs() {
             // Extract employee name if available
             let employeeName = getEmployeeName(log);
             if (!employeeName && newValueStr) {
-                // Extract name from format like "Employee Record Permanently Deleted: {name}"
-                const match = newValueStr.match(/:\s*(.+)$/);
+                // Extract name from format like "Permanently Deleted: {name}" or "Soft Deleted: {name}"
+                const match = newValueStr.match(/(?:Permanently Deleted|Soft Deleted):\s*(.+)$/);
                 if (match) {
                     employeeName = match[1].trim();
                 }

@@ -206,8 +206,8 @@ export default function UserLogs() {
             // Extract user name if available
             let userName = getUserName(log);
             if (!userName && newValueStr) {
-                // Extract name from format like "User Record Permanently Deleted: {name}"
-                const match = newValueStr.match(/:\s*(.+)$/);
+                // Extract name from format like "Permanently Deleted: {name}" or "Soft Deleted: {name}"
+                const match = newValueStr.match(/(?:Permanently Deleted|Soft Deleted):\s*(.+)$/);
                 if (match) {
                     userName = match[1].trim();
                 }
@@ -224,7 +224,14 @@ export default function UserLogs() {
                                 ? 'This record has been permanently deleted and cannot be recovered.'
                                 : 'This record is now inactive and recoverable.'}
                         </div>
-                        {/* ID/Name already shown in header line; omit here to avoid repetition */}
+                        {userName && (
+                            <div className="text-xs">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground font-medium">Name:</span>
+                                    <span className="font-semibold text-foreground">{userName}</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
