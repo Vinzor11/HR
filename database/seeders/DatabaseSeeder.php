@@ -21,7 +21,7 @@ class DatabaseSeeder extends Seeder
         
         // 3. Seed leave request form fields (depends on LeaveTypeSeeder)
         $this->call(LeaveRequestTypeSeeder::class);
-        
+
         // 4. Initialize leave balances for existing employees (optional - only if employees exist)
         // This will skip gracefully if no employees are found
         $this->call(InitializeLeaveBalancesSeeder::class);
