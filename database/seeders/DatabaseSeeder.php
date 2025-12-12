@@ -13,11 +13,6 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Do not auto-seed in production (e.g., Railway builds)
-        if (app()->environment('production')) {
-            return;
-        }
-
         $this->call(SuperAdminSeeder::class);
         $this->call(LeaveRequestTypeSeeder::class);
 

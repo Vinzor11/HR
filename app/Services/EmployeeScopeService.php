@@ -24,9 +24,9 @@ class EmployeeScopeService
      */
     public function getEmployeeScope(User $user): ?Builder
     {
-        // Super Admin and Admin can see all
-        if ($user->hasRole(['super-admin', 'admin'])) {
-            return null; // null means no restrictions
+        // Permission-based full access
+        if ($user->can('view-all-employees')) {
+            return null; // no restrictions
         }
 
         // Get user's employee record
@@ -42,25 +42,13 @@ class EmployeeScopeService
             return Employee::whereRaw('1 = 0');
         }
 
-        $position = $employee->position;
-        $hierarchyLevel = $position->hierarchy_level ?? 1;
-
-        // Dean (hierarchy_level 9-10): Can view all employees in their faculty
-        if ($hierarchyLevel >= 9 && $hierarchyLevel <= 10) {
+        // Permission-based faculty/department access
+        if ($user->can('view-faculty-employees')) {
             return $this->getFacultyScope($employee);
         }
 
-        // Department Head (hierarchy_level 8): Can view all employees in their department
-        if ($hierarchyLevel === 8) {
+        if ($user->can('view-department-employees')) {
             return $this->getDepartmentScope($employee);
-        }
-
-        // Check if user is actually a department head via department.head_position_id
-        if ($employee->department_id) {
-            $department = Department::find($employee->department_id);
-            if ($department && $department->head_position_id === $employee->position_id) {
-                return $this->getDepartmentScope($employee);
-            }
         }
 
         // Regular employees: can only view themselves

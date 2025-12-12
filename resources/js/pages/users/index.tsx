@@ -182,6 +182,8 @@ export default function Index({ users, filters }: IndexProps) {
                 onSuccess: (response: { props: FlashProps }) => {
                     const successMessage = response.props.flash?.success;
                     successMessage && toast.success(successMessage);
+                    // Re-fetch with current pagination/filter settings to keep row count
+                    triggerFetch({ perPage });
                     closeModal();
                     // Restore pointer events - let React/Radix handle DOM cleanup
                     setTimeout(() => {
