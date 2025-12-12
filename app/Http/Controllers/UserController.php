@@ -17,34 +17,11 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $authUser = Auth::user();
-        $rolePriority = ['super-admin', 'admin', 'editor', 'user'];
-        $authRoles = $authUser->getRoleNames()->map(fn ($r) => strtolower($r))->toArray();
-        $authUserRole = collect($rolePriority)->first(fn ($r) => in_array($r, $authRoles));
-
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
         $showDeleted = $request->boolean('show_deleted', false);
 
         $userQuery = User::with('roles');
-
-        if (! $authUserRole) {
-            abort(403, 'Unauthorized Access Prevented');
-        }
-
-        if ($authUserRole === 'admin') {
-            $userQuery->whereDoesntHave('roles', function ($q) {
-                $q->where('name', 'super-admin');
-            });
-        } elseif ($authUserRole === 'editor') {
-            $userQuery->whereHas('roles', function ($q) {
-                $q->whereIn('name', ['editor', 'user']);
-            });
-        } elseif ($authUserRole === 'user') {
-            $userQuery->whereHas('roles', function ($q) {
-                $q->whereIn('name', ['user']);
-            });
-        }
 
         $userQuery->when($showDeleted, function ($query) {
             $query->onlyTrashed();
