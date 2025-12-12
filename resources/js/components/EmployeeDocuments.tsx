@@ -116,15 +116,15 @@ export default function EmployeeDocuments({ employee }: EmployeeDocumentsProps) 
     }
   };
 
-  const handleDownload = async (document: Document) => {
+  const handleDownload = async (doc: Document) => {
     try {
-      const response = await fetch(`/employees/${employee.id}/documents/${document.id}/download`);
+      const response = await fetch(`/employees/${employee.id}/documents/${doc.id}/download`);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = document.original_filename;
+        a.download = doc.original_filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -138,13 +138,13 @@ export default function EmployeeDocuments({ employee }: EmployeeDocumentsProps) 
     }
   };
 
-  const handleDelete = async (document: Document) => {
-    if (!confirm(`Are you sure you want to delete "${document.title}"?`)) {
+  const handleDelete = async (doc: Document) => {
+    if (!confirm(`Are you sure you want to delete "${doc.title}"?`)) {
       return;
     }
 
     try {
-      const response = await fetch(`/employees/${employee.id}/documents/${document.id}`, {
+      const response = await fetch(`/employees/${employee.id}/documents/${doc.id}`, {
         method: 'DELETE',
         headers: {
           'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
@@ -152,7 +152,7 @@ export default function EmployeeDocuments({ employee }: EmployeeDocumentsProps) 
       });
 
       if (response.ok) {
-        setDocuments(prev => prev.filter(doc => doc.id !== document.id));
+        setDocuments(prev => prev.filter(doc => doc.id !== doc.id));
         toast.success('Document deleted successfully');
       } else {
         toast.error('Failed to delete document');
@@ -288,7 +288,7 @@ export default function EmployeeDocuments({ employee }: EmployeeDocumentsProps) 
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDownload(document)}
+                        onClick={() => handleDownload(doc)}
                       >
                         <Download className="h-4 w-4 mr-2" />
                         Download
@@ -296,7 +296,7 @@ export default function EmployeeDocuments({ employee }: EmployeeDocumentsProps) 
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDelete(document)}
+                        onClick={() => handleDelete(doc)}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4" />

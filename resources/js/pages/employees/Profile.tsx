@@ -1157,7 +1157,7 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
             )}
 
             {/* Documents */}
-            <div className="col-span-1 lg:col-span-2 xl:col-span-3">
+            <div className="col-span-1 md:col-span-2">
               <Card id="documents">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
