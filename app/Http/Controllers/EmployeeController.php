@@ -1461,13 +1461,22 @@ class EmployeeController extends Controller
                 $newValue = $log->new_value;
                 
                 if ($log->field_changed === 'position_id') {
-                    if ($oldValue) {
-                        $oldPos = Position::withTrashed()->find($oldValue);
-                        $oldValue = $oldPos ? ($oldPos->pos_name ?? $oldPos->name ?? 'Unknown Position') : 'Unknown Position';
+                    // For position_id changes, the audit log already contains position names
+                    // Handle null values and clean up empty strings
+                    if ($oldValue === null || trim($oldValue) === '') {
+                        $oldValue = 'Unknown Position';
+                    } elseif (is_numeric($oldValue)) {
+                        // If it's numeric, it might be an old format ID - try to resolve it
+                        $oldPos = Position::withTrashed()->find((int) $oldValue);
+                        $oldValue = $oldPos ? (trim($oldPos->pos_name ?? $oldPos->name ?? '') ?: 'Unknown Position') : 'Unknown Position';
                     }
-                    if ($newValue) {
-                        $newPos = Position::withTrashed()->find($newValue);
-                        $newValue = $newPos ? ($newPos->pos_name ?? $newPos->name ?? 'Unknown Position') : 'Unknown Position';
+
+                    if ($newValue === null || trim($newValue) === '') {
+                        $newValue = 'Unknown Position';
+                    } elseif (is_numeric($newValue)) {
+                        // If it's numeric, it might be an old format ID - try to resolve it
+                        $newPos = Position::withTrashed()->find((int) $newValue);
+                        $newValue = $newPos ? (trim($newPos->pos_name ?? $newPos->name ?? '') ?: 'Unknown Position') : 'Unknown Position';
                     }
                 }
                 
@@ -1611,12 +1620,17 @@ class EmployeeController extends Controller
         DB::transaction(function () use ($request, $employee, $validated, $original, &$changes) {
             // Track changes BEFORE updating
             foreach ($validated as $key => $newValue) {
+                // Skip organization_type as it's not saved to the employee model
+                if ($key === 'organization_type') {
+                    continue;
+                }
+
                 $oldValue = $original[$key] ?? null;
-                
+
                 // Normalize values for comparison (handle dates, booleans, etc.)
                 $normalizedOld = $this->normalizeValue($oldValue);
                 $normalizedNew = $this->normalizeValue($newValue);
-                
+
                 // Compare normalized values (use != for loose comparison to handle type differences)
                 if ($normalizedOld != $normalizedNew) {
                     $changes[$key] = [
@@ -1663,11 +1677,11 @@ class EmployeeController extends Controller
                     } elseif ($field === 'position_id') {
                         if ($oldValue) {
                             $oldPos = Position::find($oldValue);
-                            $oldValue = $oldPos ? $oldPos->pos_name : $oldValue;
+                            $oldValue = $oldPos ? (trim($oldPos->pos_name ?? $oldPos->name ?? '') ?: 'Unknown Position') : $oldValue;
                         }
                         if ($newValue) {
                             $newPos = Position::find($newValue);
-                            $newValue = $newPos ? $newPos->pos_name : $newValue;
+                            $newValue = $newPos ? (trim($newPos->pos_name ?? $newPos->name ?? '') ?: 'Unknown Position') : $newValue;
                         }
                     }
                     
@@ -2104,17 +2118,21 @@ class EmployeeController extends Controller
             'status' => 'required|in:active,inactive,on-leave',
             'employment_status' => 'required|in:Regular,Contractual,Job-Order,Probationary',
             'employee_type' => 'required|in:Teaching,Non-Teaching',
-            'organization_type' => 'nullable|in:academic,administrative',
             'faculty_id' => [
                 function ($attribute, $value, $fail) use ($request) {
-                    $organizationType = $request->input('organization_type');
-                    // Faculty ID is only required for academic organization type
-                    if ($organizationType === 'academic' && empty($value)) {
-                        $fail('Faculty is required for academic departments.');
-                    }
-                    // For administrative, faculty_id should be null
-                    if ($organizationType === 'administrative' && !empty($value)) {
-                        $fail('Faculty must not be selected for administrative offices.');
+                    $departmentId = $request->input('department_id');
+                    if ($departmentId) {
+                        $department = \App\Models\Department::find($departmentId);
+                        if ($department) {
+                            // Faculty ID is only required for academic departments
+                            if ($department->type === 'academic' && empty($value)) {
+                                $fail('Faculty is required for academic departments.');
+                            }
+                            // For administrative departments, faculty_id should be null
+                            if ($department->type === 'administrative' && !empty($value)) {
+                                $fail('Faculty must not be selected for administrative offices.');
+                            }
+                        }
                     }
                 },
                 'nullable',
@@ -2429,8 +2447,8 @@ class EmployeeController extends Controller
                 'employee_id' => $employee->id,
                 'action_type' => $actionType,
                 'field_changed' => $fieldChanged,
-                'old_value' => $oldPosition ? $oldPosition->pos_name : null,
-                'new_value' => $newPosition ? $newPosition->pos_name : null,
+                'old_value' => $oldPosition ? (trim($oldPosition->pos_name ?? $oldPosition->name ?? '') ?: 'Unknown Position') : null,
+                'new_value' => $newPosition ? (trim($newPosition->pos_name ?? $newPosition->name ?? '') ?: 'Unknown Position') : null,
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

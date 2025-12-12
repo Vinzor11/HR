@@ -1664,7 +1664,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
         };
       })
     };
-    const { faculty_id: _removedFacultyId, ...sanitizedSubmissionData } = submissionData;
+    const { faculty_id: _removedFacultyId, organization_type: _removedOrgType, ...sanitizedSubmissionData } = submissionData;
     
     console.log('Full submission data questionnaire:', JSON.stringify(submissionData.questionnaire, null, 2));
     console.log('=====================================');
