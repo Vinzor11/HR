@@ -39,6 +39,15 @@ export default function Welcome() {
                     <main className="w-full max-w-6xl px-6">
                         {/* Main Heading */}
                         <div className="text-center mb-28">
+                            {/* ESSU Logo */}
+                            <div className="mb-8">
+                                <img
+                                    src="/images/essu-removebg-preview.png"
+                                    alt="Eastern Samar State University"
+                                    className="w-32 h-32 lg:w-40 lg:h-40 mx-auto object-contain drop-shadow-xl"
+                                />
+                            </div>
+
                             <h1 className="text-4xl lg:text-6xl font-black text-white mb-6 drop-shadow-2xl" style={{textShadow: '0 0 20px rgba(17,141,11,0.8), 0 0 40px rgba(17,141,11,0.6), 2px 2px 4px rgba(17,141,11,0.9)'}}>
                                 One platform, many connections.
                             </h1>
