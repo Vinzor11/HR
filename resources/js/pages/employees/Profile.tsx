@@ -25,6 +25,10 @@ import {
   CalendarDays,
   ChevronRight,
   Landmark,
+  History,
+  ArrowRight,
+  Building2,
+  DollarSign,
 } from 'lucide-react';
 
 interface Employee {
@@ -95,8 +99,19 @@ interface Employee {
   [key: string]: any;
 }
 
+interface EmploymentHistoryItem {
+  id: number;
+  field: string;
+  field_key: string;
+  old_value: string | null;
+  new_value: string | null;
+  action_date: string | null;
+  performed_by: string | null;
+}
+
 interface ProfilePageProps {
   employee: Employee;
+  employmentHistory?: EmploymentHistoryItem[];
 }
 
 const formatDate = (dateString: string | null | undefined): string => {
@@ -155,7 +170,7 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-export default function EmployeeProfile({ employee }: ProfilePageProps) {
+export default function EmployeeProfile({ employee, employmentHistory = [] }: ProfilePageProps) {
   const fullName = [
     employee.surname,
     employee.first_name,
@@ -205,9 +220,11 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
   );
   const hasReferences = Boolean(employee.references && employee.references.length > 0);
   const hasQuestionnaire = Boolean(employee.questionnaire && employee.questionnaire.length > 0 && employee.questionnaire.some((q: any) => q.answer === true || q.details));
+  const hasEmploymentHistory = Boolean(employmentHistory && employmentHistory.length > 0);
   const quickLinks = [
     { id: 'personal-information', label: 'Personal Information', icon: User, show: true },
     { id: 'contact-information', label: 'Contact Information', icon: Phone, show: true },
+    { id: 'employment-history', label: 'Employment History', icon: History, show: hasEmploymentHistory },
     { id: 'government-ids', label: 'Government IDs', icon: CreditCard, show: hasGovernmentIds },
     { id: 'family-background', label: 'Family Background', icon: Users, show: hasFamilyBackground },
     { id: 'children', label: 'Children', icon: Baby, show: hasChildren },
@@ -540,6 +557,97 @@ export default function EmployeeProfile({ employee }: ProfilePageProps) {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Employment History Timeline */}
+            {hasEmploymentHistory && (
+              <Card className="shadow-sm" id="employment-history">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                      <History className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">Employment History</CardTitle>
+                      <CardDescription>Timeline of position, department, and salary changes</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <div className="relative">
+                    {/* Timeline line */}
+                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
+                    
+                    <div className="space-y-6">
+                      {employmentHistory.map((item, idx) => {
+                        const getIcon = () => {
+                          switch (item.field_key) {
+                            case 'position_id':
+                              return <Briefcase className="h-4 w-4" />;
+                            case 'department_id':
+                              return <Building2 className="h-4 w-4" />;
+                            case 'salary':
+                              return <DollarSign className="h-4 w-4" />;
+                            default:
+                              return <BriefcaseBusiness className="h-4 w-4" />;
+                          }
+                        };
+                        
+                        const getColor = () => {
+                          switch (item.field_key) {
+                            case 'position_id':
+                              return 'bg-blue-500';
+                            case 'department_id':
+                              return 'bg-emerald-500';
+                            case 'salary':
+                              return 'bg-amber-500';
+                            default:
+                              return 'bg-purple-500';
+                          }
+                        };
+                        
+                        return (
+                          <div key={item.id} className="relative pl-10">
+                            {/* Timeline dot */}
+                            <div className={`absolute left-2 w-5 h-5 rounded-full ${getColor()} flex items-center justify-center text-white`}>
+                              {getIcon()}
+                            </div>
+                            
+                            <div className="bg-muted/30 border border-border rounded-lg p-4">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                                <div>
+                                  <Badge variant="outline" className="mb-2">
+                                    {item.field}
+                                  </Badge>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    {item.old_value ? (
+                                      <>
+                                        <span className="text-muted-foreground line-through">{item.old_value}</span>
+                                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium text-foreground">{item.new_value || 'N/A'}</span>
+                                      </>
+                                    ) : (
+                                      <span className="font-medium text-foreground">Set to: {item.new_value || 'N/A'}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right text-xs text-muted-foreground">
+                                  {item.action_date && (
+                                    <p>{formatDate(item.action_date)}</p>
+                                  )}
+                                  {item.performed_by && (
+                                    <p className="mt-1">by {item.performed_by}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Government IDs */}
             {hasGovernmentIds && (

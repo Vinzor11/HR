@@ -1441,8 +1441,66 @@ class EmployeeController extends Controller
             ]
         ]);
 
+        // Get employment history from audit logs (position, department, salary changes)
+        $historyFields = ['position_id', 'department_id', 'salary', 'employee_type', 'employment_status'];
+        $employmentHistory = EmployeeAuditLog::where('employee_id', $employee->id)
+            ->whereIn('field_changed', $historyFields)
+            ->orderBy('action_date', 'desc')
+            ->get()
+            ->map(function ($log) {
+                $fieldLabels = [
+                    'position_id' => 'Position',
+                    'department_id' => 'Department/Office',
+                    'salary' => 'Salary',
+                    'employee_type' => 'Employee Type',
+                    'employment_status' => 'Employment Status',
+                ];
+                
+                // For position and department, try to get the actual names
+                $oldValue = $log->old_value;
+                $newValue = $log->new_value;
+                
+                if ($log->field_changed === 'position_id') {
+                    if ($oldValue) {
+                        $oldPos = Position::find($oldValue);
+                        $oldValue = $oldPos ? $oldPos->pos_name : 'Unknown Position';
+                    }
+                    if ($newValue) {
+                        $newPos = Position::find($newValue);
+                        $newValue = $newPos ? $newPos->pos_name : 'Unknown Position';
+                    }
+                }
+                
+                if ($log->field_changed === 'department_id') {
+                    if ($oldValue) {
+                        $oldDept = Department::find($oldValue);
+                        $oldValue = $oldDept ? ($oldDept->faculty_name ?? $oldDept->name) : 'Unknown';
+                    }
+                    if ($newValue) {
+                        $newDept = Department::find($newValue);
+                        $newValue = $newDept ? ($newDept->faculty_name ?? $newDept->name) : 'Unknown';
+                    }
+                }
+                
+                if ($log->field_changed === 'salary') {
+                    $oldValue = $oldValue ? '₱' . number_format((float)$oldValue, 2) : null;
+                    $newValue = $newValue ? '₱' . number_format((float)$newValue, 2) : null;
+                }
+                
+                return [
+                    'id' => $log->record_id,
+                    'field' => $fieldLabels[$log->field_changed] ?? $log->field_changed,
+                    'field_key' => $log->field_changed,
+                    'old_value' => $oldValue,
+                    'new_value' => $newValue,
+                    'action_date' => $log->action_date ? $log->action_date->format('Y-m-d H:i:s') : null,
+                    'performed_by' => $log->performed_by,
+                ];
+            })->toArray();
+
         return Inertia::render('employees/Profile', [
             'employee' => $employeeData,
+            'employmentHistory' => $employmentHistory,
         ]);
     }
 
