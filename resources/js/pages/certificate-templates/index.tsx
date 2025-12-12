@@ -1,12 +1,13 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { TableToolbar } from '@/components/table-toolbar';
 import { CustomToast, toast } from '@/components/custom-toast';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import { router, Head, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, FileText, Edit, Trash2, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, Eye, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface CertificateTextLayer {
@@ -221,67 +222,95 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
                             </Button>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b">
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Name</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Description</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Dimensions</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Text Layers</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                                        <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {templates.data.map((template) => (
-                                        <tr key={template.id} className="border-b hover:bg-muted/50">
-                                            <td className="px-4 py-3">
-                                                <div className="font-medium">{template.name}</div>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-muted-foreground">
-                                                {template.description || '-'}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm">
-                                                {template.width} × {template.height}px
-                                            </td>
-                                            <td className="px-4 py-3 text-sm">
-                                                {template.text_layers?.length || 0} layers
-                                            </td>
-                                            <td className="px-4 py-3">
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {templates.data.map((template) => {
+                                const backgroundImageUrl = template.background_image_path
+                                    ? `/storage/${template.background_image_path}`
+                                    : null;
+
+                                return (
+                                    <Card key={template.id} className="flex flex-col border shadow-sm">
+                                        <div className="relative">
+                                            <div className="aspect-video bg-muted overflow-hidden">
+                                                {backgroundImageUrl ? (
+                                                    <img
+                                                        src={backgroundImageUrl}
+                                                        alt={`${template.name} preview`}
+                                                        className="h-full w-full object-contain"
+                                                    />
+                                                ) : (
+                                                    <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">
+                                                        No preview available
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="absolute left-3 top-3">
                                                 <Badge variant={template.is_active ? 'default' : 'secondary'}>
                                                     {template.is_active ? 'Active' : 'Inactive'}
                                                 </Badge>
-                                            </td>
-                                            <td className="px-4 py-3">
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-1 flex-col gap-3 p-4">
+                                            <div>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <h3 className="text-lg font-semibold leading-tight line-clamp-2">
+                                                        {template.name}
+                                                    </h3>
+                                                </div>
+                                                {template.description && (
+                                                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                                                        {template.description}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                                                <div>
+                                                    <div className="text-xs uppercase tracking-wide">Dimensions</div>
+                                                    <div className="text-foreground font-medium">
+                                                        {template.width} × {template.height}px
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Layers className="h-4 w-4" />
+                                                    <div className="text-foreground font-medium">
+                                                        {template.text_layers?.length || 0} layers
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-auto flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <Button
-                                                        variant="ghost"
+                                                        variant="outline"
                                                         size="sm"
                                                         onClick={() => router.visit(`/certificate-templates/${template.id}`)}
                                                     >
-                                                        <Eye className="h-4 w-4" />
+                                                        <Eye className="h-4 w-4 mr-1" />
+                                                        Preview
                                                     </Button>
                                                     <Button
-                                                        variant="ghost"
+                                                        variant="outline"
                                                         size="sm"
                                                         onClick={() => router.visit(`/certificate-templates/${template.id}/edit`)}
                                                     >
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleDelete(template)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                        <Edit className="h-4 w-4 mr-1" />
+                                                        Edit
                                                     </Button>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleDelete(template)}
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
