@@ -237,7 +237,7 @@ class DepartmentController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "{$unitLabel} Record Deleted: {$departmentName}",
+                'new_value' => "Soft Deleted: {$departmentName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -337,7 +337,7 @@ class DepartmentController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "{$unitLabel} Record Permanently Deleted: {$departmentName}",
+                'new_value' => "Permanently Deleted: {$departmentName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

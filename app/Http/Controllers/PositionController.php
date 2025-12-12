@@ -222,7 +222,7 @@ class PositionController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Position Record Deleted: {$positionName}",
+                'new_value' => "Soft Deleted: {$positionName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -295,7 +295,7 @@ class PositionController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Position Record Permanently Deleted: {$positionName}",
+                'new_value' => "Permanently Deleted: {$positionName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

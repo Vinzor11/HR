@@ -1686,7 +1686,7 @@ class EmployeeController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Employee Record Soft-Deleted: {$employeeName}",
+                'new_value' => "Soft Deleted: {$employeeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -1753,7 +1753,7 @@ class EmployeeController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Employee Record Permanently Deleted: {$employeeName}",
+                'new_value' => "Permanently Deleted: {$employeeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

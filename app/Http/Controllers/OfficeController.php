@@ -207,7 +207,7 @@ class OfficeController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Office Record Deleted: {$officeName}",
+                'new_value' => "Soft Deleted: {$officeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -290,7 +290,7 @@ class OfficeController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Office Record Permanently Deleted: {$officeName}",
+                'new_value' => "Permanently Deleted: {$officeName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

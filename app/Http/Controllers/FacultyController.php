@@ -202,7 +202,7 @@ class FacultyController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Faculty Record Deleted: {$facultyName}",
+                'new_value' => "Soft Deleted: {$facultyName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);
@@ -275,7 +275,7 @@ class FacultyController extends Controller
                 'action_type' => 'DELETE',
                 'field_changed' => null,
                 'old_value' => null,
-                'new_value' => "Faculty Record Permanently Deleted: {$facultyName}",
+                'new_value' => "Permanently Deleted: {$facultyName}",
                 'action_date' => now(),
                 'performed_by' => auth()->user()?->name ?? 'System',
             ]);

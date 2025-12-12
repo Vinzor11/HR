@@ -169,13 +169,12 @@ class UserController extends Controller
                 $user->delete(); // Soft delete
                 
                 // Log user soft deletion
-                $user->refresh();
                 UserAuditLog::create([
                     'user_id' => $userId,
                     'action_type' => 'DELETE',
                     'field_changed' => null,
                     'old_value' => null,
-                    'new_value' => "User Record Soft-Deleted: {$userName}",
+                    'new_value' => "Soft Deleted: {$userName}",
                     'action_date' => now(),
                     'performed_by' => Auth::user()->name ?? 'System',
                 ]);
@@ -188,7 +187,7 @@ class UserController extends Controller
                     'action_type' => 'DELETE',
                     'field_changed' => null,
                     'old_value' => null,
-                    'new_value' => "User Record Permanently Deleted: {$userName}",
+                    'new_value' => "Permanently Deleted: {$userName}",
                     'action_date' => now(),
                     'performed_by' => Auth::user()->name ?? 'System',
                 ]);
@@ -247,7 +246,7 @@ class UserController extends Controller
             'action_type' => 'DELETE',
             'field_changed' => null,
             'old_value' => null,
-            'new_value' => "User Record Permanently Deleted: {$userName}",
+            'new_value' => "Permanently Deleted: {$userName}",
             'action_date' => now(),
             'performed_by' => Auth::user()->name ?? 'System',
         ]);

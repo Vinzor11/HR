@@ -658,8 +658,24 @@ export function CertificateTemplateEditor({
 
     const handleDragStart = (event: DragStartEvent) => {
         setActiveId(event.active.id as string);
-        // Don't track drag start position - we'll use the mouse position directly on drop
-        setDragStartPos(null);
+        
+        // Track the starting position in canvas coordinates for accurate calculation
+        const activeData = event.active.data.current as { type?: string; layer?: TextLayer };
+        if (activeData.type === 'layer' && activeData.layer) {
+            // Get the CURRENT layer state from textLayers (not stale data)
+            const currentLayer = textLayers.find(l => l.id === activeData.layer?.id);
+            if (currentLayer) {
+                setDragStartPos({
+                    layerId: currentLayer.id,
+                    x: currentLayer.x_position,
+                    y: currentLayer.y_position,
+                    mouseX: 0,
+                    mouseY: 0,
+                });
+            }
+        } else {
+            setDragStartPos(null);
+        }
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
@@ -672,25 +688,33 @@ export function CertificateTemplateEditor({
 
         // Handle dragging existing layers - use delta for accurate positioning
         if (activeData.type === 'layer' && activeData.layer) {
-            const layer = activeData.layer;
+            const layerId = activeData.layer.id;
+            
+            // Use the starting position we tracked (not the stale layer data)
+            // This ensures we use the position as it was when drag started
+            const startPos = dragStartPos?.layerId === layerId 
+                ? { x: dragStartPos.x, y: dragStartPos.y }
+                : { x: activeData.layer.x_position, y: activeData.layer.y_position };
             
             // Calculate new position using the drag delta
             // Delta is in screen pixels, so we need to convert to canvas coordinates
             const deltaInCanvasX = delta.x / effectiveScale;
             const deltaInCanvasY = delta.y / effectiveScale;
             
-            // New position = original position + delta
-            let newX = layer.x_position + deltaInCanvasX;
-            let newY = layer.y_position + deltaInCanvasY;
+            // New position = starting position + delta (in canvas coordinates)
+            let newX = startPos.x + deltaInCanvasX;
+            let newY = startPos.y + deltaInCanvasY;
             
             // Clamp to canvas bounds
             newX = Math.max(0, Math.min(newX, width));
             newY = Math.max(0, Math.min(newY, height));
             
-            updateLayer(layer.id, {
+            updateLayer(layerId, {
                 x_position: Math.round(newX), // Round for pixel-perfect positioning
                 y_position: Math.round(newY),
             });
+            
+            setDragStartPos(null);
             return;
         }
 
@@ -743,6 +767,8 @@ export function CertificateTemplateEditor({
                 onTextLayersChange([...textLayers, newLayer]);
             }
         }
+        
+        setDragStartPos(null);
     };
 
     const selectedLayer = textLayers.find((l) => l.id === selectedLayerId);
