@@ -184,6 +184,13 @@ export function CertificateTemplateEditor({
     const [dragStartPos, setDragStartPos] = useState<{ layerId: string; x: number; y: number; mouseX: number; mouseY: number } | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Ref to always have the latest textLayers (avoids stale closure issues)
+    const textLayersRef = useRef(textLayers);
+    textLayersRef.current = textLayers;
+    
+    // Ref to always have the latest effectiveScale
+    const effectiveScaleRef = useRef(1);
 
     // Configure sensors for drag and drop - lower distance for better accuracy
     const sensors = useSensors(
@@ -627,6 +634,7 @@ export function CertificateTemplateEditor({
 
     // Effective scale combines auto-fit scale with user zoom
     const effectiveScale = canvasScale * userZoom;
+    effectiveScaleRef.current = effectiveScale;
 
     const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!canvasRef.current) return;
@@ -662,8 +670,8 @@ export function CertificateTemplateEditor({
         // Track the starting position in canvas coordinates for accurate calculation
         const activeData = event.active.data.current as { type?: string; layer?: TextLayer };
         if (activeData.type === 'layer' && activeData.layer) {
-            // Get the CURRENT layer state from textLayers (not stale data)
-            const currentLayer = textLayers.find(l => l.id === activeData.layer?.id);
+            // Get the CURRENT layer state from textLayersRef (always up-to-date)
+            const currentLayer = textLayersRef.current.find(l => l.id === activeData.layer?.id);
             if (currentLayer) {
                 setDragStartPos({
                     layerId: currentLayer.id,
@@ -686,22 +694,25 @@ export function CertificateTemplateEditor({
 
         const activeData = active.data.current as { type?: string; fieldKey?: string; layer?: TextLayer };
 
-        // Handle dragging existing layers - use delta for accurate positioning
+        // Handle dragging existing layers
         if (activeData.type === 'layer' && activeData.layer) {
             const layerId = activeData.layer.id;
             
-            // Use the starting position we tracked (not the stale layer data)
-            // This ensures we use the position as it was when drag started
+            // Get the starting position we tracked at drag start
+            // This is critical for accurate positioning at any zoom level
             const startPos = dragStartPos?.layerId === layerId 
                 ? { x: dragStartPos.x, y: dragStartPos.y }
                 : { x: activeData.layer.x_position, y: activeData.layer.y_position };
             
-            // Calculate new position using the drag delta
-            // Delta is in screen pixels, so we need to convert to canvas coordinates
-            const deltaInCanvasX = delta.x / effectiveScale;
-            const deltaInCanvasY = delta.y / effectiveScale;
+            // Use effectiveScaleRef to get the current scale (avoids stale closure)
+            const currentScale = effectiveScaleRef.current;
             
-            // New position = starting position + delta (in canvas coordinates)
+            // Delta is in screen pixels, convert to canvas coordinates
+            // At 200% zoom, moving 100 screen pixels = 50 canvas pixels
+            const deltaInCanvasX = delta.x / currentScale;
+            const deltaInCanvasY = delta.y / currentScale;
+            
+            // New position = starting canvas position + delta in canvas coordinates
             let newX = startPos.x + deltaInCanvasX;
             let newY = startPos.y + deltaInCanvasY;
             
@@ -710,7 +721,7 @@ export function CertificateTemplateEditor({
             newY = Math.max(0, Math.min(newY, height));
             
             updateLayer(layerId, {
-                x_position: Math.round(newX), // Round for pixel-perfect positioning
+                x_position: Math.round(newX),
                 y_position: Math.round(newY),
             });
             
@@ -739,9 +750,10 @@ export function CertificateTemplateEditor({
                     const relativeX = finalMouseX - containerBounds.left;
                     const relativeY = finalMouseY - containerBounds.top;
                     
-                    // Convert to canvas coordinates
-                    x = relativeX / effectiveScale;
-                    y = relativeY / effectiveScale;
+                    // Convert to canvas coordinates using current scale
+                    const currentScale = effectiveScaleRef.current;
+                    x = relativeX / currentScale;
+                    y = relativeY / currentScale;
                     
                     // Clamp to valid bounds
                     x = Math.max(0, Math.min(x, width));
