@@ -1462,23 +1462,23 @@ class EmployeeController extends Controller
                 
                 if ($log->field_changed === 'position_id') {
                     if ($oldValue) {
-                        $oldPos = Position::find($oldValue);
-                        $oldValue = $oldPos ? $oldPos->pos_name : 'Unknown Position';
+                        $oldPos = Position::withTrashed()->find($oldValue);
+                        $oldValue = $oldPos ? ($oldPos->pos_name ?? $oldPos->name ?? 'Unknown Position') : 'Unknown Position';
                     }
                     if ($newValue) {
-                        $newPos = Position::find($newValue);
-                        $newValue = $newPos ? $newPos->pos_name : 'Unknown Position';
+                        $newPos = Position::withTrashed()->find($newValue);
+                        $newValue = $newPos ? ($newPos->pos_name ?? $newPos->name ?? 'Unknown Position') : 'Unknown Position';
                     }
                 }
                 
                 if ($log->field_changed === 'department_id') {
                     if ($oldValue) {
-                        $oldDept = Department::find($oldValue);
-                        $oldValue = $oldDept ? ($oldDept->faculty_name ?? $oldDept->name) : 'Unknown';
+                        $oldDept = Department::withTrashed()->find($oldValue);
+                        $oldValue = $oldDept ? ($oldDept->faculty_name ?? $oldDept->name ?? 'Unknown') : 'Unknown';
                     }
                     if ($newValue) {
-                        $newDept = Department::find($newValue);
-                        $newValue = $newDept ? ($newDept->faculty_name ?? $newDept->name) : 'Unknown';
+                        $newDept = Department::withTrashed()->find($newValue);
+                        $newValue = $newDept ? ($newDept->faculty_name ?? $newDept->name ?? 'Unknown') : 'Unknown';
                     }
                 }
                 

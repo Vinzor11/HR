@@ -277,33 +277,33 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
                                             
                                             {/* Actions */}
                                             <div className="flex items-center gap-2 pt-2 border-t">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
                                                     className="flex-1"
-                                                    onClick={() => router.visit(`/certificate-templates/${template.id}`)}
-                                                >
+                                                        onClick={() => router.visit(`/certificate-templates/${template.id}`)}
+                                                    >
                                                     <Eye className="h-4 w-4 mr-2" />
                                                     View
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
                                                     className="flex-1"
-                                                    onClick={() => router.visit(`/certificate-templates/${template.id}/edit`)}
-                                                >
+                                                        onClick={() => router.visit(`/certificate-templates/${template.id}/edit`)}
+                                                    >
                                                     <Edit className="h-4 w-4 mr-2" />
                                                     Edit
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleDelete(template)}
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleDelete(template)}
                                                     className="text-destructive hover:text-destructive"
-                                                >
+                                                    >
                                                     <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
+                                                    </Button>
+                                                </div>
                                         </div>
                                     </Card>
                                 );

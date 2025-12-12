@@ -184,7 +184,7 @@ export function CertificateTemplateEditor({
     const [dragStartPos, setDragStartPos] = useState<{ layerId: string; x: number; y: number; mouseX: number; mouseY: number } | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    
+
     // Ref to always have the latest textLayers (avoids stale closure issues)
     const textLayersRef = useRef(textLayers);
     textLayersRef.current = textLayers;
@@ -682,7 +682,7 @@ export function CertificateTemplateEditor({
                 });
             }
         } else {
-            setDragStartPos(null);
+        setDragStartPos(null);
         }
     };
 
