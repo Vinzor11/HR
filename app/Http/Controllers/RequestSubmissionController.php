@@ -164,6 +164,12 @@ class RequestSubmissionController extends Controller
         $requestType->load(['fields' => fn ($query) => $query->orderBy('sort_order')]);
 
         $rules = $this->buildDynamicRules($requestType);
+        
+        // Add Leave Request specific validations
+        if ($requestType->name === 'Leave Request') {
+            $this->addLeaveRequestValidations($rules, $request);
+        }
+        
         $validated = $request->validate($rules);
 
         if ($requestType->name === 'Leave Request') {
@@ -487,10 +493,67 @@ class RequestSubmissionController extends Controller
                     break;
             }
 
+            // Special validation for leave_type field in Leave Request
+            if ($requestType->name === 'Leave Request' && $field->field_key === 'leave_type' && !empty($fieldRules)) {
+                // Add validation to ensure leave type exists and is active
+                $fieldRules[] = Rule::exists('leave_types', 'code')
+                    ->where('is_active', true);
+            }
+
             $rules[$key] = $fieldRules;
         }
 
         return $rules;
+    }
+
+    protected function addLeaveRequestValidations(array &$rules, Request $request): void
+    {
+        $answers = $request->input('answers', []);
+        $leaveType = data_get($answers, 'leave_type');
+        $startDate = data_get($answers, 'start_date');
+        $endDate = data_get($answers, 'end_date');
+
+        // Validate date range - end_date must be after or equal to start_date
+        if ($startDate && $endDate) {
+            $rules['answers.end_date'][] = function ($attribute, $value, $fail) use ($startDate) {
+                try {
+                    $start = Carbon::parse($startDate);
+                    $end = Carbon::parse($value);
+                    if ($end->lt($start)) {
+                        $fail('The end date must be after or equal to the start date.');
+                    }
+                } catch (\Exception $e) {
+                    // Let date validation handle invalid dates
+                }
+            };
+        }
+
+        // Conditional validation: other_leave_specify is required when leave_type is OTHER
+        if ($leaveType === 'OTHER') {
+            if (isset($rules['answers.other_leave_specify'])) {
+                // Replace nullable with required
+                $rules['answers.other_leave_specify'] = array_map(function($rule) {
+                    return $rule === 'nullable' ? 'required' : $rule;
+                }, $rules['answers.other_leave_specify']);
+                // Ensure string and length validation
+                if (!in_array('string', $rules['answers.other_leave_specify'])) {
+                    $rules['answers.other_leave_specify'][] = 'string';
+                }
+                $rules['answers.other_leave_specify'][] = 'min:3';
+                $rules['answers.other_leave_specify'][] = 'max:255';
+            } else {
+                // Add validation if field exists in form
+                $rules['answers.other_leave_specify'] = ['required', 'string', 'min:3', 'max:255'];
+            }
+        }
+
+        // Validate total_days if provided
+        if (isset($rules['answers.total_days'])) {
+            if (!in_array('numeric', $rules['answers.total_days'])) {
+                $rules['answers.total_days'][] = 'numeric';
+            }
+            $rules['answers.total_days'][] = 'min:0.5';
+        }
     }
 
     protected function assertSufficientLeaveBalance(Request $request, RequestType $requestType): void
@@ -515,11 +578,14 @@ class RequestSubmissionController extends Controller
             return;
         }
 
-        $leaveType = LeaveType::where('code', $leaveTypeCode)->first();
+        // Check if leave type exists and is active
+        $leaveType = LeaveType::where('code', $leaveTypeCode)
+            ->where('is_active', true)
+            ->first();
 
         if (!$leaveType) {
             throw ValidationException::withMessages([
-                'answers.leave_type' => 'Selected leave type is invalid.',
+                'answers.leave_type' => 'Selected leave type is invalid or inactive. Please select a valid leave type.',
             ]);
         }
 
@@ -534,12 +600,43 @@ class RequestSubmissionController extends Controller
 
         $days = $this->leaveService->calculateWorkingDays($start, $end);
 
-        if (!$this->leaveService->hasSufficientBalance($employeeId, $leaveType->id, $days)) {
-            $balance = LeaveBalance::getCurrentYearBalance($employeeId, $leaveType->id);
+        // For special leaves that don't use credits, skip balance check
+        // But still validate max days per request if set
+        if ($leaveType->is_special_leave && !$leaveType->uses_credits_from) {
+            // Check max days per request if applicable
+            if ($leaveType->max_days_per_request !== null && $days > $leaveType->max_days_per_request) {
+                throw ValidationException::withMessages([
+                    'answers.total_days' => "Maximum {$leaveType->max_days_per_request} day(s) allowed for {$leaveType->name}.",
+                ]);
+            }
+            return; // Special leaves don't require balance checks
+        }
+
+        // For credit-based leaves (VL, SL, FL), check balance
+        // FL uses VL credits, so check the source type
+        $sourceLeaveType = $leaveType;
+        if ($leaveType->uses_credits_from) {
+            $sourceLeaveType = LeaveType::where('code', $leaveType->uses_credits_from)->first();
+            if (!$sourceLeaveType) {
+                throw ValidationException::withMessages([
+                    'answers.leave_type' => 'Leave type configuration error. Please contact HR.',
+                ]);
+            }
+        }
+
+        if (!$this->leaveService->hasSufficientBalance($employeeId, $sourceLeaveType->id, $days)) {
+            $balance = LeaveBalance::getCurrentYearBalance($employeeId, $sourceLeaveType->id);
             $available = $balance ? (float) $balance->balance : 0;
 
             throw ValidationException::withMessages([
-                'answers.leave_type' => "Insufficient leave balance. Only {$available} day(s) available.",
+                'answers.leave_type' => "Insufficient {$sourceLeaveType->name} balance. Only {$available} day(s) available.",
+            ]);
+        }
+
+        // Check max days per request if applicable
+        if ($leaveType->max_days_per_request !== null && $days > $leaveType->max_days_per_request) {
+            throw ValidationException::withMessages([
+                'answers.total_days' => "Maximum {$leaveType->max_days_per_request} day(s) allowed per request for {$leaveType->name}.",
             ]);
         }
     }

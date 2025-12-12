@@ -222,89 +222,86 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
                             </Button>
                         </div>
                     ) : (
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {templates.data.map((template) => {
-                                const backgroundImageUrl = template.background_image_path
-                                    ? `/storage/${template.background_image_path}`
+                                const imageUrl = template.background_image_path
+                                    ? (template.background_image_path.startsWith('/')
+                                        ? template.background_image_path
+                                        : `/storage/${template.background_image_path}`)
                                     : null;
-
+                                
                                 return (
-                                    <Card key={template.id} className="flex flex-col border shadow-sm">
-                                        <div className="relative">
-                                            <div className="aspect-video bg-muted overflow-hidden">
-                                                {backgroundImageUrl ? (
-                                                    <img
-                                                        src={backgroundImageUrl}
-                                                        alt={`${template.name} preview`}
-                                                        className="h-full w-full object-contain"
-                                                    />
-                                                ) : (
-                                                    <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">
-                                                        No preview available
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="absolute left-3 top-3">
+                                    <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-200">
+                                        {/* Preview Image */}
+                                        <div className="relative bg-muted aspect-[4/3] overflow-hidden">
+                                            {imageUrl ? (
+                                                <img
+                                                    src={imageUrl}
+                                                    alt={template.name}
+                                                    className="w-full h-full object-contain"
+                                                />
+                                            ) : (
+                                                <div className="flex items-center justify-center h-full text-muted-foreground">
+                                                    <FileText className="h-16 w-16 opacity-50" />
+                                                </div>
+                                            )}
+                                            {/* Status Badge Overlay */}
+                                            <div className="absolute top-2 right-2">
                                                 <Badge variant={template.is_active ? 'default' : 'secondary'}>
                                                     {template.is_active ? 'Active' : 'Inactive'}
                                                 </Badge>
                                             </div>
                                         </div>
-
-                                        <div className="flex flex-1 flex-col gap-3 p-4">
+                                        
+                                        {/* Card Content */}
+                                        <div className="p-4 space-y-3">
                                             <div>
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <h3 className="text-lg font-semibold leading-tight line-clamp-2">
-                                                        {template.name}
-                                                    </h3>
-                                                </div>
+                                                <h3 className="font-semibold text-lg line-clamp-1">{template.name}</h3>
                                                 {template.description && (
-                                                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                                                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
                                                         {template.description}
                                                     </p>
                                                 )}
                                             </div>
-
-                                            <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                                                <div>
-                                                    <div className="text-xs uppercase tracking-wide">Dimensions</div>
-                                                    <div className="text-foreground font-medium">
-                                                        {template.width} × {template.height}px
-                                                    </div>
+                                            
+                                            {/* Template Info */}
+                                            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                                <div className="flex items-center gap-1">
+                                                    <Layers className="h-3 w-3" />
+                                                    <span>{template.text_layers?.length || 0} layers</span>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Layers className="h-4 w-4" />
-                                                    <div className="text-foreground font-medium">
-                                                        {template.text_layers?.length || 0} layers
-                                                    </div>
+                                                <div className="flex items-center gap-1">
+                                                    <span>{template.width} × {template.height}px</span>
                                                 </div>
                                             </div>
-
-                                            <div className="mt-auto flex items-center justify-between gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => router.visit(`/certificate-templates/${template.id}`)}
-                                                    >
-                                                        <Eye className="h-4 w-4 mr-1" />
-                                                        Preview
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => router.visit(`/certificate-templates/${template.id}/edit`)}
-                                                    >
-                                                        <Edit className="h-4 w-4 mr-1" />
-                                                        Edit
-                                                    </Button>
-                                                </div>
+                                            
+                                            {/* Actions */}
+                                            <div className="flex items-center gap-2 pt-2 border-t">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    onClick={() => router.visit(`/certificate-templates/${template.id}`)}
+                                                >
+                                                    <Eye className="h-4 w-4 mr-2" />
+                                                    View
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    onClick={() => router.visit(`/certificate-templates/${template.id}/edit`)}
+                                                >
+                                                    <Edit className="h-4 w-4 mr-2" />
+                                                    Edit
+                                                </Button>
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleDelete(template)}
+                                                    className="text-destructive hover:text-destructive"
                                                 >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                    <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
                                         </div>

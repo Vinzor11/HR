@@ -371,6 +371,30 @@ class LeaveTypeSeeder extends Seeder
                 'legal_basis' => 'CSC MC No. 41, s. 1998',
                 'commutation_applicable' => true,
             ],
+            // 15. Others (catch-all for unlisted leave types)
+            [
+                'name' => 'Other Leave',
+                'code' => 'OTHER',
+                'description' => 'Other leave types not covered by standard categories. Specify details in the application.',
+                'color' => '#71717a', // Zinc
+                'requires_approval' => true,
+                'requires_medical_certificate' => false,
+                'max_days_per_request' => null,
+                'max_days_per_year' => null,
+                'min_notice_days' => 0,
+                'can_carry_over' => false,
+                'max_carry_over_days' => null,
+                'is_paid' => true,
+                'is_active' => true,
+                'sort_order' => 15,
+                'gender_restriction' => 'all',
+                'uses_credits_from' => null,
+                'is_monetizable' => false,
+                'is_special_leave' => true,
+                'required_document' => null,
+                'legal_basis' => null,
+                'commutation_applicable' => false,
+            ],
         ];
 
         foreach ($leaveTypes as $leaveType) {
