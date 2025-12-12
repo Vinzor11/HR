@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import EmployeeDocuments from '@/components/EmployeeDocuments';
 import { useState, useEffect, useRef } from 'react';
 import {
   User,
@@ -236,6 +237,7 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
     { id: 'other-information', label: 'Other Information', icon: FileText, show: hasOtherInformation },
     { id: 'questionnaire', label: 'Questionnaire', icon: FileText, show: hasQuestionnaire },
     { id: 'references', label: 'References', icon: UserCircle, show: hasReferences },
+    { id: 'documents', label: 'Employee Documents', icon: FileText, show: true },
   ].filter((link) => link.show);
 
   const scrollToSection = (id: string) => {
@@ -1153,6 +1155,23 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
                 </CardContent>
               </Card>
             )}
+
+            {/* Documents */}
+            <div className="col-span-1 lg:col-span-2 xl:col-span-3">
+              <Card id="documents">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                      <FileText className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <CardTitle className="text-xl">Employee Documents</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <EmployeeDocuments employee={employee} />
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* Right Column - Quick Stats */}

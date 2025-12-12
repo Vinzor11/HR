@@ -149,4 +149,9 @@ class Employee extends Model
     {
         return $this->hasMany(EmployeeAuditLog::class, 'employee_id', 'id')->orderBy('action_date', 'desc');
     }
+
+    public function documents()
+    {
+        return $this->hasMany(EmployeeDocument::class)->orderBy('created_at', 'desc');
+    }
 }

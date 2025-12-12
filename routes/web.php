@@ -17,6 +17,7 @@ use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\OrganizationalLogController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\CertificateTemplateController;
+use App\Http\Controllers\EmployeeDocumentController;
 
 // Simple test route to check if Laravel is working
 Route::get('/test', function () {
@@ -93,6 +94,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/positions/{id}/restore', [PositionController::class, 'restore'])->name('positions.restore')->middleware('permission:restore-position');
     Route::delete('/positions/{id}/force-delete', [PositionController::class, 'forceDelete'])->name('positions.force-delete')->middleware('permission:force-delete-position');
     Route::resource('employees', EmployeeController::class)->middleware('permission:access-employees-module');
+    Route::get('employees/{employee}/documents', [EmployeeDocumentController::class, 'index'])->name('employees.documents.index')->middleware('permission:access-employees-module');
+    Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store'])->name('employees.documents.store')->middleware('permission:access-employees-module');
+    Route::get('employees/{employee}/documents/{document}/download', [EmployeeDocumentController::class, 'download'])->name('employees.documents.download')->middleware('permission:access-employees-module');
+    Route::delete('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy'])->name('employees.documents.destroy')->middleware('permission:access-employees-module');
     Route::resource('permissions', PermissionController::class)->middleware('permission:access-permissions-module');
     Route::resource('roles', RoleController::class)->middleware('permission:access-roles-module');
     Route::resource('users', UserController::class)->middleware('permission:access-users-module');

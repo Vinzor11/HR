@@ -13,15 +13,17 @@ return new class extends Migration
     {
         Schema::create('employee_documents', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('employee_id')->constrained('employees')->onDelete('cascade');
+            $table->string('employee_id', 15);
             $table->string('title');
             $table->string('filename');
             $table->string('original_filename');
             $table->string('file_path');
             $table->string('mime_type');
             $table->unsignedBigInteger('file_size');
-            $table->foreignId('uploaded_by')->constrained('users')->onDelete('cascade');
+            $table->unsignedBigInteger('uploaded_by');
             $table->timestamps();
+            $table->foreign('employee_id')->references('id')->on('employees')->onDelete('cascade');
+            $table->foreign('uploaded_by')->references('id')->on('users')->onDelete('cascade');
         });
     }
 
