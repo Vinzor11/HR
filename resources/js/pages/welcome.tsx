@@ -11,9 +11,12 @@ export default function Welcome() {
                 <link rel="preconnect" href="https://fonts.bunny.net" />
                 <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
             </Head>
-            <div className="flex min-h-screen flex-col items-center bg-[#FDFDFC] p-6 text-[#1b1b18] lg:justify-center lg:p-8 dark:bg-[#0a0a0a]">
-                <header className="mb-6 w-full max-w-[335px] text-sm not-has-[nav]:hidden lg:max-w-4xl">
-                    <nav className="flex items-center justify-end gap-4">
+            <div className="flex min-h-screen flex-col items-center bg-cover bg-[center_top] bg-no-repeat text-[#1b1b18] lg:justify-center relative" style={{backgroundImage: 'url("/images/welcome-essu.png")'}}>
+                <div className="absolute inset-0 bg-white/60 dark:bg-black/50"></div>
+
+                {/* Top right navigation */}
+                <header className="absolute top-4 right-4 z-20 text-sm">
+                    <nav className="flex items-center gap-4">
                         {auth.user ? (
                             <Link href={route('dashboard')} className={buttonVariants({ size: 'sm' })}>
                                 Dashboard
@@ -30,31 +33,95 @@ export default function Welcome() {
                         )}
                     </nav>
                 </header>
-                <div className="flex w-full items-center justify-center opacity-100 transition-opacity duration-750 lg:grow starting:opacity-0">
-                    <main className="flex w-full max-w-[335px] flex-col-reverse lg:max-w-4xl lg:flex-row">
-                        <div className="flex-1 rounded-br-lg rounded-bl-lg bg-white p-6 pb-12 text-[13px] leading-[20px] shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] lg:rounded-tl-lg lg:rounded-br-none lg:p-20 dark:bg-[#161615] dark:text-[#EDEDEC] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d]">
-                            <div>
-                                <h1 className="mb-4 font-medium text-3xl text-[#118d0b]">VISION</h1>
-                                <p className="mb-6 leading-relaxed text-black dark:text-[#EDEDEC]">
-                                    A technologically-advanced university producing professionals and competitive leaders for local and national development.
-                                </p>
-                                <h1 className="mb-4 font-medium text-3xl text-[#118d0b]">MISSION</h1>
-                                <p className="leading-relaxed text-black dark:text-[#EDEDEC]">
-                                    To provide quality education responsive to the national and global needs focused on generating knowledge and technology that will improve the lives of the people.
-                                </p>
-                            </div>
+
+                <div className="relative z-10 flex w-full flex-col items-center">
+                <div className="flex w-full items-center justify-center opacity-100 transition-opacity duration-750 lg:grow pt-68 starting:opacity-0">
+                    <main className="w-full max-w-6xl px-6">
+                        {/* Main Heading */}
+                        <div className="text-center mb-28">
+                            <h1 className="text-4xl lg:text-6xl font-black text-white mb-6 drop-shadow-2xl" style={{textShadow: '0 0 20px rgba(17,141,11,0.8), 0 0 40px rgba(17,141,11,0.6), 2px 2px 4px rgba(17,141,11,0.9)'}}>
+                                One platform, many connections.
+                            </h1>
+                            <p className="text-xl lg:text-2xl text-white font-semibold drop-shadow-xl max-w-4xl mx-auto" style={{textShadow: '0 0 15px rgba(0,0,0,0.8), 1px 1px 3px rgba(0,0,0,0.9)'}}>
+                                Discover all the systems linked to our ERP that make your work faster, smarter, and easier.
+                            </p>
                         </div>
-                        <div className="relative -mb-px aspect-[335/376] w-full shrink-0 overflow-hidden rounded-t-lg bg-[#fff2f2] lg:mb-0 lg:-ml-px lg:aspect-auto lg:w-[438px] lg:rounded-t-none lg:rounded-r-lg dark:bg-[#1D0002]">
-                            <img
-                                src="/images/essy.png"
-                                alt="Eastern Samar State University"
-                                className="w-full h-full object-contain translate-y-0 opacity-100 transition-all duration-750 starting:translate-y-6 starting:opacity-0"
-                            />
-                            <div className="absolute inset-0 rounded-t-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] lg:rounded-t-none lg:rounded-r-lg dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d]" />
+
+                        {/* System Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <a
+                                href="https://infirmary.great-site.net"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:bg-white/20 hover:scale-105 transition-all duration-300"
+                            >
+                                <div className="text-center">
+                                    <div className="w-16 h-16 bg-[#118d0b] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-[#0f7a0a] transition-colors">
+                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">Infirmary System</h3>
+                                    <p className="text-white/80 text-sm">Healthcare management and patient care</p>
+                                </div>
+                            </a>
+
+                            <a
+                                href="https://essu-inventory-system.vercel.app/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:bg-white/20 hover:scale-105 transition-all duration-300"
+                            >
+                                <div className="text-center">
+                                    <div className="w-16 h-16 bg-[#118d0b] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-[#0f7a0a] transition-colors">
+                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">Inventory System</h3>
+                                    <p className="text-white/80 text-sm">Asset and resource management</p>
+                                </div>
+                            </a>
+
+                            <a
+                                href="https://management.fwh.is"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:bg-white/20 hover:scale-105 transition-all duration-300"
+                            >
+                                <div className="text-center">
+                                    <div className="w-16 h-16 bg-[#118d0b] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-[#0f7a0a] transition-colors">
+                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">Maintenance System</h3>
+                                    <p className="text-white/80 text-sm">Facility and equipment maintenance</p>
+                                </div>
+                            </a>
+
+                            <a
+                                href="https://erp-rms.42web.io"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:bg-white/20 hover:scale-105 transition-all duration-300"
+                            >
+                                <div className="text-center">
+                                    <div className="w-16 h-16 bg-[#118d0b] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-[#0f7a0a] transition-colors">
+                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">Research System</h3>
+                                    <p className="text-white/80 text-sm">Research management and collaboration</p>
+                                </div>
+                            </a>
                         </div>
                     </main>
                 </div>
                 <div className="hidden h-14.5 lg:block"></div>
+                </div>
             </div>
         </>
     );
