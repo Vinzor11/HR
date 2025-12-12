@@ -35,7 +35,7 @@ export default function Welcome() {
                 </header>
 
                 <div className="relative z-10 flex w-full flex-col items-center">
-                <div className="flex w-full items-center justify-center opacity-100 transition-opacity duration-750 lg:grow pt-68 starting:opacity-0">
+                <div className="flex w-full items-center justify-center opacity-100 transition-opacity duration-750 lg:grow pt-12 starting:opacity-0">
                     <main className="w-full max-w-6xl px-6">
                         {/* Main Heading */}
                         <div className="text-center mb-28">
