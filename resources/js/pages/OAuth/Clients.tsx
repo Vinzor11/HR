@@ -20,7 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Plus, Key, Copy, CheckCircle2, Eye, Trash2 } from 'lucide-react';
+import { Plus, Key, Copy, CheckCircle2, Eye, Trash2, Edit } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { router } from '@inertiajs/react';
@@ -39,6 +39,7 @@ interface Client {
     id: string;
     name: string;
     redirect: string;
+    post_logout_redirect: string;
     created_at: string;
 }
 
@@ -69,6 +70,7 @@ export default function Clients({ clients }: ClientsProps) {
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         redirect: '',
+        post_logout_redirect: '',
         type: 'other',
     });
 
@@ -177,6 +179,22 @@ export default function Clients({ clients }: ClientsProps) {
                                         {errors.redirect && (
                                             <p className="text-sm text-destructive">{errors.redirect}</p>
                                         )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="post_logout_redirect">Post-Logout Redirect URI (Optional)</Label>
+                                        <Input
+                                            id="post_logout_redirect"
+                                            type="url"
+                                            value={data.post_logout_redirect}
+                                            onChange={(e) => setData('post_logout_redirect', e.target.value)}
+                                            placeholder="https://example.com/logged-out"
+                                        />
+                                        {errors.post_logout_redirect && (
+                                            <p className="text-sm text-destructive">{errors.post_logout_redirect}</p>
+                                        )}
+                                        <p className="text-xs text-muted-foreground">
+                                            Where users are redirected after SSO logout. Leave empty to redirect to HR home page.
+                                        </p>
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="type">Application Type</Label>
@@ -300,6 +318,14 @@ export default function Clients({ clients }: ClientsProps) {
                                             <Button
                                                 variant="outline"
                                                 size="icon"
+                                                onClick={() => router.visit(`/oauth/clients/${client.id}/edit`)}
+                                                title="Edit Client"
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
                                                 onClick={() => handleView(client)}
                                                 title="View Details"
                                             >
@@ -341,6 +367,12 @@ export default function Clients({ clients }: ClientsProps) {
                                             <Label className="text-xs text-muted-foreground">Redirect URI</Label>
                                             <p className="text-sm break-all">{client.redirect}</p>
                                         </div>
+                                        {client.post_logout_redirect && (
+                                            <div>
+                                                <Label className="text-xs text-muted-foreground">Post-Logout Redirect URI</Label>
+                                                <p className="text-sm break-all">{client.post_logout_redirect}</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -408,6 +440,12 @@ export default function Clients({ clients }: ClientsProps) {
                                 <Label>Redirect URI</Label>
                                 <Input value={viewingClient.redirect} readOnly className="break-all" />
                             </div>
+                            {viewingClient.post_logout_redirect && (
+                                <div className="space-y-2">
+                                    <Label>Post-Logout Redirect URI</Label>
+                                    <Input value={viewingClient.post_logout_redirect} readOnly className="break-all" />
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <Label>Created At</Label>
                                 <Input

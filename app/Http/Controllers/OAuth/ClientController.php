@@ -86,6 +86,81 @@ class ClientController extends Controller
         ]);
     }
 
+    public function edit(Request $request, string $id)
+    {
+        $client = $request->user()->oauthApps()
+            ->where('id', $id)
+            ->where('revoked', false)
+            ->firstOrFail();
+
+        return Inertia::render('OAuth/EditClient', [
+            'client' => [
+                'id' => $client->id,
+                'name' => $client->name,
+                'redirect_uris' => $client->redirect_uris ?? [],
+                'post_logout_redirect_uris' => $this->parseRedirectUris($client->post_logout_redirect_uris),
+            ],
+        ]);
+    }
+
+    public function update(Request $request, string $id)
+    {
+        $client = $request->user()->oauthApps()
+            ->where('id', $id)
+            ->where('revoked', false)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'redirect_uris' => 'required|array',
+            'redirect_uris.*' => 'required|url',
+            'post_logout_redirect_uris' => 'nullable|array',
+            'post_logout_redirect_uris.*' => 'nullable|url',
+        ]);
+
+        // Update client data
+        $client->name = $validated['name'];
+        $client->redirect_uris = $validated['redirect_uris'];
+
+        // Handle post-logout redirect URIs
+        if (!empty($validated['post_logout_redirect_uris'])) {
+            $client->post_logout_redirect_uris = $validated['post_logout_redirect_uris'];
+        } else {
+            $client->post_logout_redirect_uris = null;
+        }
+
+        $client->save();
+
+        return redirect()->route('oauth.clients')->with('success', 'OAuth client updated successfully.');
+    }
+
+    /**
+     * Parse redirect URIs from database format to array
+     */
+    private function parseRedirectUris($uris): array
+    {
+        if (empty($uris)) {
+            return [];
+        }
+
+        // If it's already an array, return it
+        if (is_array($uris)) {
+            return $uris;
+        }
+
+        // If it's a string, try to decode as JSON
+        if (is_string($uris)) {
+            $decoded = json_decode($uris, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+            // If not JSON, treat as single URI
+            return [$uris];
+        }
+
+        return [];
+    }
+
     public function destroy(Request $request, string $id)
     {
         $client = $request->user()->oauthApps()
