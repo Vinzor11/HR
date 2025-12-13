@@ -206,7 +206,7 @@ class AuthenticatedSessionController extends Controller
     {
         try {
             // Find all active tokens for the user
-            $tokens = $this->tokens->findValidTokensForUser($userId);
+            $tokens = $this->tokens->findActive($userId);
 
             foreach ($tokens as $token) {
                 // Revoke the token
