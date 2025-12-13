@@ -221,15 +221,22 @@
             window.location.href = logoutUrl;
         }
 
-        // Handle OAuth callback
-        const urlParams2 = new URLSearchParams(window.location.search);
-        const code = urlParams2.get('code');
-        const state = urlParams2.get('state');
-        const error = urlParams2.get('error');
+        // Handle OAuth callback - execute immediately when page loads
+        (function handleOAuthCallback() {
+            const urlParams2 = new URLSearchParams(window.location.search);
+            const code = urlParams2.get('code');
+            const state = urlParams2.get('state');
+            const error = urlParams2.get('error');
 
-        if (error) {
-            showResult({ error: error, error_description: urlParams2.get('error_description') }, true);
-        } else if (code && state) {
+            if (error) {
+                showResult({ error: error, error_description: urlParams2.get('error_description') }, true);
+                return;
+            }
+
+            if (!code || !state) {
+                return; // No OAuth callback to handle
+            }
+
             // Verify state
             const storedState = sessionStorage.getItem('oauth_state');
             if (state !== storedState) {
@@ -311,7 +318,7 @@
                     details: error,
                 }, true);
             });
-        }
+        })(); // End of OAuth callback handler IIFE
     </script>
 </body>
 </html>
