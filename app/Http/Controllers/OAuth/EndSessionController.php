@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Laravel\Passport\ClientRepository;
 use Laravel\Passport\TokenRepository;
+use Laravel\Passport\Client;
 
 class EndSessionController extends Controller
 {
@@ -39,11 +40,11 @@ class EndSessionController extends Controller
         // Validate post_logout_redirect_uri if provided
         if ($postLogoutRedirectUri) {
             // Check if the URI is registered for any client
-            $client = $this->clients->findForUser(1, 100); // Get all clients
+            $clients = Client::all(); // Get all clients
             $validUri = false;
 
-            foreach ($client as $c) {
-                if (in_array($postLogoutRedirectUri, $c->redirect_uris ?? [])) {
+            foreach ($clients as $client) {
+                if (in_array($postLogoutRedirectUri, $client->redirect_uris ?? [])) {
                     $validUri = true;
                     break;
                 }
