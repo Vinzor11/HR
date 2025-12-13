@@ -127,6 +127,46 @@ if (window.location.pathname === '/logged-out') {
 }
 ```
 
+### Step 5: Register Post-Logout Redirect URIs
+
+**IMPORTANT:** You must register your post-logout redirect URIs in the HR system's OAuth client configuration.
+
+#### Registering Post-Logout Redirect URIs:
+
+1. **Go to HR System OAuth Clients Page:**
+   ```
+   https://hr-production-eaf1.up.railway.app/oauth/clients
+   ```
+
+2. **Edit Your OAuth Client:**
+   - Find your application in the client list
+   - Click "Edit" or view client details
+
+3. **Add Post-Logout Redirect URIs:**
+   In the client edit form, find the **"Post-Logout Redirect URIs"** field and add:
+   ```
+   https://yourapp.com/logged-out
+   https://yourapp.com/login
+   https://yourapp.com/
+   ```
+
+4. **Save Changes:**
+   - Click "Save" to update the client configuration
+   - The system will now validate post-logout redirects against this list
+
+#### Why This Is Required:
+
+- **Security:** Prevents open redirect attacks
+- **Compliance:** Follows OAuth 2.0 and OpenID Connect standards
+- **User Experience:** Ensures proper redirect after logout
+
+#### If You Don't Register URIs:
+
+If post-logout redirect URIs are not registered:
+- SSO logout will still work
+- Users will be redirected to the HR system's home page instead of your app
+- Users will need to manually navigate back to your application
+
 ## 📱 Framework-Specific Examples
 
 ### React Application
@@ -441,6 +481,7 @@ function performSSOLogout() {
 - [ ] Logout button shows for both auth methods
 - [ ] Local tokens cleared before redirect
 - [ ] Correct redirect URL used for each method
+- [ ] Post-logout redirect URIs registered in HR system
 - [ ] Post-logout redirect handled properly
 - [ ] No sensitive data remains in storage
 - [ ] Browser back button doesn't restore session
@@ -542,9 +583,18 @@ const authLogger = {
 
 ### Common Issues
 
-**Problem: User not redirected after SSO logout**
+**Problem: SSO logout doesn't redirect back to my app**
 ```
-Solution: Check that post_logout_redirect_uri is registered in HR system
+Solution: Register post_logout_redirect_uri in HR system OAuth client
+
+Steps:
+1. Go to https://hr-production-eaf1.up.railway.app/oauth/clients
+2. Find and edit your OAuth client
+3. In the "Post-Logout Redirect URIs" field, add your URIs:
+   - https://yourapp.com/logged-out
+   - https://yourapp.com/login
+   - https://yourapp.com/
+4. Save the client configuration
 ```
 
 **Problem: Infinite redirect loops**
@@ -560,6 +610,11 @@ Solution: Use window.location.href instead of fetch/XHR for redirects
 **Problem: State parameter mismatch**
 ```
 Solution: Ensure state is stored in sessionStorage, not localStorage
+```
+
+**Problem: Logout works but redirects to HR home page**
+```
+Solution: Post-logout redirect URI not registered. Register it in OAuth client settings.
 ```
 
 ### Debug Steps
