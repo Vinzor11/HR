@@ -1,9 +1,36 @@
 import { type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { buttonVariants } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
 
 export default function Welcome() {
     const { auth } = usePage<SharedData>().props;
+
+    // Dynamic background based on time
+    const [backgroundImage, setBackgroundImage] = useState('/images/landing-page.png');
+
+    useEffect(() => {
+        const updateBackground = () => {
+            const now = new Date();
+            const hours = now.getHours();
+
+            // 6:00 AM to 5:59 PM (6 to 17) = daytime
+            // 6:00 PM to 5:59 AM (18 to 5) = nighttime
+            if (hours >= 6 && hours < 18) {
+                setBackgroundImage('/images/landing-page.png');
+            } else {
+                setBackgroundImage('/images/landing-page-night.png');
+            }
+        };
+
+        // Set initial background
+        updateBackground();
+
+        // Update every minute to check for time changes
+        const interval = setInterval(updateBackground, 60000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <>
@@ -11,7 +38,7 @@ export default function Welcome() {
                 <link rel="preconnect" href="https://fonts.bunny.net" />
                 <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
             </Head>
-            <div className="flex min-h-screen flex-col items-center bg-cover bg-[center_top] bg-no-repeat text-[#1b1b18] lg:justify-center relative" style={{backgroundImage: 'url("/images/landing-page.png")'}}>
+            <div className="flex min-h-screen flex-col items-center bg-cover bg-[center_top] bg-no-repeat text-[#1b1b18] lg:justify-center relative" style={{backgroundImage: `url("${backgroundImage}")`}}>
                 <div className="absolute inset-0 bg-white/40 dark:bg-black/30"></div>
 
                 {/* Top right navigation */}
