@@ -3,6 +3,7 @@
 use App\Http\Controllers\OAuth\UserInfoController;
 use App\Http\Controllers\OAuth\OpenIdConfigurationController;
 use App\Http\Controllers\OAuth\JwksController;
+use App\Http\Controllers\OAuth\EndSessionController;
 use Laravel\Passport\Http\Controllers\AuthorizationController as PassportAuthorizationController;
 use Laravel\Passport\Http\Controllers\ApproveAuthorizationController as PassportApproveAuthorizationController;
 use Laravel\Passport\Http\Controllers\DenyAuthorizationController as PassportDenyAuthorizationController;
@@ -32,4 +33,12 @@ Route::post('oauth/token', [\Laravel\Passport\Http\Controllers\AccessTokenContro
 Route::middleware(['auth:api'])->group(function () {
     Route::get('oauth/userinfo', [UserInfoController::class, '__invoke']);
 });
+
+// End session endpoint (OpenID Connect RP-initiated logout)
+Route::get('oauth/end-session', [EndSessionController::class, 'endSession'])
+    ->name('oauth.end-session');
+
+// Back-channel logout endpoint (optional)
+Route::post('oauth/back-channel-logout', [EndSessionController::class, 'backChannelLogout'])
+    ->name('oauth.back-channel-logout');
 

@@ -118,6 +118,7 @@
 
         <div>
             <button onclick="login()" id="loginBtn">🔐 Sign in with HR System</button>
+            <button onclick="logout()" id="logoutBtn" style="display: none;">🚪 Logout from HR System</button>
             <button onclick="clearResult()" id="clearBtn">Clear</button>
         </div>
 
@@ -196,6 +197,30 @@
             window.location.href = `${hrSystemUrl}/oauth/authorize?${params}`;
         }
 
+        function logout() {
+            const hrSystemUrl = sessionStorage.getItem('oauth_hr_url');
+
+            if (!hrSystemUrl) {
+                showStatus('No active session found', 'error');
+                return;
+            }
+
+            showStatus('Logging out from HR system...', 'info');
+
+            // Use OpenID Connect RP-initiated logout
+            const logoutUrl = `${hrSystemUrl}/oauth/end-session`;
+
+            // Clear stored tokens
+            sessionStorage.removeItem('oauth_access_token');
+            sessionStorage.removeItem('oauth_refresh_token');
+
+            // Hide logout button
+            document.getElementById('logoutBtn').style.display = 'none';
+
+            // Redirect to end session endpoint
+            window.location.href = logoutUrl;
+        }
+
         // Handle OAuth callback
         const urlParams2 = new URLSearchParams(window.location.search);
         const code = urlParams2.get('code');
@@ -259,6 +284,13 @@
                         return response.json();
                     })
                     .then(userInfo => {
+                        // Store tokens for logout
+                        sessionStorage.setItem('oauth_access_token', tokenData.access_token);
+                        sessionStorage.setItem('oauth_refresh_token', tokenData.refresh_token);
+
+                        // Show logout button
+                        document.getElementById('logoutBtn').style.display = 'inline-block';
+
                         showResult({
                             message: 'Login successful!',
                             token_data: {

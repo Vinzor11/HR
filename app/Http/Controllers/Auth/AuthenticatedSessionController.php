@@ -9,11 +9,15 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Laravel\Passport\TokenRepository;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class AuthenticatedSessionController extends Controller
 {
+    public function __construct(
+        protected TokenRepository $tokens
+    ) {}
     /**
      * Show the login page.
      */
@@ -181,9 +185,39 @@ class AuthenticatedSessionController extends Controller
 
         Auth::guard('web')->logout();
 
+        // Revoke all OAuth access tokens for this user
+        if ($user) {
+            $this->revokeUserTokens($user->id);
+        }
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    /**
+     * Revoke all active access tokens for a user
+     *
+     * @param int $userId
+     * @return void
+     */
+    protected function revokeUserTokens(int $userId): void
+    {
+        try {
+            // Find all active tokens for the user
+            $tokens = $this->tokens->findValidTokensForUser($userId);
+
+            foreach ($tokens as $token) {
+                // Revoke the token
+                $token->revoke();
+            }
+        } catch (\Exception $e) {
+            // Log error but don't fail the logout
+            \Illuminate\Support\Facades\Log::error('Failed to revoke user tokens during logout', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

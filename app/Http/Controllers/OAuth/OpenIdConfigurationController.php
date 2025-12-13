@@ -16,6 +16,7 @@ class OpenIdConfigurationController extends Controller
             'authorization_endpoint' => $baseUrl . '/oauth/authorize',
             'token_endpoint' => $baseUrl . '/oauth/token',
             'userinfo_endpoint' => $baseUrl . '/oauth/userinfo',
+            'end_session_endpoint' => $baseUrl . '/oauth/end-session',
             'jwks_uri' => $baseUrl . '/.well-known/jwks.json',
             'response_types_supported' => ['code'],
             'subject_types_supported' => ['public'],
