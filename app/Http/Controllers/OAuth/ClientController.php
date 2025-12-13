@@ -27,7 +27,7 @@ class ClientController extends Controller
                 'id' => $client->id,
                 'name' => $client->name,
                 'redirect' => implode(', ', $client->redirect_uris ?? []),
-                'post_logout_redirect' => implode(', ', $client->post_logout_redirect_uris ?? []),
+                'post_logout_redirect' => $this->formatRedirectUris($client->post_logout_redirect_uris),
                 'created_at' => $client->created_at->toDateTimeString(),
             ]),
         ]);
@@ -80,7 +80,7 @@ class ClientController extends Controller
             'id' => $client->id,
             'name' => $client->name,
             'redirect' => implode(', ', $client->redirect_uris ?? []),
-            'post_logout_redirect' => implode(', ', $client->post_logout_redirect_uris ?? []),
+            'post_logout_redirect' => $this->formatRedirectUris($client->post_logout_redirect_uris),
             'created_at' => $client->created_at->toDateTimeString(),
             'note' => 'Client secret cannot be retrieved after creation. If you need a new secret, delete and recreate this client.',
         ]);
@@ -92,10 +92,37 @@ class ClientController extends Controller
             ->where('id', $id)
             ->where('revoked', false)
             ->firstOrFail();
-        
+
         $this->clients->delete($client);
-        
+
         return redirect()->route('oauth.clients')->with('success', 'OAuth client deleted successfully.');
+    }
+
+    /**
+     * Format redirect URIs for display (handle both array and string formats)
+     */
+    private function formatRedirectUris($uris): string
+    {
+        if (empty($uris)) {
+            return '';
+        }
+
+        // If it's already an array, use it directly
+        if (is_array($uris)) {
+            return implode(', ', $uris);
+        }
+
+        // If it's a string, try to decode as JSON first
+        if (is_string($uris)) {
+            $decoded = json_decode($uris, true);
+            if (is_array($decoded)) {
+                return implode(', ', $decoded);
+            }
+            // If not JSON, treat as single URI
+            return $uris;
+        }
+
+        return '';
     }
 }
 
