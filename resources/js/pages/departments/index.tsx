@@ -256,40 +256,33 @@ export default function DepartmentIndex({ departments, faculties, filters }: Ind
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Prevent double submission - check if already processing
     if (processing) {
       return;
     }
-    
-    const isEditMode = mode === 'edit' && selectedDepartment;
-    data._method = isEditMode ? 'PUT' : 'POST';
 
+    const isEditMode = mode === 'edit' && selectedDepartment;
     const departmentId = selectedDepartment?.id ?? selectedDepartment?.department_id;
+
+    // Set the method for the form
+    setData('_method', isEditMode ? 'PUT' : 'POST');
+
     const routePath =
       isEditMode && departmentId
         ? route('departments.update', { department: departmentId })
         : route('departments.store');
 
+    // Use transform to modify the data before submission
     transform((formData) => {
-      // Build the payload
-      const payload: any = {
-        code: formData.code,
-        name: formData.name,
-        type: formData.type,
-        description: formData.description || null,
+      const payload = {
+        ...formData,
+        // Only include faculty_id for academic departments
+        faculty_id: formData.type === 'academic' && formData.faculty_id && formData.faculty_id !== ''
+          ? Number(formData.faculty_id)
+          : null,
       };
-      
-      // Only include faculty_id for academic departments
-      if (formData.type === 'academic') {
-        payload.faculty_id = formData.faculty_id && formData.faculty_id !== '' 
-          ? Number(formData.faculty_id) 
-          : null;
-      } else {
-        // Explicitly exclude faculty_id for administrative offices
-        payload.faculty_id = null;
-      }
-      
+
       return payload;
     });
 
