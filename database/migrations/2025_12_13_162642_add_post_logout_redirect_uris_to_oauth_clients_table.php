@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('oauth_clients', function (Blueprint $table) {
-            $table->text('post_logout_redirect_uris')->nullable()->after('redirect_uris');
+            if (!Schema::hasColumn('oauth_clients', 'post_logout_redirect_uris')) {
+                $table->text('post_logout_redirect_uris')->nullable()->after('redirect_uris');
+            }
         });
     }
 
@@ -22,7 +24,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('oauth_clients', function (Blueprint $table) {
-            $table->dropColumn('post_logout_redirect_uris');
+            if (Schema::hasColumn('oauth_clients', 'post_logout_redirect_uris')) {
+                $table->dropColumn('post_logout_redirect_uris');
+            }
         });
     }
 };
