@@ -40,7 +40,7 @@ class EndSessionController extends Controller
         // Validate post_logout_redirect_uri if provided
         if ($postLogoutRedirectUri) {
             // Check if the URI is registered for any client
-            $clients = $this->clients->findForUser(1, 100); // Get all clients
+            $clients = \Laravel\Passport\Client::all(); // Get all clients
             $validUri = false;
 
             foreach ($clients as $client) {
