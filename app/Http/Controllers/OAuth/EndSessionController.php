@@ -122,8 +122,14 @@ class EndSessionController extends Controller
     protected function revokeUserTokens(int $userId): void
     {
         try {
+            // Get the user model
+            $user = \App\Models\User::find($userId);
+            if (!$user) {
+                return;
+            }
+
             // Find all active tokens for the user
-            $tokens = $this->tokens->findActive($userId);
+            $tokens = $this->tokens->forUser($user);
 
             foreach ($tokens as $token) {
                 // Revoke the token
