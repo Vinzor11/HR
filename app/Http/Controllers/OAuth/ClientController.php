@@ -27,6 +27,7 @@ class ClientController extends Controller
                 'id' => $client->id,
                 'name' => $client->name,
                 'redirect' => implode(', ', $client->redirect_uris ?? []),
+                'post_logout_redirect' => implode(', ', $client->post_logout_redirect_uris ?? []),
                 'created_at' => $client->created_at->toDateTimeString(),
             ]),
         ]);
@@ -37,6 +38,7 @@ class ClientController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'redirect' => 'required|url',
+            'post_logout_redirect' => 'nullable|url',
             'type' => 'nullable|in:accounting,payroll,other',
         ]);
         
@@ -47,7 +49,13 @@ class ClientController extends Controller
             $request->user(), // user
             false // enable device flow
         );
-        
+
+        // Set post-logout redirect URIs if provided
+        if (!empty($validated['post_logout_redirect'])) {
+            $client->post_logout_redirect_uris = [$validated['post_logout_redirect']];
+            $client->save();
+        }
+
         // Get the plain text secret - Passport returns it immediately after creation
         // If hashing is enabled, we need to get it before it's hashed
         $plainSecret = $client->plainSecret ?? $client->secret;
@@ -72,6 +80,7 @@ class ClientController extends Controller
             'id' => $client->id,
             'name' => $client->name,
             'redirect' => implode(', ', $client->redirect_uris ?? []),
+            'post_logout_redirect' => implode(', ', $client->post_logout_redirect_uris ?? []),
             'created_at' => $client->created_at->toDateTimeString(),
             'note' => 'Client secret cannot be retrieved after creation. If you need a new secret, delete and recreate this client.',
         ]);

@@ -40,11 +40,30 @@ class EndSessionController extends Controller
         // Validate post_logout_redirect_uri if provided
         if ($postLogoutRedirectUri) {
             // Check if the URI is registered for any client
-            $clients = Client::all(); // Get all clients
+            $clients = $this->clients->findForUser(1, 100); // Get all clients
             $validUri = false;
 
             foreach ($clients as $client) {
-                if (in_array($postLogoutRedirectUri, $client->redirect_uris ?? [])) {
+                // Check post_logout_redirect_uris field first (preferred)
+                $postLogoutUris = $client->post_logout_redirect_uris ?? [];
+                if (!is_array($postLogoutUris) && !empty($postLogoutUris)) {
+                    // Handle serialized data
+                    $postLogoutUris = json_decode($postLogoutUris, true) ?? [];
+                }
+
+                if (in_array($postLogoutRedirectUri, $postLogoutUris)) {
+                    $validUri = true;
+                    break;
+                }
+
+                // Fallback: Also check regular redirect_uris for backward compatibility
+                $redirectUris = $client->redirect_uris ?? [];
+                if (!is_array($redirectUris) && !empty($redirectUris)) {
+                    // Handle serialized data
+                    $redirectUris = json_decode($redirectUris, true) ?? [];
+                }
+
+                if (in_array($postLogoutRedirectUri, $redirectUris)) {
                     $validUri = true;
                     break;
                 }
