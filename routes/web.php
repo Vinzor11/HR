@@ -129,11 +129,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/trainings/{id}/force-delete', [TrainingController::class, 'forceDelete'])->name('trainings.force-delete')->middleware('permission:force-delete-training');
     Route::get('/api/roles', [RoleController::class, 'getAllRoles'])->name('roles.api');
 
-    // Employee API for external system integration (SSO)
-    Route::get('/api/employees/{employee_id}', [EmployeeController::class, 'apiShow'])
-        ->name('api.employees.show')
-        ->middleware('auth:api'); // Requires API token authentication
-
     // Leave Management Routes (CS Form No. 6 Compliant)
     Route::get('leaves/balance', [LeaveController::class, 'myBalance'])->name('leaves.balance');
     Route::get('leaves/calendar', [LeaveController::class, 'calendar'])->name('leaves.calendar')
@@ -150,13 +145,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:access-users-module');
 
     // SSO Activity Recording (for external systems)
-    Route::post('/api/oauth/activity/sso-login', [App\Http\Controllers\OAuth\ClientController::class, 'recordSSOLogin'])
+    Route::post('oauth/activity/sso-login', [App\Http\Controllers\OAuth\ClientController::class, 'recordSSOLogin'])
         ->name('oauth.activity.sso-login')
-        ->middleware('auth:api'); // Requires API token authentication
-
-    // Temporary test endpoint (remove after testing)
-    Route::post('/api/test/sso-login', [App\Http\Controllers\OAuth\ClientController::class, 'testRecordSSOLogin'])
-        ->name('test.sso-login');
+        ->middleware('auth:sanctum'); // Requires API token authentication
     Route::post('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'store'])
         ->name('oauth.clients.store')
         ->middleware('permission:access-users-module');

@@ -205,13 +205,6 @@ class ClientController extends Controller
      */
     public function recordSSOLogin(Request $request)
     {
-        \Log::info('SSO Login Recording Attempt', [
-            'headers' => $request->headers->all(),
-            'has_authorization' => $request->hasHeader('Authorization'),
-            'body' => $request->all(),
-            'ip' => $request->ip(),
-        ]);
-
         $validated = $request->validate([
             'client_id' => 'required|string',
             'application_name' => 'required|string|max:255',
@@ -223,17 +216,8 @@ class ClientController extends Controller
         $user = $request->user(); // Authenticated via API token
 
         if (!$user) {
-            \Log::warning('SSO Login Recording: No authenticated user', [
-                'token_present' => $request->hasHeader('Authorization'),
-                'headers' => $request->headers->all(),
-            ]);
             return response()->json(['error' => 'Unauthorized'], 401);
         }
-
-        \Log::info('SSO Login Recording: User authenticated', [
-            'user_id' => $user->id,
-            'user_email' => $user->email,
-        ]);
 
         // Record the SSO login activity
         $userAgentInfo = \App\Models\UserActivity::parseUserAgent($validated['user_agent'] ?? $request->userAgent());
@@ -256,54 +240,6 @@ class ClientController extends Controller
             'activity' => [
                 'type' => 'sso_login',
                 'application' => $validated['application_name'],
-                'timestamp' => now()->toISOString(),
-            ]
-        ]);
-    }
-
-    /**
-     * Test endpoint for SSO login recording (temporary - remove after testing)
-     */
-    public function testRecordSSOLogin(Request $request)
-    {
-        $validated = $request->validate([
-            'user_id' => 'required|integer',
-            'client_id' => 'required|string',
-            'application_name' => 'required|string|max:255',
-            'login_method' => 'required|in:direct,sso',
-            'ip_address' => 'nullable|string',
-            'user_agent' => 'nullable|string',
-        ]);
-
-        $user = \App\Models\User::find($validated['user_id']);
-
-        if (!$user) {
-            return response()->json(['error' => 'User not found'], 404);
-        }
-
-        // Record the SSO login activity
-        $userAgentInfo = \App\Models\UserActivity::parseUserAgent($validated['user_agent'] ?? $request->userAgent());
-
-        $activity = \App\Models\UserActivity::create([
-            'user_id' => $user->id,
-            'activity_type' => 'sso_login',
-            'ip_address' => $validated['ip_address'] ?? $request->ip(),
-            'user_agent' => $validated['user_agent'] ?? $request->userAgent(),
-            'device' => $userAgentInfo['device'],
-            'browser' => $userAgentInfo['browser'],
-            'status' => 'success',
-            'login_time' => now(),
-            'notes' => "SSO login to {$validated['application_name']} (Client ID: {$validated['client_id']}) - TEST",
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Test SSO login activity recorded successfully',
-            'activity' => [
-                'id' => $activity->id,
-                'type' => 'sso_login',
-                'application' => $validated['application_name'],
-                'user_id' => $user->id,
                 'timestamp' => now()->toISOString(),
             ]
         ]);
