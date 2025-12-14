@@ -21,6 +21,7 @@ class UserActivity extends Model
         'status',
         'login_time',
         'logout_time',
+        'notes',
     ];
 
     protected $casts = [
