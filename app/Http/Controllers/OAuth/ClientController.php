@@ -199,5 +199,50 @@ class ClientController extends Controller
 
         return '';
     }
+
+    /**
+     * Record SSO login activity from external systems
+     */
+    public function recordSSOLogin(Request $request)
+    {
+        $validated = $request->validate([
+            'client_id' => 'required|string',
+            'application_name' => 'required|string|max:255',
+            'login_method' => 'required|in:direct,sso',
+            'ip_address' => 'nullable|string',
+            'user_agent' => 'nullable|string',
+        ]);
+
+        $user = $request->user(); // Authenticated via API token
+
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        // Record the SSO login activity
+        $userAgentInfo = \App\Models\UserActivity::parseUserAgent($validated['user_agent'] ?? $request->userAgent());
+
+        \App\Models\UserActivity::create([
+            'user_id' => $user->id,
+            'activity_type' => 'sso_login',
+            'ip_address' => $validated['ip_address'] ?? $request->ip(),
+            'user_agent' => $validated['user_agent'] ?? $request->userAgent(),
+            'device' => $userAgentInfo['device'],
+            'browser' => $userAgentInfo['browser'],
+            'status' => 'success',
+            'login_time' => now(),
+            'notes' => "SSO login to {$validated['application_name']} (Client ID: {$validated['client_id']})",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'SSO login activity recorded successfully',
+            'activity' => [
+                'type' => 'sso_login',
+                'application' => $validated['application_name'],
+                'timestamp' => now()->toISOString(),
+            ]
+        ]);
+    }
 }
 

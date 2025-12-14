@@ -143,6 +143,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'index'])
         ->name('oauth.clients')
         ->middleware('permission:access-users-module');
+
+    // SSO Activity Recording (for external systems)
+    Route::post('oauth/activity/sso-login', [App\Http\Controllers\OAuth\ClientController::class, 'recordSSOLogin'])
+        ->name('oauth.activity.sso-login')
+        ->middleware('auth:sanctum'); // Requires API token authentication
     Route::post('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'store'])
         ->name('oauth.clients.store')
         ->middleware('permission:access-users-module');
