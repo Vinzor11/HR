@@ -947,12 +947,19 @@ class LeaveService
             // Get current year's balance
             $currentBalance = LeaveBalance::getOrCreateBalance($employeeId, $leaveType->id, $year);
             
+            // Check if carry-over has already been processed for this year
+            $alreadyCarriedOver = LeaveAccrual::forEmployee($employeeId)
+                ->forLeaveType($leaveType->id)
+                ->whereYear('accrual_date', $year)
+                ->ofType(LeaveAccrual::TYPE_CARRY_OVER)
+                ->exists();
+            
             // Skip if already has carry-over
-            if ($currentBalance->carried_over > 0) {
+            if ($alreadyCarriedOver || $currentBalance->carried_over > 0) {
                 $results[] = [
                     'leave_type' => $leaveType->code,
                     'status' => 'skipped',
-                    'reason' => 'Already has carry-over',
+                    'reason' => $alreadyCarriedOver ? 'Carry-over already processed' : 'Already has carry-over',
                 ];
                 continue;
             }

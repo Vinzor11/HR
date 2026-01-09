@@ -2481,18 +2481,17 @@ class EmployeeController extends Controller
             $leaveService = app(LeaveService::class);
             $year = now()->year;
 
-            // CSC Standard Entitlements per leave type
+            // NOTE: VL and SL accrue monthly (1.25 days/month) via scheduled command
+            // We only add annual entitlement for leave types that don't accrue monthly
             // Based on Omnibus Rules on Leave (CSC MC No. 41, s. 1998)
-            $entitlements = [
-                'VL' => 15.0,    // Vacation Leave - 15 days/year
-                'SL' => 15.0,    // Sick Leave - 15 days/year
-                'SPL' => 3.0,    // Special Privilege Leave - 3 days/year
-                // Other leaves (maternity, paternity, etc.) are granted on-demand
+            $annualEntitlements = [
+                'SPL' => 3.0,    // Special Privilege Leave - 3 days/year (doesn't accrue monthly)
+                // VL and SL are handled by monthly accruals, not annual entitlement
             ];
 
             $leaveTypes = LeaveType::active()->get()->keyBy('code');
 
-            foreach ($entitlements as $code => $days) {
+            foreach ($annualEntitlements as $code => $days) {
                 $leaveType = $leaveTypes->get($code);
                 
                 if (!$leaveType) {
@@ -2502,6 +2501,24 @@ class EmployeeController extends Controller
 
                 // Check if leave type is available for this employee (gender restriction)
                 if (!$leaveType->isAvailableFor($employee)) {
+                    continue;
+                }
+
+                // Check if balance already exists to prevent duplicates
+                $existingBalance = \App\Models\LeaveBalance::where('employee_id', $employee->id)
+                    ->where('leave_type_id', $leaveType->id)
+                    ->where('year', $year)
+                    ->first();
+
+                // Check if annual entitlement already exists for this year
+                $existingAnnualAccrual = \App\Models\LeaveAccrual::where('employee_id', $employee->id)
+                    ->where('leave_type_id', $leaveType->id)
+                    ->where('accrual_type', 'annual')
+                    ->whereYear('accrual_date', $year)
+                    ->exists();
+
+                if ($existingBalance || $existingAnnualAccrual) {
+                    // Balance or annual accrual already exists, skip
                     continue;
                 }
 
