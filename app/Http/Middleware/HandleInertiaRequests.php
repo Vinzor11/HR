@@ -58,8 +58,9 @@ class HandleInertiaRequests extends Middleware
             
             try {
                 // Cache permissions per user for 5 minutes to avoid expensive queries on every request
-                // Cache key includes user ID and updated_at timestamp to invalidate when user changes
-                $cacheKey = "user_permissions_{$user->id}_{$user->updated_at->timestamp}";
+                // Cache key includes user ID, updated_at timestamp, and role IDs to invalidate when roles change
+                $roleIds = $user->roles()->pluck('id')->sort()->implode(',');
+                $cacheKey = "user_permissions_{$user->id}_{$user->updated_at->timestamp}_roles_{$roleIds}";
                 
                 $permissions = Cache::remember($cacheKey, 300, function () use ($user) {
                     // Use a more efficient method: get permissions from roles and direct permissions
