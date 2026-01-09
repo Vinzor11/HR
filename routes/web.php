@@ -138,6 +138,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/leaves/balance', [LeaveController::class, 'getBalance'])->name('api.leaves.balance');
     Route::get('api/leaves/credits', [LeaveController::class, 'getLeaveCredits'])->name('api.leaves.credits');
     Route::get('api/leaves/types', [LeaveController::class, 'getAvailableLeaveTypes'])->name('api.leaves.types');
+    Route::get('api/leaves/history', [LeaveController::class, 'getLeaveHistory'])->name('api.leaves.history');
+
+    // Admin Leave Balance Management Routes
+    Route::middleware('permission:manage-leave-balances')->prefix('admin/leave-balances')->name('admin.leave-balances.')->group(function () {
+        Route::get('/', [App\Http\Controllers\LeaveBalanceAdminController::class, 'index'])->name('index');
+        Route::get('/special-leave-types', [App\Http\Controllers\LeaveBalanceAdminController::class, 'getSpecialLeaveTypes'])->name('special-leave-types');
+        Route::get('/{employee}', [App\Http\Controllers\LeaveBalanceAdminController::class, 'show'])->name('show');
+        Route::get('/{employee}/balance', [App\Http\Controllers\LeaveBalanceAdminController::class, 'getEmployeeBalance'])->name('get-balance');
+        Route::post('/{employee}/initial-balance', [App\Http\Controllers\LeaveBalanceAdminController::class, 'setInitialBalance'])->name('set-initial-balance');
+        Route::post('/{employee}/adjust', [App\Http\Controllers\LeaveBalanceAdminController::class, 'adjustBalance'])->name('adjust');
+        Route::post('/{employee}/grant-special', [App\Http\Controllers\LeaveBalanceAdminController::class, 'grantSpecialLeave'])->name('grant-special');
+        Route::post('/bulk-initial-balances', [App\Http\Controllers\LeaveBalanceAdminController::class, 'bulkSetInitialBalances'])->name('bulk-initial-balances');
+    });
 
     // OAuth Client Management
     Route::get('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'index'])

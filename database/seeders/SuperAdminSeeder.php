@@ -55,6 +55,12 @@ class SuperAdminSeeder extends Seeder
                 'label' => 'Access Leave Calendar',
                 'description' => 'Can view the leave calendar showing all employees\' leave requests',
             ],
+            [
+                'name' => 'manage-leave-balances',
+                'module' => 'Leaves',
+                'label' => 'Manage Leave Balances',
+                'description' => 'Can set initial balances, grant special leaves, and adjust employee leave credits',
+            ],
 
             // Roles Permissions
             ['name' => 'create-role', 'module' => 'Roles', 'label' => 'Create Role', 'description' => 'Can create new roles'],

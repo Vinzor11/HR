@@ -183,6 +183,51 @@ class LeaveController extends Controller
     }
 
     /**
+     * Get leave history for a specific leave type
+     * Returns accrual/adjustment history (earned/spent)
+     */
+    public function getLeaveHistory(Request $request)
+    {
+        $user = $request->user();
+        $employeeId = $user->employee_id;
+
+        if (!$employeeId) {
+            return response()->json(['error' => 'No employee record found'], 404);
+        }
+
+        $validated = $request->validate([
+            'leave_type_id' => 'required|exists:leave_types,id',
+            'year' => 'nullable|integer|min:2000|max:2100',
+        ]);
+
+        $year = $validated['year'] ?? now()->year;
+        $history = $this->leaveService->getAdjustmentHistory(
+            $employeeId,
+            $validated['leave_type_id'],
+            $year
+        )->map(function ($item) {
+            // Get the type label using the accessor
+            $typeLabel = $item->accrual_type_label;
+            
+            return [
+                'id' => $item->id,
+                'date' => $item->accrual_date->format('Y-m-d'),
+                'type' => $item->accrual_type,
+                'type_label' => $typeLabel,
+                'amount' => (float) $item->amount,
+                'notes' => $item->notes,
+                'reference_number' => $item->reference_number,
+                'created_by' => $item->creator?->name ?? 'System',
+            ];
+        });
+
+        return response()->json([
+            'history' => $history,
+            'year' => $year,
+        ]);
+    }
+
+    /**
      * Get leave credits certification for CS Form No. 6 Section 7
      * Returns VL and SL balances as of a specific date
      */

@@ -5,7 +5,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { useLayout } from '@/contexts/LayoutContext';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FileText, Folder, LayoutGrid, Lock, Shield, Users, IdCard, Landmark , Briefcase, GraduationCap, UserCheck, Clock, List, Calendar, CalendarDays, School } from 'lucide-react';
+import { BookOpen, FileText, Folder, LayoutGrid, Lock, Shield, Users, IdCard, Landmark , Briefcase, GraduationCap, UserCheck, Clock, List, Calendar, CalendarDays, School, Settings, Wallet } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -171,6 +171,12 @@ const mainNavItems: NavItem[] = [
                 href: '/leaves/history',
                 icon: FileText,
             },
+            {
+                title: 'Manage Balances',
+                href: '/admin/leave-balances',
+                icon: Wallet,
+                permission: 'manage-leave-balances',
+            },
         ],
     },
 ];
@@ -190,12 +196,21 @@ const footerNavItems: NavItem[] = [
 
 export function AppSidebar() {
     const { auth } = usePage().props as any;
-    const roles = auth.roles;
-    const permissions = auth.permissions;
+    const roles = auth?.roles || [];
+    const permissions = auth?.permissions || [];
 
     const { position } = useLayout();
 
-    const filteredNavItems = mainNavItems
+    // Debug: Check if manage-leave-balances permission exists
+    if (process.env.NODE_ENV === 'development') {
+        const hasManageLeaveBalances = permissions.includes('manage-leave-balances');
+        if (!hasManageLeaveBalances && permissions.length > 0) {
+            console.log('[Sidebar Debug] Permission "manage-leave-balances" not found in user permissions');
+            console.log('[Sidebar Debug] Available permissions:', permissions);
+        }
+    }
+
+    const filteredNavItems: NavItem[] = mainNavItems
         .map((item) => {
             // Filter children based on permissions
             const children = item.children
@@ -206,7 +221,7 @@ export function AppSidebar() {
                 children,
             };
         })
-        .flatMap((item) => {
+        .flatMap((item): NavItem[] => {
             // If item has children, check how many are visible
             if (item.children && item.children.length > 0) {
                 // If only one child is visible, flatten it - return the child as a direct menu item
@@ -234,7 +249,7 @@ export function AppSidebar() {
             // Item with no children and no permission requirement (like Dashboard): always show
             return [item];
         })
-        .filter((item) => {
+        .filter((item): item is NavItem => {
             // Final filter: if item has children, ensure at least one is visible
             if (item.children && item.children.length > 0) {
                 return item.children.length > 0;

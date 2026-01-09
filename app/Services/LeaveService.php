@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\LeaveAccrual;
 use App\Models\LeaveBalance;
 use App\Models\LeaveCreditsHistory;
 use App\Models\LeaveRequest;
@@ -556,6 +557,467 @@ class LeaveService
             'daily_rate' => $dailyRate,
             'total_value' => $totalValue,
         ];
+    }
+
+    // =========================================================================
+    // INITIAL BALANCE & MIGRATION METHODS
+    // For long-time employees when system is newly implemented
+    // =========================================================================
+
+    /**
+     * Set initial balance for an employee (for system migration)
+     * 
+     * Use this when:
+     * - Migrating from an old/manual system
+     * - Employee has existing leave balance that needs to be captured
+     * - Setting up balance for long-time employees
+     * 
+     * @param string $employeeId Employee ID
+     * @param int $leaveTypeId Leave type ID
+     * @param float $balance The actual current balance to set
+     * @param float $usedToDate How much they've already used (for records)
+     * @param string|null $notes Notes about the migration
+     * @param Carbon|null $asOfDate The date this balance is effective from
+     * @param int|null $year The year for the balance (defaults to current year)
+     */
+    public function setInitialBalance(
+        string $employeeId,
+        int $leaveTypeId,
+        float $balance,
+        float $usedToDate = 0,
+        ?string $notes = null,
+        ?Carbon $asOfDate = null,
+        ?int $year = null
+    ): LeaveBalance {
+        $year = $year ?? now()->year;
+        $asOfDate = $asOfDate ?? now();
+        $createdBy = auth()->id();
+
+        DB::beginTransaction();
+        try {
+            // Get or create the balance record
+            $leaveBalance = LeaveBalance::getOrCreateBalance($employeeId, $leaveTypeId, $year);
+            
+            // Calculate entitled based on balance + used
+            $entitled = $balance + $usedToDate;
+
+            // Create accrual record for audit trail
+            LeaveAccrual::create([
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'amount' => $entitled,
+                'accrual_date' => now(),
+                'accrual_type' => LeaveAccrual::TYPE_INITIAL_MIGRATION,
+                'notes' => $notes ?? "Initial balance migration as of {$asOfDate->format('Y-m-d')}",
+                'effective_date' => $asOfDate,
+                'reference_number' => 'MIG-' . strtoupper(uniqid()),
+                'created_by' => $createdBy,
+            ]);
+
+            // Update balance record
+            $leaveBalance->initial_balance = $entitled;
+            $leaveBalance->entitled = $entitled;
+            $leaveBalance->used = $usedToDate;
+            $leaveBalance->accrued = 0; // Reset accrued since we're setting initial
+            $leaveBalance->balance_as_of_date = $asOfDate;
+            $leaveBalance->migration_notes = $notes;
+            $leaveBalance->is_manually_set = true;
+            $leaveBalance->recalculateBalance();
+
+            DB::commit();
+
+            Log::info('Initial leave balance set', [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'balance' => $balance,
+                'used_to_date' => $usedToDate,
+                'entitled' => $entitled,
+                'as_of_date' => $asOfDate->format('Y-m-d'),
+                'created_by' => $createdBy,
+            ]);
+
+            return $leaveBalance->fresh();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to set initial leave balance', [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'balance' => $balance,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Adjust leave balance (add or deduct credits)
+     * 
+     * Use this for:
+     * - Corrections to balance
+     * - Manual adjustments
+     * - Restoring cancelled leave credits
+     * 
+     * @param string $employeeId Employee ID
+     * @param int $leaveTypeId Leave type ID
+     * @param float $amount Amount to add (positive) or deduct (negative)
+     * @param string $reason Reason for adjustment
+     * @param string $adjustmentType Type of adjustment (correction, manual, restored, etc.)
+     * @param int|null $year Year for the balance
+     */
+    public function adjustBalance(
+        string $employeeId,
+        int $leaveTypeId,
+        float $amount,
+        string $reason,
+        string $adjustmentType = LeaveAccrual::TYPE_ADJUSTMENT,
+        ?int $year = null
+    ): LeaveBalance {
+        $year = $year ?? now()->year;
+        $createdBy = auth()->id();
+
+        DB::beginTransaction();
+        try {
+            $leaveBalance = LeaveBalance::getOrCreateBalance($employeeId, $leaveTypeId, $year);
+
+            // Create accrual record for audit trail
+            LeaveAccrual::create([
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'amount' => $amount,
+                'accrual_date' => now(),
+                'accrual_type' => $adjustmentType,
+                'notes' => $reason,
+                'reference_number' => 'ADJ-' . strtoupper(uniqid()),
+                'created_by' => $createdBy,
+            ]);
+
+            // Update balance
+            $leaveBalance->entitled += $amount;
+            $leaveBalance->accrued += $amount;
+            $leaveBalance->recalculateBalance();
+
+            DB::commit();
+
+            Log::info('Leave balance adjusted', [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'amount' => $amount,
+                'reason' => $reason,
+                'type' => $adjustmentType,
+                'new_balance' => $leaveBalance->balance,
+                'created_by' => $createdBy,
+            ]);
+
+            return $leaveBalance->fresh();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to adjust leave balance', [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'amount' => $amount,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    // =========================================================================
+    // SPECIAL LEAVE GRANT METHODS
+    // For maternity, paternity, VAWC, solo parent, etc.
+    // =========================================================================
+
+    /**
+     * Grant special leave credits to an employee
+     * 
+     * Use this for leave types that are granted on-demand:
+     * - Maternity Leave (ML) - 105 days
+     * - Paternity Leave (PL) - 7 days
+     * - Solo Parent Leave (SoloP) - 7 days/year
+     * - VAWC Leave - 10 days
+     * - Women's Special Leave (WSL) - 60 days
+     * - Adoption Leave - 60 days
+     * - Rehabilitation Leave
+     * - Study Leave
+     * 
+     * @param string $employeeId Employee ID
+     * @param int $leaveTypeId Leave type ID
+     * @param float $days Number of days to grant
+     * @param string $reason Reason for granting
+     * @param string|null $supportingDocument Reference to supporting document
+     * @param int|null $year Year for the balance
+     */
+    public function grantSpecialLeave(
+        string $employeeId,
+        int $leaveTypeId,
+        float $days,
+        string $reason,
+        ?string $supportingDocument = null,
+        ?int $year = null
+    ): LeaveBalance {
+        $year = $year ?? now()->year;
+        $createdBy = auth()->id();
+
+        $leaveType = LeaveType::findOrFail($leaveTypeId);
+        $employee = Employee::findOrFail($employeeId);
+
+        // Validate eligibility
+        if (!$leaveType->isAvailableFor($employee)) {
+            throw new \InvalidArgumentException("Employee is not eligible for {$leaveType->name}");
+        }
+
+        // Check max days per year if applicable
+        if ($leaveType->max_days_per_year) {
+            $existingBalance = LeaveBalance::getOrCreateBalance($employeeId, $leaveTypeId, $year);
+            $totalAfterGrant = $existingBalance->entitled + $days;
+            
+            if ($totalAfterGrant > $leaveType->max_days_per_year) {
+                throw new \InvalidArgumentException(
+                    "Cannot grant {$days} days. Maximum {$leaveType->max_days_per_year} days allowed per year for {$leaveType->name}. " .
+                    "Current entitlement: {$existingBalance->entitled} days."
+                );
+            }
+        }
+
+        DB::beginTransaction();
+        try {
+            $leaveBalance = LeaveBalance::getOrCreateBalance($employeeId, $leaveTypeId, $year);
+
+            // Create accrual record for audit trail
+            LeaveAccrual::create([
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'amount' => $days,
+                'accrual_date' => now(),
+                'accrual_type' => LeaveAccrual::TYPE_SPECIAL_GRANT,
+                'notes' => $reason,
+                'supporting_document' => $supportingDocument,
+                'reference_number' => 'SPL-' . strtoupper(uniqid()),
+                'created_by' => $createdBy,
+            ]);
+
+            // Update balance
+            $leaveBalance->entitled += $days;
+            $leaveBalance->accrued += $days;
+            $leaveBalance->recalculateBalance();
+
+            DB::commit();
+
+            Log::info('Special leave granted', [
+                'employee_id' => $employeeId,
+                'leave_type' => $leaveType->name,
+                'leave_type_code' => $leaveType->code,
+                'days' => $days,
+                'reason' => $reason,
+                'supporting_document' => $supportingDocument,
+                'new_balance' => $leaveBalance->balance,
+                'created_by' => $createdBy,
+            ]);
+
+            return $leaveBalance->fresh();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to grant special leave', [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'days' => $days,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get leave adjustment history for an employee
+     * 
+     * @param string $employeeId Employee ID
+     * @param int|null $leaveTypeId Optional leave type filter
+     * @param int|null $year Optional year filter
+     */
+    public function getAdjustmentHistory(string $employeeId, ?int $leaveTypeId = null, ?int $year = null): \Illuminate\Database\Eloquent\Collection
+    {
+        $query = LeaveAccrual::forEmployee($employeeId)
+            ->with(['leaveType', 'creator'])
+            ->orderBy('created_at', 'desc');
+
+        if ($leaveTypeId) {
+            $query->forLeaveType($leaveTypeId);
+        }
+
+        if ($year) {
+            $query->forYear($year);
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Bulk set initial balances for multiple employees
+     * Useful for system migration
+     * 
+     * @param array $balances Array of [employee_id, leave_type_id, balance, used_to_date, notes]
+     * @param Carbon|null $asOfDate The date these balances are effective from
+     */
+    public function bulkSetInitialBalances(array $balances, ?Carbon $asOfDate = null): array
+    {
+        $results = [
+            'success' => [],
+            'failed' => [],
+        ];
+
+        foreach ($balances as $data) {
+            try {
+                $this->setInitialBalance(
+                    $data['employee_id'],
+                    $data['leave_type_id'],
+                    $data['balance'],
+                    $data['used_to_date'] ?? 0,
+                    $data['notes'] ?? null,
+                    $asOfDate
+                );
+                $results['success'][] = $data['employee_id'];
+            } catch (\Exception $e) {
+                $results['failed'][] = [
+                    'employee_id' => $data['employee_id'],
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Get special leave grant summary for an employee
+     */
+    public function getSpecialLeaveGrants(string $employeeId, ?int $year = null): array
+    {
+        $year = $year ?? now()->year;
+
+        $grants = LeaveAccrual::forEmployee($employeeId)
+            ->forYear($year)
+            ->specialGrants()
+            ->with('leaveType')
+            ->get();
+
+        return $grants->groupBy('leave_type_id')->map(function ($items) {
+            $leaveType = $items->first()->leaveType;
+            return [
+                'leave_type' => $leaveType->name,
+                'leave_type_code' => $leaveType->code,
+                'total_granted' => $items->sum('amount'),
+                'grants' => $items->map(function ($item) {
+                    return [
+                        'amount' => $item->amount,
+                        'date' => $item->accrual_date->format('Y-m-d'),
+                        'reason' => $item->notes,
+                        'document' => $item->supporting_document,
+                        'reference' => $item->reference_number,
+                    ];
+                })->toArray(),
+            ];
+        })->values()->toArray();
+    }
+
+    /**
+     * Process carry-over from previous year for a specific employee and year
+     * This can be called to fix balances that were created before carry-over logic was implemented
+     * 
+     * @param string $employeeId
+     * @param int $year Target year to carry over to
+     * @return array Results of carry-over processing
+     */
+    public function processCarryOver(string $employeeId, int $year): array
+    {
+        $results = [];
+        $previousYear = $year - 1;
+        
+        $leaveTypes = LeaveType::active()->where('can_carry_over', true)->get();
+        
+        foreach ($leaveTypes as $leaveType) {
+            // Get previous year's balance
+            $previousBalance = LeaveBalance::where('employee_id', $employeeId)
+                ->where('leave_type_id', $leaveType->id)
+                ->where('year', $previousYear)
+                ->first();
+            
+            if (!$previousBalance || $previousBalance->balance <= 0) {
+                continue;
+            }
+            
+            // Get current year's balance
+            $currentBalance = LeaveBalance::getOrCreateBalance($employeeId, $leaveType->id, $year);
+            
+            // Skip if already has carry-over
+            if ($currentBalance->carried_over > 0) {
+                $results[] = [
+                    'leave_type' => $leaveType->code,
+                    'status' => 'skipped',
+                    'reason' => 'Already has carry-over',
+                ];
+                continue;
+            }
+            
+            // Calculate carry-over amount with cap
+            $carryOverCap = $leaveType->max_carry_over_days 
+                ? min($leaveType->max_carry_over_days, self::CARRY_OVER_CAP_DAYS)
+                : self::CARRY_OVER_CAP_DAYS;
+            
+            $carryOverAmount = min($previousBalance->balance, $carryOverCap);
+            
+            if ($carryOverAmount > 0) {
+                DB::beginTransaction();
+                try {
+                    // Update current year's balance
+                    $currentBalance->carried_over = $carryOverAmount;
+                    $currentBalance->entitled += $carryOverAmount;
+                    $currentBalance->recalculateBalance();
+                    
+                    // Create accrual record
+                    LeaveAccrual::create([
+                        'employee_id' => $employeeId,
+                        'leave_type_id' => $leaveType->id,
+                        'amount' => $carryOverAmount,
+                        'accrual_date' => now(),
+                        'accrual_type' => LeaveAccrual::TYPE_CARRY_OVER,
+                        'notes' => "Carried over from {$previousYear} (balance: {$previousBalance->balance} days, capped at {$carryOverAmount} days)",
+                        'effective_date' => Carbon::create($year, 1, 1),
+                        'reference_number' => 'CO-' . strtoupper(uniqid()),
+                        'created_by' => auth()->id(),
+                    ]);
+                    
+                    DB::commit();
+                    
+                    $results[] = [
+                        'leave_type' => $leaveType->code,
+                        'status' => 'success',
+                        'previous_balance' => $previousBalance->balance,
+                        'carried_over' => $carryOverAmount,
+                    ];
+                    
+                    Log::info('Leave balance carry-over processed', [
+                        'employee_id' => $employeeId,
+                        'leave_type_id' => $leaveType->id,
+                        'from_year' => $previousYear,
+                        'to_year' => $year,
+                        'carried_over' => $carryOverAmount,
+                    ]);
+                } catch (\Exception $e) {
+                    DB::rollBack();
+                    $results[] = [
+                        'leave_type' => $leaveType->code,
+                        'status' => 'error',
+                        'error' => $e->getMessage(),
+                    ];
+                    Log::error('Failed to process carry-over', [
+                        'employee_id' => $employeeId,
+                        'leave_type_id' => $leaveType->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+        
+        return $results;
     }
 }
 
