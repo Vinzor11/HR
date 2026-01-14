@@ -18,21 +18,28 @@ class DepartmentApiController extends Controller
      * Query parameters:
      * - type: Filter by department type ('academic' or 'administrative')
      * - status: Filter by status (default: active only)
+     * - include_deleted: Include soft-deleted departments (default: false)
      */
     public function index(Request $request): JsonResponse
     {
         $type = $request->input('type'); // 'academic' or 'administrative'
         $status = $request->input('status', 'active'); // Default to active only
+        $includeDeleted = $request->boolean('include_deleted', false);
         
-        $query = Department::query();
+        // Include soft-deleted departments if requested (for sync purposes)
+        $query = $includeDeleted 
+            ? Department::withTrashed()
+            : Department::query();
         
         // Filter by type if provided
         if ($type && in_array($type, ['academic', 'administrative'])) {
             $query->where('type', $type);
         }
         
-        // Only return non-deleted departments
-        $query->whereNull('deleted_at');
+        // Only return non-deleted departments if include_deleted is false
+        if (!$includeDeleted) {
+            $query->whereNull('deleted_at');
+        }
         
         // Load faculty relationship
         $departments = $query->with('faculty')
@@ -45,6 +52,8 @@ class DepartmentApiController extends Controller
                     'name' => $dept->name,
                     'type' => $dept->type,
                     'description' => $dept->description,
+                    'is_deleted' => $dept->trashed(), // true if soft-deleted
+                    'deleted_at' => $dept->deleted_at?->format('Y-m-d H:i:s'), // null if not deleted
                     'faculty' => $dept->faculty ? [
                         'id' => $dept->faculty->id,
                         'code' => $dept->faculty->code,
@@ -64,11 +73,15 @@ class DepartmentApiController extends Controller
      * 
      * Returns detailed information about a specific department/office.
      */
-    public function show(string $id): JsonResponse
+    public function show(Request $request, string $id): JsonResponse
     {
-        $department = Department::with('faculty')
-            ->whereNull('deleted_at')
-            ->find($id);
+        $includeDeleted = $request->boolean('include_deleted', false);
+        
+        $query = $includeDeleted 
+            ? Department::withTrashed()->with('faculty')
+            : Department::with('faculty')->whereNull('deleted_at');
+        
+        $department = $query->find($id);
         
         if (!$department) {
             return response()->json([
@@ -83,6 +96,8 @@ class DepartmentApiController extends Controller
             'name' => $department->name,
             'type' => $department->type,
             'description' => $department->description,
+            'is_deleted' => $department->trashed(), // true if soft-deleted
+            'deleted_at' => $department->deleted_at?->format('Y-m-d H:i:s'), // null if not deleted
             'faculty' => $department->faculty ? [
                 'id' => $department->faculty->id,
                 'code' => $department->faculty->code,

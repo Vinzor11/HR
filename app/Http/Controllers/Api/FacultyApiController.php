@@ -17,13 +17,18 @@ class FacultyApiController extends Controller
      * Query parameters:
      * - type: Filter by faculty type
      * - status: Filter by status (default: active only)
+     * - include_deleted: Include soft-deleted faculties (default: false)
      */
     public function index(Request $request): JsonResponse
     {
         $type = $request->input('type');
         $status = $request->input('status', 'active');
+        $includeDeleted = $request->boolean('include_deleted', false);
         
-        $query = Faculty::query();
+        // Include soft-deleted faculties if requested (for sync purposes)
+        $query = $includeDeleted 
+            ? Faculty::withTrashed()
+            : Faculty::query();
         
         // Filter by type if provided
         if ($type) {
@@ -37,8 +42,10 @@ class FacultyApiController extends Controller
             $query->where('status', $status);
         }
         
-        // Only return non-deleted faculties
-        $query->whereNull('deleted_at');
+        // Only return non-deleted faculties if include_deleted is false
+        if (!$includeDeleted) {
+            $query->whereNull('deleted_at');
+        }
         
         $faculties = $query->orderBy('name')
             ->get()
@@ -50,6 +57,8 @@ class FacultyApiController extends Controller
                     'type' => $faculty->type,
                     'description' => $faculty->description,
                     'status' => $faculty->status,
+                    'is_deleted' => $faculty->trashed(), // true if soft-deleted
+                    'deleted_at' => $faculty->deleted_at?->format('Y-m-d H:i:s'), // null if not deleted
                 ];
             });
         
@@ -64,10 +73,15 @@ class FacultyApiController extends Controller
      * 
      * Returns detailed information about a specific faculty.
      */
-    public function show(string $id): JsonResponse
+    public function show(Request $request, string $id): JsonResponse
     {
-        $faculty = Faculty::whereNull('deleted_at')
-            ->find($id);
+        $includeDeleted = $request->boolean('include_deleted', false);
+        
+        $query = $includeDeleted 
+            ? Faculty::withTrashed()
+            : Faculty::whereNull('deleted_at');
+        
+        $faculty = $query->find($id);
         
         if (!$faculty) {
             return response()->json([
@@ -83,6 +97,8 @@ class FacultyApiController extends Controller
             'type' => $faculty->type,
             'description' => $faculty->description,
             'status' => $faculty->status,
+            'is_deleted' => $faculty->trashed(), // true if soft-deleted
+            'deleted_at' => $faculty->deleted_at?->format('Y-m-d H:i:s'), // null if not deleted
         ]);
     }
 }

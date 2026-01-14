@@ -28,14 +28,20 @@ class EmployeeApiController extends Controller
      * - page (optional): Page number for pagination (default: 1)
      * - per_page (optional): Number of items per page (default: 50, max: 100)
      * - status (optional): Filter by status - 'active', 'inactive', or 'all' (default: 'active')
+     * - include_deleted (optional): Include soft-deleted employees (default: false)
      * 
      * @param Request $request
      * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
+        // Include soft-deleted employees if requested (for sync purposes)
+        $includeDeleted = $request->boolean('include_deleted', false);
+        
         // Build query for all employees
-        $query = Employee::with(['department', 'position']);
+        $query = $includeDeleted 
+            ? Employee::withTrashed()->with(['department', 'position'])
+            : Employee::with(['department', 'position']);
         
         // Filter by status
         $status = $request->input('status', 'active');
@@ -175,6 +181,8 @@ class EmployeeApiController extends Controller
     {
         return [
             'id' => $employee->id,
+            'is_deleted' => $employee->trashed(), // true if soft-deleted
+            'deleted_at' => $employee->deleted_at?->format('Y-m-d H:i:s'), // null if not deleted
             'name' => [
                 'surname' => $employee->surname,
                 'first_name' => $employee->first_name,
