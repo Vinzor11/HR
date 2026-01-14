@@ -19,6 +19,61 @@ class EmployeeApiController extends Controller
     }
 
     /**
+     * List all employees
+     * 
+     * Returns all employee records from the employees table.
+     * Designed for external systems that need to fetch all employee data.
+     * 
+     * Query Parameters:
+     * - page (optional): Page number for pagination (default: 1)
+     * - per_page (optional): Number of items per page (default: 50, max: 100)
+     * - status (optional): Filter by status - 'active', 'inactive', or 'all' (default: 'active')
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function index(Request $request): JsonResponse
+    {
+        // Build query for all employees
+        $query = Employee::with(['department', 'position']);
+        
+        // Filter by status
+        $status = $request->input('status', 'active');
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+        
+        // Pagination
+        $perPage = min((int)$request->input('per_page', 50), 100); // Max 100 per page
+        $employees = $query->orderBy('surname')
+            ->orderBy('first_name')
+            ->paginate($perPage);
+        
+        // Format employees data
+        $formattedEmployees = $employees->map(function ($employee) {
+            return $this->formatEmployeeResponseData($employee);
+        });
+        
+        return response()->json([
+            'data' => $formattedEmployees,
+            'meta' => [
+                'current_page' => $employees->currentPage(),
+                'last_page' => $employees->lastPage(),
+                'per_page' => $employees->perPage(),
+                'total' => $employees->total(),
+                'from' => $employees->firstItem(),
+                'to' => $employees->lastItem(),
+            ],
+            'links' => [
+                'first' => $employees->url(1),
+                'last' => $employees->url($employees->lastPage()),
+                'prev' => $employees->previousPageUrl(),
+                'next' => $employees->nextPageUrl(),
+            ],
+        ]);
+    }
+
+    /**
      * Get current employee (from OAuth token)
      * 
      * Returns the employee record associated with the authenticated user.
@@ -107,7 +162,18 @@ class EmployeeApiController extends Controller
      */
     private function formatEmployeeResponse(Employee $employee): JsonResponse
     {
-        return response()->json([
+        return response()->json($this->formatEmployeeResponseData($employee));
+    }
+
+    /**
+     * Format employee data for list responses (returns array instead of JsonResponse)
+     * 
+     * @param Employee $employee
+     * @return array
+     */
+    private function formatEmployeeResponseData(Employee $employee): array
+    {
+        return [
             'id' => $employee->id,
             'name' => [
                 'surname' => $employee->surname,
@@ -186,7 +252,7 @@ class EmployeeApiController extends Controller
                 'solo_parent_id_no' => $employee->solo_parent_id_no,
                 'indigenous_group' => $employee->indigenous_group,
             ],
-        ]);
+        ];
     }
 }
 

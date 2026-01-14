@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     // Employee endpoints
+    Route::get('/employees', [EmployeeApiController::class, 'index'])
+        ->name('api.employees.index');
+    
     Route::get('/employees/me', [EmployeeApiController::class, 'getCurrentEmployee'])
         ->name('api.employees.me');
     
