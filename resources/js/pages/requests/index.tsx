@@ -243,13 +243,13 @@ export default function RequestsIndex({
             <Head title="HR Requests" />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <div className="space-y-6">
+            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4">
+                <div className="space-y-4 md:space-y-6">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h1 className="text-2xl font-semibold text-foreground">HR Request Center</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Submit new requests, monitor approvals, and track fulfillment — all in one place.
+                        <h1 className="text-xl md:text-2xl font-semibold text-foreground">HR Request Center</h1>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                            Submit new requests, monitor approvals, and track fulfillment.
                         </p>
                     </div>
 
@@ -307,56 +307,55 @@ export default function RequestsIndex({
                     </Dialog>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    <Card className="p-4 flex items-center gap-3">
-                        <div className="rounded-full bg-amber-100 p-2 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                            <ClipboardList className="h-5 w-5" />
+                <div className="grid grid-cols-3 gap-2 md:gap-4">
+                    <Card className="p-2.5 md:p-4 flex flex-col md:flex-row items-center gap-2 md:gap-3">
+                        <div className="rounded-full bg-amber-100 p-1.5 md:p-2 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                            <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
                         </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Awaiting approval</p>
-                            <p className="text-2xl font-semibold text-foreground">{summaryStats.pending}</p>
-                        </div>
-                    </Card>
-                    <Card className="p-4 flex items-center gap-3">
-                        <div className="rounded-full bg-sky-100 p-2 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
-                            <UserCheck className="h-5 w-5" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">In fulfillment</p>
-                            <p className="text-2xl font-semibold text-foreground">{summaryStats.fulfillment}</p>
+                        <div className="text-center md:text-left">
+                            <p className="text-[10px] md:text-sm text-muted-foreground">Pending</p>
+                            <p className="text-lg md:text-2xl font-semibold text-foreground">{summaryStats.pending}</p>
                         </div>
                     </Card>
-                    <Card className="p-4 flex items-center gap-3">
-                        <div className="rounded-full bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            <FileCheck2 className="h-5 w-5" />
+                    <Card className="p-2.5 md:p-4 flex flex-col md:flex-row items-center gap-2 md:gap-3">
+                        <div className="rounded-full bg-sky-100 p-1.5 md:p-2 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
+                            <UserCheck className="h-4 w-4 md:h-5 md:w-5" />
                         </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Completed</p>
-                            <p className="text-2xl font-semibold text-foreground">{summaryStats.completed}</p>
+                        <div className="text-center md:text-left">
+                            <p className="text-[10px] md:text-sm text-muted-foreground">Fulfillment</p>
+                            <p className="text-lg md:text-2xl font-semibold text-foreground">{summaryStats.fulfillment}</p>
+                        </div>
+                    </Card>
+                    <Card className="p-2.5 md:p-4 flex flex-col md:flex-row items-center gap-2 md:gap-3">
+                        <div className="rounded-full bg-emerald-100 p-1.5 md:p-2 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <FileCheck2 className="h-4 w-4 md:h-5 md:w-5" />
+                        </div>
+                        <div className="text-center md:text-left">
+                            <p className="text-[10px] md:text-sm text-muted-foreground">Completed</p>
+                            <p className="text-lg md:text-2xl font-semibold text-foreground">{summaryStats.completed}</p>
                         </div>
                     </Card>
                 </div>
 
-                <Card className="space-y-4 p-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <Card className="space-y-3 md:space-y-4 p-3 md:p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <TableToolbar
                             searchValue={searchTerm}
                             onSearchChange={handleSearchChange}
                             perPage={perPage}
                             onPerPageChange={handlePerPageChange}
                             isSearching={isSearching}
-                            searchPlaceholder="Search by reference code, request type, or requester"
-                            searchDescription="Try typing a reference code (REQ-001), request title, or employee name."
+                            searchPlaceholder="Search requests..."
                             actionSlot={
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <Filter className="h-4 w-4 text-muted-foreground" />
+                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                    <div className="flex items-center gap-1.5">
+                                        <Filter className="h-4 w-4 text-muted-foreground hidden sm:block" />
                                         <select
-                                            className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                            className="rounded-md border border-border bg-background px-2 py-1.5 text-xs sm:text-sm text-foreground min-w-[90px]"
                                             value={status}
                                             onChange={(event) => handleStatusChange(event.target.value)}
                                         >
-                                            <option value="">All statuses</option>
+                                            <option value="">All status</option>
                                             {statusOptions.map((option) => (
                                                 <option key={option} value={option}>
                                                     {option.charAt(0).toUpperCase() + option.slice(1)}
@@ -365,11 +364,11 @@ export default function RequestsIndex({
                                         </select>
                                     </div>
                                     <select
-                                        className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                        className="rounded-md border border-border bg-background px-2 py-1.5 text-xs sm:text-sm text-foreground min-w-[100px] hidden sm:block"
                                         value={requestTypeId}
                                         onChange={(event) => handleTypeFilterChange(event.target.value)}
                                     >
-                                        <option value="">All request types</option>
+                                        <option value="">All types</option>
                                         {requestTypes.map((type) => (
                                             <option key={type.id} value={type.id}>
                                                 {type.name}
@@ -377,7 +376,7 @@ export default function RequestsIndex({
                                         ))}
                                     </select>
                                     <select
-                                        className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                        className="rounded-md border border-border bg-background px-2 py-1.5 text-xs sm:text-sm text-foreground min-w-[80px]"
                                         value={scope}
                                         onChange={(event) => handleScopeChange(event.target.value)}
                                     >
@@ -388,32 +387,33 @@ export default function RequestsIndex({
                                             </option>
                                         ))}
                                     </select>
-                                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                                    {/* Date filters - Hidden on mobile */}
+                                    <div className="hidden md:flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-2 py-1.5">
                                         <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                                        <div className="flex items-center gap-2 flex-1 min-w-[140px]">
-                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">From</span>
+                                        <div className="flex items-center gap-1.5 flex-1 min-w-[120px]">
+                                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">From</span>
                                             <Input
                                                 type="date"
-                                                className="h-8 flex-1 min-w-[140px] text-sm"
+                                                className="h-7 flex-1 min-w-[120px] text-xs"
                                                 value={dateFrom}
                                                 onChange={(event) => handleDateChange('date_from', event.target.value)}
                                             />
                                         </div>
-                                        <span className="text-xs text-muted-foreground shrink-0">to</span>
-                                        <div className="flex items-center gap-2 flex-1 min-w-[140px]">
-                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">To</span>
+                                        <span className="text-xs text-muted-foreground">to</span>
+                                        <div className="flex items-center gap-1.5 flex-1 min-w-[120px]">
+                                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">To</span>
                                             <Input
                                                 type="date"
-                                                className="h-8 flex-1 min-w-[140px] text-sm"
+                                                className="h-7 flex-1 min-w-[120px] text-xs"
                                                 value={dateTo}
                                                 onChange={(event) => handleDateChange('date_to', event.target.value)}
                                             />
                                         </div>
                                     </div>
                                     {scope === 'all' && (
-                                        <Button variant="outline" size="sm" className="gap-2" onClick={handleExport}>
+                                        <Button variant="outline" size="sm" className="gap-1.5 h-8 px-2 sm:px-3 hidden sm:flex" onClick={handleExport}>
                                             <Download className="h-4 w-4" />
-                                            Export CSV
+                                            <span className="hidden md:inline">Export</span>
                                         </Button>
                                     )}
                                 </div>
@@ -421,15 +421,15 @@ export default function RequestsIndex({
                         />
                     </div>
 
-                    <div className="space-y-6">
+                    <div className="space-y-4 md:space-y-6">
                         {sortedSubmissionDates.length === 0 ? (
-                            <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+                            <div className="rounded-xl border border-dashed p-6 md:p-10 text-center text-muted-foreground text-sm">
                                 No requests match your filters yet.
                             </div>
                         ) : (
                             sortedSubmissionDates.map((dateKey) => (
-                                <section key={dateKey} className="space-y-3">
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                <section key={dateKey} className="space-y-2 md:space-y-3">
+                                    <div className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                         {dateKey}
                                     </div>
                                     {groupedSubmissions[dateKey].map((submission) => {
@@ -439,46 +439,45 @@ export default function RequestsIndex({
                                         return (
                                             <div
                                                 key={submission.id}
-                                                className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm transition hover:border-primary/50"
+                                                className="rounded-lg md:rounded-xl border border-border bg-card px-3 md:px-4 py-2.5 md:py-3 shadow-sm transition hover:border-primary/50"
                                             >
                                                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                    <div>
-                                                        <div className="flex flex-wrap items-center gap-3">
-                                                            <h3 className="text-base font-semibold text-foreground">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-1.5 md:gap-3">
+                                                            <h3 className="text-sm md:text-base font-semibold text-foreground truncate max-w-[200px] md:max-w-none">
                                                                 {submission.request_type?.name || 'Unknown Request Type'}
                                                             </h3>
-                                                            <Badge className={statusBadgeStyles[submission.status]}>
+                                                            <Badge className={`text-[10px] md:text-xs px-1.5 md:px-2 ${statusBadgeStyles[submission.status]}`}>
                                                                 {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
                                                             </Badge>
-                                                            <span className="text-xs text-muted-foreground">Ref: {submission.reference_code}</span>
+                                                            <span className="text-[10px] md:text-xs text-muted-foreground hidden sm:inline">Ref: {submission.reference_code}</span>
                                                             {!submission.request_type && (
-                                                                <Badge variant="destructive" className="text-xs">
-                                                                    Request Type Deleted
+                                                                <Badge variant="destructive" className="text-[10px] md:text-xs">
+                                                                    Deleted
                                                                 </Badge>
                                                             )}
                                                         </div>
-                                                        <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                                        <div className="mt-1.5 md:mt-2 flex flex-wrap gap-2 md:gap-4 text-[10px] md:text-xs text-muted-foreground">
                                                             <span className="flex items-center gap-1">
-                                                                <Calendar className="h-3.5 w-3.5" />
-                                                                Submitted {formatDate(submission.submitted_at || submission.created_at)}
+                                                                <Calendar className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                                                                {formatDate(submission.submitted_at || submission.created_at)}
                                                             </span>
-                                                            <span>
-                                                                Requester: {requesterName} ({requesterId})
+                                                            <span className="truncate max-w-[150px] md:max-w-none">
+                                                                {requesterName}
                                                             </span>
-                                                            {submission.fulfillment?.completed_at && (
-                                                                <span>Completed {formatDate(submission.fulfillment.completed_at)}</span>
-                                                            )}
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex flex-wrap items-center gap-2">
+                                                    <div className="flex items-center">
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
+                                                            className="h-8 text-xs md:text-sm"
                                                             onClick={() => router.get(route('requests.show', submission.id))}
                                                         >
-                                                            View details
-                                                            <ChevronRight className="ml-1 h-4 w-4" />
+                                                            <span className="hidden sm:inline">View details</span>
+                                                            <span className="sm:hidden">View</span>
+                                                            <ChevronRight className="ml-1 h-3.5 w-3.5 md:h-4 md:w-4" />
                                                         </Button>
                                                     </div>
                                                 </div>

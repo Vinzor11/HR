@@ -196,6 +196,7 @@ function Sidebar({
             } as React.CSSProperties
           }
           side={side}
+          showCloseButton={false}
         >
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>

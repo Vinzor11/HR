@@ -354,48 +354,45 @@ export default function Index({ roles, filters }: IndexProps) {
                         onPerPageChange={handlePerPageChange}
                         isSearching={isSearching}
                         actionSlot={
-                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-2">
-                                <div className="flex items-center gap-2">
-                                    {/* Sort by icon button */}
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="outline" size="sm" className="h-9 gap-2">
-                                                <ArrowUpDown className="h-4 w-4" />
-                                                <span className="hidden sm:inline">Sort</span>
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>
-                                                A → Z
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>
-                                                Z → A
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>
-                                                Oldest First
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleSortKeyChange('date-desc')}>
-                                                Newest First
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                                {/* Sort Dropdown */}
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-9 gap-1.5 sm:gap-2 px-2 sm:px-3">
+                                            <ArrowUpDown className="h-4 w-4" />
+                                            <span className="hidden sm:inline">Sort</span>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>
+                                            A → Z
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>
+                                            Z → A
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>
+                                            Oldest First
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleSortKeyChange('date-desc')}>
+                                            Newest First
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
 
-                                    {/* Rows selector */}
-                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                        <span className="whitespace-nowrap">Rows:</span>
-                                        <Select value={perPage} onValueChange={handlePerPageChange}>
-                                            <SelectTrigger className="h-9 w-[80px]">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {['5', '10', '25', '50', '100'].map((option) => (
-                                                    <SelectItem key={option} value={option}>
-                                                        {option}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                {/* Per Page - Hidden on mobile */}
+                                <div className="hidden sm:flex items-center">
+                                    <Select value={perPage} onValueChange={handlePerPageChange}>
+                                        <SelectTrigger className="h-9 w-[70px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {['5', '10', '25', '50', '100'].map((option) => (
+                                                <SelectItem key={option} value={option}>
+                                                    {option}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <CustomModalForm

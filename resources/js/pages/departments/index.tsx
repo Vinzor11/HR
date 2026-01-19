@@ -542,8 +542,8 @@ const handleFacultyFilterChange = (value: string) => {
       <Head title="Departments & Offices" />
       <CustomToast />
 
-      <div className="flex flex-col overflow-hidden bg-background rounded-xl" style={{ height: 'calc(100vh - 80px)' }}>
-        <div className="flex-shrink-0 border-b border-border bg-card px-4 py-2 shadow-sm">
+      <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
+        <div className="flex-shrink-0 border-b border-border bg-card px-3 sm:px-4 py-2 shadow-sm">
           <TableToolbar
             searchValue={searchTerm}
             onSearchChange={handleSearchChange}
@@ -551,11 +551,11 @@ const handleFacultyFilterChange = (value: string) => {
             onPerPageChange={handlePerPageChange}
             isSearching={isSearching}
             actionSlot={
-              <div className="flex flex-row flex-wrap items-center gap-2">
-                {/* Sort by icon button */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Sort Dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-2">
+                    <Button variant="outline" size="sm" className="h-9 gap-1.5 sm:gap-2 px-2 sm:px-3">
                       <ArrowUpDown className="h-4 w-4" />
                       <span className="hidden sm:inline">Sort</span>
                     </Button>
@@ -576,10 +576,10 @@ const handleFacultyFilterChange = (value: string) => {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* Rows selector */}
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                {/* Per Page - Hidden on mobile */}
+                <div className="hidden sm:flex items-center">
                   <Select value={perPage} onValueChange={handlePerPageChange}>
-                    <SelectTrigger className="h-9 w-[80px]">
+                    <SelectTrigger className="h-9 w-[70px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -592,24 +592,24 @@ const handleFacultyFilterChange = (value: string) => {
                   </Select>
                 </div>
 
-                {/* Type filter - Departments vs Offices */}
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                {/* Type filter - Hidden on mobile */}
+                <div className="hidden md:flex items-center">
                   <Select value={typeFilter || 'all'} onValueChange={handleTypeFilterChange}>
-                    <SelectTrigger className="h-9 w-[180px]">
+                    <SelectTrigger className="h-9 w-[160px]">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All (Departments & Offices)</SelectItem>
-                      <SelectItem value="academic">Departments Only</SelectItem>
-                      <SelectItem value="administrative">Offices Only</SelectItem>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="academic">Departments</SelectItem>
+                      <SelectItem value="administrative">Offices</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Faculty filter */}
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                {/* Faculty filter - Hidden on mobile */}
+                <div className="hidden lg:flex items-center">
                   <Select value={facultyFilter || 'all'} onValueChange={handleFacultyFilterChange}>
-                    <SelectTrigger className="h-9 w-[180px]">
+                    <SelectTrigger className="h-9 w-[160px]">
                       <SelectValue placeholder="All Faculties" />
                     </SelectTrigger>
                     <SelectContent>
@@ -623,12 +623,12 @@ const handleFacultyFilterChange = (value: string) => {
                     </Select>
                   </div>
 
-                {/* Show Deleted Departments Toggle - Only show if user has restore or force delete permission */}
+                {/* Show Deleted Toggle */}
                 {(hasPermission(permissions, 'restore-department') || hasPermission(permissions, 'force-delete-department')) && (
                   <Button
                     variant={showDeleted ? "default" : "outline"}
                     size="sm"
-                    className="gap-2 h-9"
+                    className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
                     onClick={() => {
                       const newValue = !showDeleted
                       setShowDeleted(newValue)
@@ -641,12 +641,12 @@ const handleFacultyFilterChange = (value: string) => {
                     {showDeleted ? (
                       <>
                         <ArchiveRestore className="h-4 w-4" />
-                        Show Active
+                        <span className="hidden sm:inline">Show Active</span>
                       </>
                     ) : (
                       <>
                         <Archive className="h-4 w-4" />
-                        Show Deleted
+                        <span className="hidden sm:inline">Show Deleted</span>
                       </>
                     )}
                   </Button>
@@ -704,7 +704,7 @@ const handleFacultyFilterChange = (value: string) => {
           />
         </div>
 
-        <div className="flex-1 min-h-0 bg-background p-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
           <EnterpriseEmployeeTable
             columns={DepartmentTableConfig.columns}
             actions={DepartmentTableConfig.actions}

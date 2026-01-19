@@ -319,7 +319,7 @@ export const CustomModalForm = ({
                     <h4 className="text-sm font-bold text-gray-700 capitalize">
                       {module}
                     </h4>
-                    <div className="ms-4 mt-2 grid grid-cols-5 gap-2">
+                    <div className="ms-4 mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                       {Array.isArray(perms) &&
                         perms.map((perm: any) => (
                           <label
@@ -509,10 +509,11 @@ export const CustomModalForm = ({
         type={addButton.type}
         id={addButton.id}
         variant={addButton.variant}
-        className={addButton.className}
+        className={`gap-1.5 sm:gap-2 h-9 px-2 sm:px-3 ${addButton.className || ''}`}
+        size="sm"
       >
-        {IconComponent && <IconComponent className="me-2" />}
-        {addButton.label}
+        {IconComponent && <IconComponent className="h-4 w-4" />}
+        <span className="hidden sm:inline">{addButton.label}</span>
       </Button>
     </DialogTrigger>
   </div>
@@ -521,7 +522,7 @@ export const CustomModalForm = ({
 
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
-        className="sm:max-w-[830px] max-h-[90vh] overflow-hidden"
+        className="w-[95vw] max-w-[95vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[830px] max-h-[85vh] sm:max-h-[90vh] overflow-hidden"
         onEscapeKeyDown={() => {
           onOpenChange(false);
         }}
@@ -558,7 +559,7 @@ export const CustomModalForm = ({
                 <div
                   className={`grid gap-4 ${
                     groups[currentGroupIndex].group === 'Employee'
-                      ? 'grid-cols-1 md:grid-cols-3'
+                      ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
                       : groups[currentGroupIndex].layout || 'grid-cols-1'
                   }`}
                 >

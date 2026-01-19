@@ -157,9 +157,9 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
             <Head title={`Request ${submission.reference_code}`} />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <div className="space-y-6">
-                <div className="flex items-center justify-between">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4 pb-20 sm:pb-4">
+                <div className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <Link href={route('requests.index')} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
                         <ArrowLeft className="mr-1 h-4 w-4" />
                         Back to all requests
@@ -167,7 +167,7 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                     <Badge className={statusBadgeStyles[submission.status]}>{currentStatusLabel}</Badge>
                 </div>
 
-                <Card className="grid gap-4 p-5 md:grid-cols-3">
+                <Card className="grid gap-4 p-4 sm:p-5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                     <div>
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Reference</p>
                         <p className="text-lg font-semibold text-foreground">{submission.reference_code}</p>
@@ -189,8 +189,8 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                     </div>
                 </Card>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    <Card className="p-5 md:col-span-2 space-y-4">
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+                    <Card className="p-4 sm:p-5 md:col-span-2 space-y-4">
                         <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                             <FileText className="h-4 w-4" />
                             Submitted details

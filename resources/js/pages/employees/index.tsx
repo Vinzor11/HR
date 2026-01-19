@@ -732,12 +732,13 @@ export default function Index() {
       <div className="flex flex-col overflow-hidden bg-background" style={{ height: 'calc(100vh - 80px)' }}>
             {/* Top Section - Controls */}
             <div className="flex-shrink-0 bg-card border-b border-border shadow-sm z-40">
-              <div className="px-6 py-3">
-            <div className="flex items-center justify-between gap-4">
-              {/* Left: Search and Filters */}
-              <div className="flex items-center gap-3 flex-1">
+              <div className="px-3 md:px-6 py-2 md:py-3">
+            {/* Mobile-first responsive layout */}
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              {/* Search Section - Full width on mobile */}
+              <div className="flex flex-col sm:flex-row gap-2 flex-1">
                 {/* Smart Search Bar */}
-                    <div className="relative flex-1 max-w-md">
+                    <div className="relative flex-1 max-w-full lg:max-w-md">
                       <div className="flex items-center gap-2">
                         <Select 
                           value={searchMode} 
@@ -748,7 +749,7 @@ export default function Index() {
                             }
                           }}
                         >
-                          <SelectTrigger className="w-[140px] h-9">
+                          <SelectTrigger className="w-[100px] sm:w-[140px] h-9 text-xs sm:text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -763,8 +764,8 @@ export default function Index() {
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="text"
-                        placeholder={`Search by ${searchMode === 'any' ? 'ID, Name, Position, Department...' : searchMode}...`}
-                        className="pl-10 pr-4 py-2 h-9 border-border focus:border-primary focus:ring-primary rounded-lg"
+                        placeholder={`Search ${searchMode === 'any' ? 'employees...' : `by ${searchMode}...`}`}
+                        className="pl-10 pr-4 py-2 h-9 text-sm border-border focus:border-primary focus:ring-primary rounded-lg"
                         value={searchTerm}
                         onChange={(e) => {
                           setSearchTerm(e.target.value);
@@ -778,17 +779,17 @@ export default function Index() {
                 {/* Filters Button */}
                 <Dialog open={filterModalOpen} onOpenChange={setFilterModalOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2 relative h-9">
+                    <Button variant="outline" size="sm" className="gap-1.5 sm:gap-2 relative h-9 px-2 sm:px-3">
                       <Filter className="h-4 w-4" />
-                      Filters
+                      <span className="hidden sm:inline">Filters</span>
                       {activeFiltersCount > 0 && (
-                        <Badge className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
+                        <Badge className="ml-0.5 sm:ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
                           {activeFiltersCount}
                         </Badge>
                       )}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto mx-auto">
                     <DialogTitle className="text-lg font-semibold">Filter Employees</DialogTitle>
                     <DialogDescription>
                       Apply filters to narrow down your search results
@@ -953,11 +954,11 @@ export default function Index() {
                   </DialogContent>
                 </Dialog>
 
-                {/* Page Size Dropdown */}
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                {/* Page Size Dropdown - Hidden on mobile */}
+                <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
                   <span className="whitespace-nowrap">Rows:</span>
                   <Select value={perPage} onValueChange={handlePerPageChange}>
-                    <SelectTrigger className="h-9 w-[80px]">
+                    <SelectTrigger className="h-9 w-[70px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -971,14 +972,15 @@ export default function Index() {
                 </div>
               </div>
 
-              {/* Right: Action Buttons */}
-              <div className="flex items-center gap-2">
+              {/* Action Buttons - Scrollable on mobile */}
+              <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 md:overflow-visible">
+              <div className="flex items-center gap-2 min-w-max">
                 {/* View Mode Toggle */}
-                <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 bg-card shadow-sm">
+                <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-card shadow-sm">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-8 px-3 ${viewMode === 'table' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
+                    className={`h-8 w-8 sm:w-auto sm:px-3 p-0 ${viewMode === 'table' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
                     onClick={() => setViewMode('table')}
                     title="Table View"
                   >
@@ -987,7 +989,7 @@ export default function Index() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-8 px-3 ${viewMode === 'card' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
+                    className={`h-8 w-8 sm:w-auto sm:px-3 p-0 ${viewMode === 'card' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
                     onClick={() => setViewMode('card')}
                     title="Card View"
                   >
@@ -996,7 +998,7 @@ export default function Index() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-8 px-3 text-xs ${viewMode === 'auto' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
+                    className={`h-8 px-2 sm:px-3 text-xs ${viewMode === 'auto' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
                     onClick={() => setViewMode('auto')}
                     title="Auto (Switch based on viewport)"
                   >
@@ -1009,7 +1011,7 @@ export default function Index() {
                   <Button 
                     variant={showDeleted ? "default" : "outline"}
                     size="sm" 
-                    className="gap-2 h-9"
+                    className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
                     onClick={() => {
                       const newValue = !showDeleted;
                       updateShowDeleted(newValue);
@@ -1019,34 +1021,34 @@ export default function Index() {
                     {showDeleted ? (
                       <>
                         <ArchiveRestore className="h-4 w-4" />
-                        Show Active
+                        <span className="hidden sm:inline">Show Active</span>
                       </>
                     ) : (
                       <>
                         <Archive className="h-4 w-4" />
-                        Show Deleted
+                        <span className="hidden sm:inline">Show Deleted</span>
                       </>
                     )}
                   </Button>
                 )}
 
-                {/* Export Button */}
+                {/* Export Button - Hidden on mobile */}
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="gap-2 h-9"
+                  className="hidden sm:flex gap-2 h-9"
                   onClick={exportToCSV}
                 >
                   <Download className="h-4 w-4" />
                   Export
                 </Button>
 
-                {/* Column Visibility */}
+                {/* Column Visibility - Hidden on mobile */}
                 <Dialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2 h-9">
+                    <Button variant="outline" size="sm" className="hidden sm:flex gap-2 h-9">
                       <Columns3 className="h-4 w-4" />
-                      Columns
+                      <span className="hidden md:inline">Columns</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="!max-w-[95vw] sm:!max-w-4xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
@@ -1167,19 +1169,20 @@ export default function Index() {
                 <Button
                   onClick={() => router.visit(route('employees.create'))}
                   size="sm"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
                 >
                   <UserPlus className="h-4 w-4" />
-                  Add New
+                  <span className="hidden sm:inline">Add New</span>
                 </Button>
                 )}
               </div>
+              </div>
             </div>
 
-            {/* Filter Chips */}
+            {/* Filter Chips - Scrollable on mobile */}
             {activeFiltersCount > 0 && (
-              <div className="flex flex-wrap gap-2 items-center mt-3 pt-3 border-t border-border">
-                <span className="text-sm text-muted-foreground font-medium">Active filters:</span>
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border overflow-x-auto">
+                <span className="text-xs sm:text-sm text-muted-foreground font-medium whitespace-nowrap">Filters:</span>
                 {statusFilter && (
                   <Badge variant="outline" className="flex items-center gap-1">
                     Status: {statusFilter}
@@ -1241,7 +1244,7 @@ export default function Index() {
         </div>
 
         {/* Table Container - Auto expand/contract based on data */}
-        <div className="flex-1 min-h-0 bg-background p-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
           <EnterpriseEmployeeTable
             key={`employee-table-${dataVersion}`}
             columns={filteredColumns}
@@ -1270,28 +1273,36 @@ export default function Index() {
 
         {/* Pagination - Fixed at bottom of viewport */}
         <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
             {/* Results Info */}
-            <div className="text-sm text-muted-foreground">
+            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+              <span className="hidden sm:inline">
               Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
               <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
               <span className="font-semibold text-foreground">{total || 0}</span> employees
+              </span>
+              <span className="sm:hidden">
+                <span className="font-semibold text-foreground">{from || 0}</span>-
+                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                <span className="font-semibold text-foreground">{total || 0}</span>
+              </span>
             </div>
 
             {/* Pagination Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">Previous</span>
               </Button>
 
-              <div className="flex items-center gap-1">
+              {/* Page Numbers - Desktop only */}
+              <div className="hidden sm:flex items-center gap-1">
                 {lastPage > 1 ? (
                   <>
                     {/* First Page */}
@@ -1368,15 +1379,22 @@ export default function Index() {
                 )}
               </div>
 
+              {/* Page Indicator - Mobile only */}
+              <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
+                <span className="font-semibold text-foreground">{currentPage}</span>
+                <span className="text-muted-foreground">/</span>
+                <span className="text-muted-foreground">{lastPage || 1}</span>
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === lastPage || lastPage === 0}
-                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
+                <span className="hidden sm:inline mr-1">Next</span>
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>

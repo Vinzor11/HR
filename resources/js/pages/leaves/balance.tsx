@@ -120,14 +120,14 @@ export default function LeaveBalancePage({ balances, year, availableYears, error
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My Leave Balance" />
-            <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
+            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 pb-20 sm:pb-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold">My Leave Balance</h1>
-                        <p className="text-muted-foreground mt-1">View your leave entitlements and usage</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold">My Leave Balance</h1>
+                        <p className="text-muted-foreground mt-1 text-sm sm:text-base">View your leave entitlements and usage</p>
                     </div>
                     <Select value={year.toString()} onValueChange={handleYearChange}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue placeholder="Select year" />
                         </SelectTrigger>
                         <SelectContent>
@@ -140,7 +140,7 @@ export default function LeaveBalancePage({ balances, year, availableYears, error
                     </Select>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {balances.map((item) => (
                         <Card
                             key={item.leave_type.id}
@@ -214,7 +214,7 @@ export default function LeaveBalancePage({ balances, year, availableYears, error
 
                 {/* History Dialog */}
                 <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-                    <DialogContent className="sm:max-w-[830px] max-h-[90vh] overflow-hidden flex flex-col">
+                    <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[830px] max-h-[85vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
                                 <History className="h-5 w-5" />

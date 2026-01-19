@@ -480,20 +480,20 @@ export default function Index({ users, filters }: IndexProps) {
             <CustomToast />
 
             <div className="flex flex-col overflow-hidden bg-background rounded-xl" style={{ height: 'calc(100vh - 80px)' }}>
-                <div className="flex-shrink-0 border-b border-border bg-card px-4 py-2 shadow-sm">
+                <div className="flex-shrink-0 border-b border-border bg-card px-3 md:px-4 py-2 shadow-sm">
                     <TableToolbar
                         searchValue={searchTerm}
                         onSearchChange={handleSearchChange}
                         perPage={perPage}
                         onPerPageChange={handlePerPageChange}
                         isSearching={isSearching}
+                        searchPlaceholder="Search users..."
                         actionSlot={
-                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-2">
-                                <div className="flex items-center gap-2">
-                                    {/* Sort by icon button */}
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                                {/* Sort Dropdown */}
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button variant="outline" size="sm" className="h-9 gap-2">
+                                        <Button variant="outline" size="sm" className="h-9 gap-1.5 sm:gap-2 px-2 sm:px-3">
                                                 <ArrowUpDown className="h-4 w-4" />
                                                 <span className="hidden sm:inline">Sort</span>
                                             </Button>
@@ -514,11 +514,10 @@ export default function Index({ users, filters }: IndexProps) {
                                         </DropdownMenuContent>
                                     </DropdownMenu>
 
-                                    {/* Rows selector */}
-                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                        <span className="whitespace-nowrap">Rows:</span>
+                                {/* Per Page - Hidden on mobile */}
+                                <div className="hidden sm:flex items-center">
                                         <Select value={perPage} onValueChange={handlePerPageChange}>
-                                            <SelectTrigger className="h-9 w-[80px]">
+                                        <SelectTrigger className="h-9 w-[70px]">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -531,12 +530,12 @@ export default function Index({ users, filters }: IndexProps) {
                                         </Select>
                                     </div>
 
-                                    {/* Show Deleted Users Toggle - Only show if user has restore or force delete permission */}
+                                {/* Show Deleted Toggle */}
                                     {(hasPermission(permissions, 'restore-user') || hasPermission(permissions, 'force-delete-user')) && (
                                         <Button 
                                             variant={showDeleted ? "default" : "outline"}
                                             size="sm" 
-                                            className="gap-2 h-9"
+                                        className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
                                             onClick={() => {
                                                 const newValue = !showDeleted;
                                                 updateShowDeleted(newValue);
@@ -546,17 +545,16 @@ export default function Index({ users, filters }: IndexProps) {
                                             {showDeleted ? (
                                                 <>
                                                     <ArchiveRestore className="h-4 w-4" />
-                                                    Show Active
+                                                <span className="hidden sm:inline">Show Active</span>
                                                 </>
                                             ) : (
                                                 <>
                                                     <Archive className="h-4 w-4" />
-                                                    Show Deleted
+                                                <span className="hidden sm:inline">Show Deleted</span>
                                                 </>
                                             )}
                                         </Button>
                                     )}
-                                </div>
 
                                 <CustomModalForm
                                     addButton={UsersModalFormConfig.addButton}
@@ -585,7 +583,7 @@ export default function Index({ users, filters }: IndexProps) {
                     />
                 </div>
 
-                <div className="flex-1 min-h-0 bg-background p-4 overflow-y-auto">
+                <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
                     <EnterpriseEmployeeTable
                         columns={UsersTableConfig.columns}
                         actions={UsersTableConfig.actions}
@@ -604,28 +602,36 @@ export default function Index({ users, filters }: IndexProps) {
 
                 {/* Pagination - Fixed at bottom of viewport */}
                 <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
                         {/* Results Info */}
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+                            <span className="hidden sm:inline">
                             Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
                             <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
                             <span className="font-semibold text-foreground">{total || 0}</span> users
+                            </span>
+                            <span className="sm:hidden">
+                                <span className="font-semibold text-foreground">{from || 0}</span>-
+                                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                                <span className="font-semibold text-foreground">{total || 0}</span>
+                            </span>
                         </div>
 
                         {/* Pagination Controls */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 sm:gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handlePageChange(currentPage - 1)}
                                 disabled={currentPage === 1}
-                                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <ChevronLeft className="h-4 w-4 mr-1" />
-                                Previous
+                                <ChevronLeft className="h-4 w-4" />
+                                <span className="hidden sm:inline ml-1">Previous</span>
                             </Button>
 
-                            <div className="flex items-center gap-1">
+                            {/* Page Numbers - Desktop only */}
+                            <div className="hidden sm:flex items-center gap-1">
                                 {lastPage > 1 ? (
                                     <>
                                         {/* First Page */}
@@ -702,15 +708,22 @@ export default function Index({ users, filters }: IndexProps) {
                                 )}
                             </div>
 
+                            {/* Page Indicator - Mobile only */}
+                            <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
+                                <span className="font-semibold text-foreground">{currentPage}</span>
+                                <span className="text-muted-foreground">/</span>
+                                <span className="text-muted-foreground">{lastPage || 1}</span>
+                            </div>
+
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handlePageChange(currentPage + 1)}
                                 disabled={currentPage === lastPage || lastPage === 0}
-                                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Next
-                                <ChevronRight className="h-4 w-4 ml-1" />
+                                <span className="hidden sm:inline mr-1">Next</span>
+                                <ChevronRight className="h-4 w-4" />
                             </Button>
                         </div>
                     </div>

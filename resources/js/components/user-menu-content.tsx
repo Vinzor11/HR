@@ -4,6 +4,7 @@ import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { type User } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { LogOut, Settings, User as UserIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface UserMenuContentProps {
     user: User;
@@ -22,27 +23,54 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                 </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-                {hasEmployeeId && (
-                    <DropdownMenuItem asChild>
-                        <Link className="block w-full" href={route('employees.my-profile')} as="button" prefetch onClick={cleanup}>
-                            <UserIcon className="mr-2" />
-                            My Employee Profile
+            
+            {/* Quick Action Buttons */}
+            <div className="px-2 py-2">
+                <div className="flex gap-2">
+                    {hasEmployeeId ? (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 h-9"
+                            asChild
+                        >
+                            <Link href={route('employees.my-profile')} onClick={cleanup}>
+                                <UserIcon className="h-4 w-4 mr-1.5" />
+                                Profile
+                            </Link>
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 h-9"
+                            asChild
+                        >
+                            <Link href={route('profile.edit')} onClick={cleanup}>
+                                <UserIcon className="h-4 w-4 mr-1.5" />
+                                Profile
+                            </Link>
+                        </Button>
+                    )}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-9"
+                        asChild
+                    >
+                        <Link href={route('profile.edit')} onClick={cleanup}>
+                            <Settings className="h-4 w-4 mr-1.5" />
+                            Settings
                         </Link>
-                    </DropdownMenuItem>
-                )}
-                <DropdownMenuItem asChild>
-                    <Link className="block w-full" href={route('profile.edit')} as="button" prefetch onClick={cleanup}>
-                        <Settings className="mr-2" />
-                        Settings
-                    </Link>
-                </DropdownMenuItem>
-            </DropdownMenuGroup>
+                    </Button>
+                </div>
+            </div>
+            
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="text-destructive focus:text-destructive focus:bg-destructive/10">
                 <Link className="block w-full" method="post" href={route('logout')} as="button" onClick={cleanup}>
-                    <LogOut className="mr-2" />
-                    Log out
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
                 </Link>
             </DropdownMenuItem>
         </>

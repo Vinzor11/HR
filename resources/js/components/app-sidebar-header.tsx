@@ -11,13 +11,13 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
             <div className={`flex w-full items-center gap-2 min-w-0 ${position === 'right' ? 'justify-end' : 'justify-start'}`}>
                 {position === 'left' ? (
                     <>
-                        <SidebarTrigger className="-ml-1" />
+                        <SidebarTrigger className="-ml-1 hidden md:flex" />
                         <Breadcrumbs breadcrumbs={breadcrumbs} />
                     </>
                 ) : (
                     <>
                         <Breadcrumbs breadcrumbs={breadcrumbs} />
-                        <SidebarTrigger className="-mr-1" />
+                        <SidebarTrigger className="-mr-1 hidden md:flex" />
                     </>
                 )}
             </div>

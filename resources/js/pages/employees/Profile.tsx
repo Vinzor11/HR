@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import EmployeeDocuments from '@/components/EmployeeDocuments';
 import { useState, useEffect, useRef } from 'react';
 import {
@@ -30,6 +31,8 @@ import {
   ArrowRight,
   Building2,
   DollarSign,
+  Menu,
+  X,
 } from 'lucide-react';
 
 interface Employee {
@@ -252,6 +255,7 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
   const [isFixed, setIsFixed] = useState(false);
   const [initialTop, setInitialTop] = useState(0);
   const [cardWidth, setCardWidth] = useState(0);
+  const [mobileQuickOverviewOpen, setMobileQuickOverviewOpen] = useState(false);
 
   useEffect(() => {
     // Get the initial position and width of the Quick Overview
@@ -293,7 +297,7 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={`${fullName} - Employee Profile`} />
       
-      <div className="space-y-8 pb-8">
+      <div className="space-y-8 pb-24 lg:pb-8">
         {/* Header Section */}
         <div className="relative">
           {/* Background Banner with improved gradient */}
@@ -1174,11 +1178,11 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
             </div>
           </div>
 
-          {/* Right Column - Quick Stats */}
-          <div className="lg:col-span-1" ref={quickOverviewRef}>
+          {/* Right Column - Quick Stats (Desktop only) */}
+          <div className="hidden lg:block lg:col-span-1" ref={quickOverviewRef}>
             {/* Desktop: Toggles between relative and fixed based on scroll */}
             <div
-              className={`hidden lg:block z-40 ${isFixed ? 'fixed right-8 top-16' : ''}`}
+              className={`z-40 ${isFixed ? 'fixed right-8 top-16' : ''}`}
               style={isFixed && cardWidth ? { width: cardWidth } : undefined}
             >
               <Card className={`shadow-sm overflow-y-auto ${isFixed ? 'max-h-[calc(100vh-5rem)]' : ''}`}>
@@ -1207,35 +1211,55 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
                 </CardContent>
               </Card>
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Mobile/Tablet: Inline version that scrolls with content */}
-            <Card className="shadow-sm lg:hidden">
-              <CardHeader className="pb-3 space-y-1">
-                <CardTitle className="text-xl">Quick Overview</CardTitle>
-                <CardDescription>Jump to key sections</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
+      {/* Mobile/Tablet: Floating Action Button + Bottom Sheet for Quick Overview */}
+      <div className="lg:hidden">
+        <Sheet open={mobileQuickOverviewOpen} onOpenChange={setMobileQuickOverviewOpen}>
+          <SheetTrigger asChild>
+            <Button
+              size="lg"
+              className="fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              <Menu className="h-6 w-6" />
+              <span className="sr-only">Quick Overview</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[70vh] rounded-t-2xl p-0">
+            <SheetHeader className="px-4 pt-2 pb-3 border-b border-border">
+              <SheetTitle className="text-lg font-semibold">Quick Overview</SheetTitle>
+              <SheetDescription className="text-sm">Jump to key sections</SheetDescription>
+            </SheetHeader>
+            
+            {/* Navigation Links */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 pb-safe">
+              <div className="grid grid-cols-2 gap-2">
                 {quickLinks.map((link) => {
                   const Icon = link.icon;
                   return (
                     <Button
                       key={link.id}
-                      variant="ghost"
-                      className="w-full justify-between rounded-lg border border-transparent px-3 py-2 hover:border-border"
-                      onClick={() => scrollToSection(link.id)}
+                      variant="outline"
+                      className="h-auto flex-col items-center justify-center gap-2 py-4 px-3 rounded-xl border-border hover:bg-primary/10 hover:border-primary/50 transition-all"
+                      onClick={() => {
+                        setMobileQuickOverviewOpen(false);
+                        // Small delay to allow sheet to close before scrolling
+                        setTimeout(() => scrollToSection(link.id), 150);
+                      }}
                     >
-                      <span className="flex items-center gap-3">
-                        <Icon className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{link.label}</span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                        <Icon className="h-5 w-5 text-primary" />
+                      </div>
+                      <span className="text-xs font-medium text-center leading-tight line-clamp-2">{link.label}</span>
                     </Button>
                   );
                 })}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </AppLayout>
   );

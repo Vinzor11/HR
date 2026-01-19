@@ -402,9 +402,9 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
             <Head title={mode === 'edit' ? `Edit ${requestType?.name}` : 'Create Request Type'} />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <form className="space-y-6" onSubmit={handleSubmit}>
-                <div className="grid gap-6 lg:grid-cols-3">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4 pb-20 sm:pb-4">
+                <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
+                <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
                     <div className="space-y-4">
                         <Card className="p-5 space-y-4">
                             <div>

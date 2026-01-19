@@ -117,11 +117,11 @@ export default function LeaveHistoryPage({ requests, leaveTypes, filters, error 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Leave History" />
-            <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
+            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 pb-20 sm:pb-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold">Leave History</h1>
-                        <p className="text-muted-foreground mt-1">View your leave request history</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold">Leave History</h1>
+                        <p className="text-muted-foreground mt-1 text-sm sm:text-base">View your leave request history</p>
                     </div>
                 </div>
 

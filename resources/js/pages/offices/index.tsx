@@ -339,8 +339,8 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
       <Head title="Offices" />
       <CustomToast />
 
-      <div className="flex flex-col overflow-hidden bg-background rounded-xl" style={{ height: 'calc(100vh - 80px)' }}>
-        <div className="flex-shrink-0 border-b border-border bg-card px-4 py-2 shadow-sm">
+      <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
+        <div className="flex-shrink-0 border-b border-border bg-card px-3 sm:px-4 py-2 shadow-sm">
           <TableToolbar
             searchValue={searchTerm}
             onSearchChange={handleSearchChange}
@@ -348,10 +348,11 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
             onPerPageChange={handlePerPageChange}
             isSearching={isSearching}
             actionSlot={
-              <div className="flex flex-row flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Sort Dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-2">
+                    <Button variant="outline" size="sm" className="h-9 gap-1.5 sm:gap-2 px-2 sm:px-3">
                       <ArrowUpDown className="h-4 w-4" />
                       <span className="hidden sm:inline">Sort</span>
                     </Button>
@@ -364,10 +365,10 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <span className="whitespace-nowrap">Rows:</span>
+                {/* Per Page - Hidden on mobile */}
+                <div className="hidden sm:flex items-center">
                   <Select value={perPage} onValueChange={handlePerPageChange}>
-                    <SelectTrigger className="h-9 w-[80px]">
+                    <SelectTrigger className="h-9 w-[70px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -380,12 +381,12 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
                   </Select>
                 </div>
 
-                {/* Show Deleted Offices Toggle - Only show if user has restore or force delete permission */}
+                {/* Show Deleted Toggle */}
                 {(hasPermission(permissions, 'restore-office') || hasPermission(permissions, 'force-delete-office')) && (
                   <Button
                     variant={showDeleted ? "default" : "outline"}
                     size="sm"
-                    className="gap-2 h-9"
+                    className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
                     onClick={() => {
                       const newValue = !showDeleted
                       setShowDeleted(newValue)
@@ -398,12 +399,12 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
                     {showDeleted ? (
                       <>
                         <ArchiveRestore className="h-4 w-4" />
-                        Show Active
+                        <span className="hidden sm:inline">Show Active</span>
                       </>
                     ) : (
                       <>
                         <Archive className="h-4 w-4" />
-                        Show Deleted
+                        <span className="hidden sm:inline">Show Deleted</span>
                       </>
                     )}
                   </Button>
@@ -438,7 +439,7 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
           />
         </div>
 
-        <div className="flex-1 min-h-0 bg-background p-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
           <EnterpriseEmployeeTable
             columns={OfficeTableConfig.columns}
             actions={OfficeTableConfig.actions}

@@ -191,12 +191,12 @@ export default function Dashboard() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
-            <div className="flex h-full flex-1 flex-col gap-6 rounded-xl p-6">
+            <div className="flex h-full flex-1 flex-col gap-4 md:gap-6 rounded-xl p-4 md:p-6">
                 {/* Header with Notifications */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground">HR Dashboard</h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <h1 className="text-2xl md:text-3xl font-bold text-foreground">HR Dashboard</h1>
+                        <p className="text-xs md:text-sm text-muted-foreground mt-1">
                             Welcome back, {auth.user.name}! Here's your HR overview.
                         </p>
                     </div>
@@ -251,26 +251,26 @@ export default function Dashboard() {
 
                 {/* 1. Top Summary Cards */}
                 {props.summary_cards && props.summary_cards.length > 0 && (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
                         {props.summary_cards.map((card, idx) => {
                             const Icon = iconMap[card.icon] || FileText;
                             const colors = colorClasses[card.color] || colorClasses.blue;
                             return (
                                 <Card key={idx} className="border-border hover:shadow-md transition-shadow">
-                                    <CardContent className="p-6">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-muted-foreground mb-1">{card.title}</p>
-                                                <p className="text-3xl font-bold text-foreground">{card.value.toLocaleString()}</p>
+                                    <CardContent className="p-3 md:p-6">
+                                        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2 md:gap-0">
+                                            <div className="flex-1 order-2 md:order-1">
+                                                <p className="text-xs md:text-sm font-medium text-muted-foreground mb-0.5 md:mb-1 truncate">{card.title}</p>
+                                                <p className="text-xl md:text-3xl font-bold text-foreground">{card.value.toLocaleString()}</p>
                                                 {card.trend && (
-                                                    <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                                                        <TrendingUp className="h-3 w-3" />
-                                                        {card.trend}
+                                                    <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-1.5 flex items-center gap-1">
+                                                        <TrendingUp className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                                                        <span className="truncate">{card.trend}</span>
                                                     </p>
                                                 )}
                                             </div>
-                                            <div className={`rounded-lg p-3 ${colors.bg} ${colors.border} border`}>
-                                                <Icon className={`h-6 w-6 ${colors.text}`} />
+                                            <div className={`rounded-lg p-2 md:p-3 ${colors.bg} ${colors.border} border order-1 md:order-2 self-start`}>
+                                                <Icon className={`h-4 w-4 md:h-6 md:w-6 ${colors.text}`} />
                                             </div>
                                         </div>
                                     </CardContent>
@@ -282,45 +282,46 @@ export default function Dashboard() {
 
                 {/* 2. Requests Overview & 3. Fulfillment Queue */}
                 {(props.recent_requests || (props.fulfillment_queue && props.fulfillment_queue.length > 0)) && (
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
                         {/* Recent Requests */}
                         {props.recent_requests && (
                             <Card className="border-border">
-                                <CardHeader className="flex flex-row items-center justify-between pb-3">
-                                    <CardTitle className="text-lg font-semibold">Recent Requests</CardTitle>
+                                <CardHeader className="flex flex-row items-center justify-between pb-2 md:pb-3 px-3 md:px-6 pt-3 md:pt-6">
+                                    <CardTitle className="text-base md:text-lg font-semibold">Recent Requests</CardTitle>
                                     <Link href="/requests">
-                                        <Button variant="ghost" size="sm" className="text-xs">
-                                            View all
+                                        <Button variant="ghost" size="sm" className="text-xs h-8 px-2 md:px-3">
+                                            <span className="hidden sm:inline">View all</span>
+                                            <span className="sm:hidden">All</span>
                                             <ArrowRight className="ml-1 h-3 w-3" />
                                         </Button>
                                     </Link>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
                                     {props.recent_requests.length > 0 ? (
-                                        <div className="space-y-3">
+                                        <div className="space-y-2 md:space-y-3">
                                             {props.recent_requests.map((request) => (
                                                 <Link
                                                     key={request.id}
                                                     href={`/requests/${request.id}`}
-                                                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-muted/50 transition-colors"
+                                                    className="flex items-center justify-between rounded-lg border border-border bg-card p-2.5 md:p-3 hover:bg-muted/50 transition-colors"
                                                 >
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <p className="text-sm font-medium text-foreground truncate">
+                                                        <div className="flex flex-wrap items-center gap-1.5 md:gap-2 mb-1">
+                                                            <p className="text-xs md:text-sm font-medium text-foreground truncate max-w-[150px] md:max-w-none">
                                                                 {request.request_type}
                                                             </p>
                                                             <Badge
                                                                 variant="outline"
-                                                                className={`text-xs ${statusBadgeColors[request.status] || ''}`}
+                                                                className={`text-[10px] md:text-xs px-1.5 md:px-2 ${statusBadgeColors[request.status] || ''}`}
                                                             >
                                                                 {request.status}
                                                             </Badge>
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground">
+                                                        <p className="text-[10px] md:text-xs text-muted-foreground truncate">
                                                             {request.requester}
                                                             {request.requester_employee_id && ` (${request.requester_employee_id})`}
                                                         </p>
-                                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                                        <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
                                                             {request.submitted_at || 'Just now'}
                                                         </p>
                                                     </div>
@@ -328,7 +329,7 @@ export default function Dashboard() {
                                             ))}
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground text-center py-4">No recent requests</p>
+                                        <p className="text-xs md:text-sm text-muted-foreground text-center py-4">No recent requests</p>
                                     )}
                                 </CardContent>
                             </Card>
@@ -389,45 +390,45 @@ export default function Dashboard() {
 
                 {/* 4. Employee Insights & 5. Quick Actions */}
                 {(props.employee_insights || (props.quick_actions && props.quick_actions.length > 0)) && (
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3">
                         {/* Employee Insights */}
                         {props.employee_insights && (
                         <Card className="border-border lg:col-span-2">
-                            <CardHeader>
-                                <CardTitle className="text-lg font-semibold">Employee Insights</CardTitle>
+                            <CardHeader className="px-3 md:px-6 pt-3 md:pt-6 pb-2 md:pb-4">
+                                <CardTitle className="text-base md:text-lg font-semibold">Employee Insights</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-4">
+                            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                                    <div className="space-y-3 md:space-y-4">
                                         <div>
-                                            <p className="text-sm font-medium text-muted-foreground mb-2">Top Departments</p>
-                                            <div className="space-y-2">
+                                            <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1.5 md:mb-2">Top Departments</p>
+                                            <div className="space-y-1.5 md:space-y-2">
                                                 {props.employee_insights.top_departments.map((dept, idx) => (
-                                                    <div key={idx} className="flex items-center justify-between text-sm">
-                                                        <span className="text-foreground truncate">{dept.name}</span>
-                                                        <span className="font-semibold text-muted-foreground">{dept.count}</span>
+                                                    <div key={idx} className="flex items-center justify-between text-xs md:text-sm">
+                                                        <span className="text-foreground truncate max-w-[150px] md:max-w-none">{dept.name}</span>
+                                                        <span className="font-semibold text-muted-foreground ml-2">{dept.count}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="space-y-4">
+                                    <div className="space-y-3 md:space-y-4">
                                         <div>
-                                            <p className="text-sm font-medium text-muted-foreground mb-2">Status Summary</p>
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between text-sm">
+                                            <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1.5 md:mb-2">Status Summary</p>
+                                            <div className="space-y-1.5 md:space-y-2">
+                                                <div className="flex items-center justify-between text-xs md:text-sm">
                                                     <span className="text-foreground">Active</span>
                                                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                                                         {props.employee_insights.total_active}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center justify-between text-sm">
+                                                <div className="flex items-center justify-between text-xs md:text-sm">
                                                     <span className="text-foreground">Inactive</span>
                                                     <span className="font-semibold text-muted-foreground">
                                                         {props.employee_insights.total_inactive}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center justify-between text-sm">
+                                                <div className="flex items-center justify-between text-xs md:text-sm">
                                                     <span className="text-foreground">On Leave Today</span>
                                                     <span className="font-semibold text-amber-600 dark:text-amber-400">
                                                         {props.employee_insights.on_leave_today}
@@ -444,10 +445,10 @@ export default function Dashboard() {
                     {/* Quick Actions */}
                     {props.quick_actions && props.quick_actions.length > 0 && (
                         <Card className="border-border">
-                            <CardHeader>
-                                <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
+                            <CardHeader className="px-3 md:px-6 pt-3 md:pt-6 pb-2 md:pb-4">
+                                <CardTitle className="text-base md:text-lg font-semibold">Quick Actions</CardTitle>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
                                 <div className="grid grid-cols-2 gap-2">
                                     {props.quick_actions.map((action, idx) => {
                                         const Icon = iconMap[action.icon] || Plus;
@@ -456,12 +457,12 @@ export default function Dashboard() {
                                             <Link key={idx} href={action.link}>
                                                 <Button
                                                     variant="outline"
-                                                    className={`w-full h-auto flex-col gap-2 p-4 hover:shadow-md transition-all ${colors.border}`}
+                                                    className={`w-full h-auto flex-col gap-1.5 md:gap-2 p-2.5 md:p-4 hover:shadow-md transition-all ${colors.border}`}
                                                 >
-                                                    <div className={`rounded-lg p-2 ${colors.bg}`}>
-                                                        <Icon className={`h-5 w-5 ${colors.text}`} />
+                                                    <div className={`rounded-lg p-1.5 md:p-2 ${colors.bg}`}>
+                                                        <Icon className={`h-4 w-4 md:h-5 md:w-5 ${colors.text}`} />
                                                     </div>
-                                                    <span className="text-xs font-medium">{action.label}</span>
+                                                    <span className="text-[10px] md:text-xs font-medium text-center leading-tight">{action.label}</span>
                                                 </Button>
                                             </Link>
                                         );
@@ -475,7 +476,7 @@ export default function Dashboard() {
 
                 {/* 6. Analytics Section */}
                 {props.analytics && (props.analytics.monthly_requests || props.analytics.request_types) && (
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
                         {/* Monthly Requests Chart */}
                         {props.analytics.monthly_requests && props.analytics.monthly_requests.length > 0 && (
                             <Card className="border-border">
@@ -557,37 +558,38 @@ export default function Dashboard() {
                 {/* Request Type Stats (for Dynamic Builder) */}
                 {props.request_type_stats && props.request_type_stats.length > 0 && (
                     <Card className="border-border">
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle className="text-lg font-semibold">Request Type Statistics</CardTitle>
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 md:px-6 pt-3 md:pt-6 pb-2 md:pb-4">
+                            <CardTitle className="text-base md:text-lg font-semibold">Request Type Statistics</CardTitle>
                             <Link href="/request-types">
-                                <Button variant="ghost" size="sm" className="text-xs">
-                                    Manage Types
+                                <Button variant="ghost" size="sm" className="text-xs h-8 px-2 md:px-3">
+                                    <span className="hidden sm:inline">Manage Types</span>
+                                    <span className="sm:hidden">Manage</span>
                                     <ArrowRight className="ml-1 h-3 w-3" />
                                 </Button>
                             </Link>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+                            <div className="grid grid-cols-1 gap-2 md:gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 {props.request_type_stats.map((type) => (
                                     <div
                                         key={type.id}
-                                        className="rounded-lg border border-border bg-card p-4 hover:bg-muted/50 transition-colors"
+                                        className="rounded-lg border border-border bg-card p-3 md:p-4 hover:bg-muted/50 transition-colors"
                                     >
-                                        <div className="flex items-start justify-between mb-2">
-                                            <p className="text-sm font-medium text-foreground">{type.name}</p>
+                                        <div className="flex items-start justify-between gap-2 mb-1.5 md:mb-2">
+                                            <p className="text-xs md:text-sm font-medium text-foreground truncate">{type.name}</p>
                                             {type.is_published ? (
-                                                <Badge variant="outline" className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                                <Badge variant="outline" className="text-[10px] md:text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">
                                                     Published
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-xs">Draft</Badge>
+                                                <Badge variant="outline" className="text-[10px] md:text-xs shrink-0">Draft</Badge>
                                             )}
                                         </div>
-                                        <p className="text-xs text-muted-foreground mb-1">
+                                        <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1">
                                             {type.submissions_count} submission{type.submissions_count !== 1 ? 's' : ''}
                                         </p>
                                         {type.created_at && (
-                                            <p className="text-xs text-muted-foreground">Created {type.created_at}</p>
+                                            <p className="text-[10px] md:text-xs text-muted-foreground">Created {type.created_at}</p>
                                         )}
                                     </div>
                                 ))}

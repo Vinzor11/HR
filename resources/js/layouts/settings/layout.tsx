@@ -38,19 +38,19 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const currentPath = window.location.pathname;
 
     return (
-        <div className="px-4 py-6">
+        <div className="px-3 sm:px-4 py-4 sm:py-6 pb-20 sm:pb-6">
             <Heading title="Settings" description="Manage your profile and account settings" />
 
-            <div className="flex flex-col space-y-8 lg:flex-row lg:space-y-0 lg:space-x-12">
-                <aside className="w-full max-w-xl lg:w-48">
-                    <nav className="flex flex-col space-y-1 space-x-0">
+            <div className="flex flex-col space-y-6 lg:flex-row lg:space-y-0 lg:space-x-12">
+                <aside className="w-full lg:w-48">
+                    <nav className="flex flex-row overflow-x-auto gap-1 pb-2 lg:flex-col lg:overflow-x-visible lg:pb-0 lg:space-y-1">
                         {sidebarNavItems.map((item) => (
                             <Button
                                 key={item.href}
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className={cn('w-full justify-start', {
+                                className={cn('whitespace-nowrap lg:w-full justify-start', {
                                     'bg-muted': currentPath === item.href,
                                 })}
                             >
@@ -62,10 +62,10 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                     </nav>
                 </aside>
 
-                <Separator className="my-6 md:hidden" />
+                <Separator className="my-4 lg:hidden" />
 
                 <div className="flex-1 md:max-w-2xl">
-                    <section className="max-w-xl space-y-12">{children}</section>
+                    <section className="max-w-xl space-y-8 sm:space-y-12">{children}</section>
                 </div>
             </div>
         </div>

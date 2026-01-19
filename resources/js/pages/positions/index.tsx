@@ -606,8 +606,8 @@ const handleCategoryFilterChange = (value: string) => {
       <Head title="Positions" />
       <CustomToast />
 
-      <div className="flex flex-col overflow-hidden bg-background rounded-xl" style={{ height: 'calc(100vh - 80px)' }}>
-        <div className="flex-shrink-0 border-b border-border bg-card px-4 py-2 shadow-sm">
+      <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
+        <div className="flex-shrink-0 border-b border-border bg-card px-3 sm:px-4 py-2 shadow-sm">
           <TableToolbar
             searchValue={searchTerm}
             onSearchChange={handleSearchChange}
@@ -615,11 +615,11 @@ const handleCategoryFilterChange = (value: string) => {
             onPerPageChange={handlePerPageChange}
             isSearching={isSearching}
             actionSlot={
-              <div className="flex flex-row flex-wrap items-center gap-2">
-                {/* Sort by icon button */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Sort Dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-2">
+                    <Button variant="outline" size="sm" className="h-9 gap-1.5 sm:gap-2 px-2 sm:px-3">
                       <ArrowUpDown className="h-4 w-4" />
                       <span className="hidden sm:inline">Sort</span>
                     </Button>
@@ -640,10 +640,10 @@ const handleCategoryFilterChange = (value: string) => {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* Rows selector */}
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                {/* Per Page - Hidden on mobile */}
+                <div className="hidden sm:flex items-center">
                   <Select value={perPage} onValueChange={handlePerPageChange}>
-                    <SelectTrigger className="h-9 w-[80px]">
+                    <SelectTrigger className="h-9 w-[70px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -656,14 +656,14 @@ const handleCategoryFilterChange = (value: string) => {
                   </Select>
                 </div>
 
-                {/* Department filter */}
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                {/* Department filter - Hidden on mobile */}
+                <div className="hidden md:flex items-center">
                   <Select value={departmentFilter || 'all'} onValueChange={handleDepartmentFilterChange}>
-                    <SelectTrigger className="h-9 w-[180px]">
-                      <SelectValue placeholder="All Departments" />
+                    <SelectTrigger className="h-9 w-[160px]">
+                      <SelectValue placeholder="Department" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Departments</SelectItem>
+                      <SelectItem value="all">All Depts</SelectItem>
                       {departments.map((dept) => (
                         <SelectItem key={dept.id} value={String(dept.id)}>
                           {dept.name || dept.code}
@@ -673,11 +673,11 @@ const handleCategoryFilterChange = (value: string) => {
                   </Select>
                 </div>
 
-                {/* Position Category filter */}
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                {/* Category filter - Hidden on mobile */}
+                <div className="hidden lg:flex items-center">
                   <Select value={categoryFilter || 'all'} onValueChange={handleCategoryFilterChange}>
-                    <SelectTrigger className="h-9 w-[200px]">
-                      <SelectValue placeholder="All Categories" />
+                    <SelectTrigger className="h-9 w-[160px]">
+                      <SelectValue placeholder="Category" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Categories</SelectItem>
@@ -690,12 +690,12 @@ const handleCategoryFilterChange = (value: string) => {
                   </Select>
                 </div>
 
-                {/* Show Deleted Positions Toggle - Only show if user has restore or force delete permission */}
+                {/* Show Deleted Toggle */}
                 {(hasPermission(permissions, 'restore-position') || hasPermission(permissions, 'force-delete-position')) && (
                   <Button
                     variant={showDeleted ? "default" : "outline"}
                     size="sm"
-                    className="gap-2 h-9"
+                    className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
                     onClick={() => {
                       const newValue = !showDeleted
                       setShowDeleted(newValue)
@@ -708,12 +708,12 @@ const handleCategoryFilterChange = (value: string) => {
                     {showDeleted ? (
                       <>
                         <ArchiveRestore className="h-4 w-4" />
-                        Show Active
+                        <span className="hidden sm:inline">Show Active</span>
                       </>
                     ) : (
                       <>
                         <Archive className="h-4 w-4" />
-                        Show Deleted
+                        <span className="hidden sm:inline">Show Deleted</span>
                       </>
                     )}
                   </Button>
@@ -752,7 +752,7 @@ const handleCategoryFilterChange = (value: string) => {
           />
         </div>
 
-        <div className="flex-1 min-h-0 bg-background p-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
           <EnterpriseEmployeeTable
             columns={PositionTableConfig.columns}
             actions={PositionTableConfig.actions}

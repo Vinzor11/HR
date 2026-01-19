@@ -158,12 +158,12 @@ export default function RequestTypesIndex({ requestTypes, filters, metrics }: Re
             <Head title="Dynamic Request Builder" />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <div className="space-y-6">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4 pb-20 sm:pb-4">
+                <div className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h1 className="text-2xl font-semibold text-foreground">Dynamic Request Builder</h1>
-                        <p className="text-sm text-muted-foreground">
+                        <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dynamic Request Builder</h1>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                             Create custom HR request types, approval workflows, and fulfillment phases without writing code.
                         </p>
                     </div>
@@ -176,18 +176,18 @@ export default function RequestTypesIndex({ requestTypes, filters, metrics }: Re
                     )}
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                    <Card className="p-4">
-                        <p className="text-sm text-muted-foreground">Active Types</p>
-                        <p className="mt-2 text-3xl font-semibold text-foreground">{metrics.total}</p>
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
+                    <Card className="p-3 sm:p-4">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Active Types</p>
+                        <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-semibold text-foreground">{metrics.total}</p>
                     </Card>
-                    <Card className="p-4">
-                        <p className="text-sm text-muted-foreground">Published</p>
-                        <p className="mt-2 text-3xl font-semibold text-emerald-600 dark:text-emerald-400">{metrics.published}</p>
+                    <Card className="p-3 sm:p-4">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Published</p>
+                        <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-semibold text-emerald-600 dark:text-emerald-400">{metrics.published}</p>
                     </Card>
-                    <Card className="p-4">
-                        <p className="text-sm text-muted-foreground">Drafts</p>
-                        <p className="mt-2 text-3xl font-semibold text-amber-600 dark:text-amber-400">{metrics.drafts}</p>
+                    <Card className="p-3 sm:p-4">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Drafts</p>
+                        <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-semibold text-amber-600 dark:text-amber-400">{metrics.drafts}</p>
                     </Card>
                 </div>
 

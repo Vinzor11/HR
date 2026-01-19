@@ -152,26 +152,26 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
             <Head title={`Submit ${requestType.name}`} />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <form className="space-y-6" onSubmit={handleSubmit}>
-                <Card className="p-5 space-y-4">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4">
+                <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
+                <Card className="p-4 sm:p-5 space-y-4">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-primary">
                                 <Sparkles className="h-4 w-4" />
                                 Dynamic Form
                             </div>
-                            <h1 className="mt-2 text-2xl font-semibold text-foreground">{requestType.name}</h1>
-                            <p className="text-sm text-muted-foreground">{formPreviewDescription}</p>
+                            <h1 className="mt-2 text-xl sm:text-2xl font-semibold text-foreground">{requestType.name}</h1>
+                            <p className="text-xs sm:text-sm text-muted-foreground">{formPreviewDescription}</p>
                         </div>
-                        <Badge variant="outline" className="flex items-center gap-1">
+                        <Badge variant="outline" className="flex items-center gap-1 w-fit">
                             <ShieldCheck className="h-4 w-4" />
-                            {requestType.has_fulfillment ? 'Includes fulfillment' : 'Standard approval'}
+                            <span className="text-xs sm:text-sm">{requestType.has_fulfillment ? 'Includes fulfillment' : 'Standard approval'}</span>
                         </Badge>
                     </div>
                 </Card>
 
-                <Card className="p-5 space-y-6">
+                <Card className="p-4 sm:p-5 space-y-4 sm:space-y-6">
                     {requestType.fields.map((field) => {
                         if (!shouldShowField(field)) {
                             return null;
@@ -304,11 +304,11 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
                     })}
                 </Card>
 
-                <div className="flex items-center justify-between">
-                    <Link href={route('requests.index')} className="text-sm text-muted-foreground hover:text-foreground">
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between pb-16 sm:pb-0">
+                    <Link href={route('requests.index')} className="text-sm text-muted-foreground hover:text-foreground text-center sm:text-left">
                         Back to Request Center
                     </Link>
-                    <Button type="submit" disabled={processing} className="min-w-[200px]">
+                    <Button type="submit" disabled={processing} className="w-full sm:w-auto sm:min-w-[200px]">
                         {processing ? 'Submitting...' : 'Submit Request'}
                     </Button>
                 </div>
