@@ -126,22 +126,10 @@ const CORE_COLUMNS = [
 
 // Column group labels
 const COLUMN_GROUP_LABELS: Record<string, string> = {
-  identification: 'Personal Details',
+  identification: 'Identification',
   employment: 'Employment Details',
   contact: 'Contact Information',
-  government: 'Government IDs',
-  address: 'Addresses',
-  family_background: 'Family Background',
-  educational_background: 'Education',
-  civil_service_eligibility: 'Civil Service',
-  work_experience: 'Work Experience',
-  voluntary_work: 'Voluntary Work',
-  learning_development: 'Training / Learning & Development',
   personal: 'Personal Details',
-  children: 'Children',
-  questionnaire: 'Questionnaires',
-  references: 'References',
-  other_information: 'Other Information',
 };
 
 export default function Index() {
