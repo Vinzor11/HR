@@ -36,6 +36,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use App\Services\EmployeeScopeService;
+use App\Services\AdvancedEmployeeFilterService;
 use App\Models\User;
 
 class EmployeeController extends Controller
@@ -77,6 +78,54 @@ class EmployeeController extends Controller
         $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = $request->input('sort_order', 'asc');
         $showDeleted = $request->boolean('show_deleted', false);
+        
+        // Get advanced filters from request
+        // CRITICAL: Only process if parameter exists AND contains valid, non-empty filters
+        $advancedFilters = [];
+        
+        // Check if parameter exists and has a non-empty value
+        $advancedFiltersInput = $request->input('advanced_filters');
+        
+        // Skip processing if empty, null, or empty array string
+        if ($advancedFiltersInput !== null && $advancedFiltersInput !== '' && $advancedFiltersInput !== '[]') {
+            if (is_string($advancedFiltersInput)) {
+                $decoded = json_decode($advancedFiltersInput, true);
+                // Only use if decoded successfully and is a non-empty array
+                if (is_array($decoded) && !empty($decoded)) {
+                    $advancedFilters = $decoded;
+                }
+            } elseif (is_array($advancedFiltersInput) && !empty($advancedFiltersInput)) {
+                $advancedFilters = $advancedFiltersInput;
+            }
+        }
+        
+        // Filter out invalid entries (empty field, missing operator, or empty value)
+        $advancedFilters = array_filter($advancedFilters, function($filter) {
+            // Must have field and operator
+            if (empty($filter['field']) || !isset($filter['operator'])) {
+                return false;
+            }
+            
+            // For null/not null operators, value can be null
+            if (in_array($filter['operator'] ?? '', ['is_null', 'is_not_null'])) {
+                return true;
+            }
+            
+            // For other operators, value must not be empty
+            $value = $filter['value'] ?? null;
+            if ($value === null || $value === '') {
+                return false;
+            }
+            if (is_array($value) && empty(array_filter($value))) {
+                return false;
+            }
+            return true;
+        });
+        
+        // Final check: if after filtering we have no valid filters, set to empty array
+        if (empty($advancedFilters)) {
+            $advancedFilters = [];
+        }
         
         // Get visible columns from request
         $visibleColumns = $request->input('visible_columns', []);
@@ -129,6 +178,9 @@ class EmployeeController extends Controller
 
         // Apply scope restrictions based on user's role/position
         $scopeQuery = $this->scopeService->getEmployeeScope($request->user());
+
+        // Initialize advanced filter service
+        $filterService = new AdvancedEmployeeFilterService();
 
         $employees = Employee::with($relationshipsToLoad)
             ->when($scopeQuery !== null, function ($query) use ($scopeQuery) {
@@ -198,6 +250,10 @@ class EmployeeController extends Controller
         ->when($employeeType && in_array($employeeType, ['Teaching', 'Non-Teaching']), function ($query) use ($employeeType) {
             $query->where('employee_type', $employeeType);
         })
+        // Apply advanced filters - only if we have valid filters
+        ->when(!empty($advancedFilters) && is_array($advancedFilters) && count($advancedFilters) > 0, function ($query) use ($filterService, $advancedFilters) {
+            $filterService->applyFilters($query, $advancedFilters);
+        })
         ->when($sortBy === 'department.faculty_name' || $sortBy === 'department', function ($query) use ($sortOrder) {
             $query->join('departments', 'employees.department_id', '=', 'departments.id')
                   ->orderBy('departments.faculty_name', $sortOrder)
@@ -256,7 +312,9 @@ class EmployeeController extends Controller
                 'sort_by' => $sortBy,
                 'sort_order' => $sortOrder,
                 'show_deleted' => $showDeleted,
+                'advanced_filters' => $advancedFilters,
             ],
+            'filter_fields_config' => AdvancedEmployeeFilterService::getFilterFieldsConfig(),
             // Load departments/positions for filter dropdowns - filtered by scope
             'departments' => $this->getScopedDepartments($request->user()),
             'positions' => $this->getScopedPositions($request->user()),

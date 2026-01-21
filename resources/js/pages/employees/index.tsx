@@ -1,5 +1,6 @@
 import { EnterpriseEmployeeTable } from '@/components/EnterpriseEmployeeTable';
 import { EmployeeDetailDrawer } from '@/components/EmployeeDetailDrawer';
+import { AdvancedFilterPanel, type FilterCondition } from '@/components/AdvancedFilterPanel';
 import { CustomToast, toast } from '@/components/custom-toast';
 import { EmployeeTableConfig } from '@/config/tables/employee-table';
 import AppLayout from '@/layouts/app-layout';
@@ -133,27 +134,50 @@ const COLUMN_GROUP_LABELS: Record<string, string> = {
 };
 
 export default function Index() {
-  const { employees, filters, flash, departments = [], positions = [], auth } = usePage<{
+  const { employees, filters, flash, departments = [], positions = [], auth, filter_fields_config } = usePage<{
     employees: EmployeeData;
     filters?: {
       search?: string;
       per_page?: number;
       status?: string;
       department_id?: string;
+      department_ids?: string[];
       position_id?: string;
+      position_ids?: string[];
       employee_type?: string;
       show_deleted?: boolean;
+      sort_by?: string;
+      sort_order?: string;
+      advanced_filters?: FilterCondition[];
     };
     flash?: { success?: string; error?: string };
     departments?: Department[];
     positions?: Position[];
     auth?: { permissions?: string[] };
+    filter_fields_config?: Record<string, Record<string, { type: string; label: string; options?: string[] }>>;
   }>().props;
   
   const permissions = auth?.permissions || [];
 
   const [columnModalOpen, setColumnModalOpen] = useState(false);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<FilterCondition[]>(() => {
+    // Always start with empty array, don't load from filters prop
+    // This ensures we don't accidentally restore filters from URL
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('employees_advanced_filters');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+    }
+    return [];
+  });
   const [searchTerm, setSearchTerm] = useState(filters?.search || '');
   const [searchMode, setSearchMode] = useState<'any' | 'id' | 'name' | 'position' | 'department'>('any');
   const [sortBy, setSortBy] = useState(filters?.sort_by || 'created_at');
@@ -384,6 +408,22 @@ export default function Index() {
         visible_columns: JSON.stringify(visibleColumns),
       };
 
+      // Only add advanced_filters if there are valid filters
+      // Filter out incomplete filters (no field selected or no value)
+      const validFilters = (advancedFilters || []).filter(f => {
+        if (!f || !f.field) return false;
+        if (['is_null', 'is_not_null'].includes(f.operator)) return true;
+        if (f.value === null || f.value === '') return false;
+        if (Array.isArray(f.value) && f.value.length === 0) return false;
+        return true;
+      });
+      
+      // CRITICAL: Only add advanced_filters if we have valid filters
+      // If empty, explicitly DO NOT include it in queryParams
+      if (validFilters.length > 0) {
+        queryParams.advanced_filters = JSON.stringify(validFilters);
+      }
+
       // Request dropdowns if filters are active
       if (statusFilter || (departmentFilter && departmentFilter.length > 0) || (positionFilter && positionFilter.length > 0) || employeeTypeFilter || params.need_dropdowns) {
         queryParams.need_dropdowns = true;
@@ -407,7 +447,7 @@ export default function Index() {
         }
       );
     },
-    [searchTerm, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, perPage, visibleColumns, searchMode, employees?.meta?.current_page]
+    [searchTerm, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, perPage, visibleColumns, searchMode, employees?.meta?.current_page, advancedFilters]
   );
 
   // Debounced search
@@ -555,17 +595,18 @@ export default function Index() {
       filteredColumns
         .filter(col => !col.isAction)
         .map(col => {
-          const cellKey = col.type === 'multi-values' 
+          const colAny = col as any;
+          const cellKey = colAny.type === 'multi-values' 
             ? col.key.split('.')[0] 
             : col.key;
           const value = getNestedValue(employee, cellKey);
           
           if (col.key === 'status') return value || '-';
           
-          if (col.type === 'multi-values') {
+          if (colAny.type === 'multi-values') {
             const items = Array.isArray((employee as any)[cellKey]) ? (employee as any)[cellKey] : [];
             return items.map((item: any) => {
-              const prop = col.displayKey || col.key.split('.')[1];
+              const prop = colAny.displayKey || col.key.split('.')[1];
               return getNestedValue(item, prop) || '-';
             }).join('; ');
           }
@@ -664,6 +705,10 @@ export default function Index() {
     updatePositionFilter([]);
     updateEmployeeTypeFilter('');
     updateShowDeleted(false);
+    setAdvancedFilters([]);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('employees_advanced_filters');
+    }
     triggerFetch({
       status: '',
       department_ids: [],
@@ -673,6 +718,224 @@ export default function Index() {
       page: 1,
     });
   };
+
+  // Handle advanced filters
+  const handleAdvancedFiltersChange = (filters: FilterCondition[]) => {
+    setAdvancedFilters(filters);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('employees_advanced_filters', JSON.stringify(filters));
+    }
+  };
+
+  const handleApplyAdvancedFilters = useCallback((updatedFilters?: FilterCondition[]) => {
+    // If updatedFilters is provided, use those; otherwise use current state
+    const filtersToApply = updatedFilters !== undefined ? updatedFilters : advancedFilters;
+    
+    // Update state if different filters were passed
+    if (updatedFilters !== undefined) {
+      setAdvancedFilters(filtersToApply);
+      if (typeof window !== 'undefined') {
+        if (filtersToApply.length > 0) {
+          localStorage.setItem('employees_advanced_filters', JSON.stringify(filtersToApply));
+        } else {
+          localStorage.removeItem('employees_advanced_filters');
+        }
+      }
+    }
+    
+    setAdvancedFilterOpen(false);
+    
+    // Build query params with the filters to apply
+    setIsLoading(true);
+    const queryParams: any = {
+      page: 1,
+      per_page: parseInt(perPage, 10),
+      search: searchTerm || '',
+      search_mode: searchMode,
+      status: statusFilter || '',
+      employee_type: employeeTypeFilter || '',
+      show_deleted: showDeleted,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      visible_columns: JSON.stringify(visibleColumns),
+    };
+    
+    // Add department/position filters if they exist
+    if (Array.isArray(departmentFilter) && departmentFilter.length > 0) {
+      queryParams.department_ids = departmentFilter;
+    }
+    if (Array.isArray(positionFilter) && positionFilter.length > 0) {
+      queryParams.position_ids = positionFilter;
+    }
+    
+    // Only add advanced_filters if there are valid filters
+    const validFilters = (filtersToApply || []).filter(f => {
+      if (!f || !f.field) return false;
+      if (['is_null', 'is_not_null'].includes(f.operator)) return true;
+      if (f.value === null || f.value === '') return false;
+      if (Array.isArray(f.value) && f.value.length === 0) return false;
+      return true;
+    });
+    
+    if (validFilters.length > 0) {
+      queryParams.advanced_filters = JSON.stringify(validFilters);
+    }
+    
+    // Remove empty values
+    Object.keys(queryParams).forEach((key) => {
+      if (queryParams[key] === '' || queryParams[key] === null || queryParams[key] === undefined || 
+          (Array.isArray(queryParams[key]) && queryParams[key].length === 0)) {
+        delete queryParams[key];
+      }
+    });
+    
+    // Explicitly ensure advanced_filters is not included if empty
+    if (validFilters.length === 0) {
+      delete queryParams.advanced_filters;
+    }
+    
+    router.get(
+      route('employees.index'),
+      queryParams,
+      {
+        preserveState: false,
+        preserveScroll: false,
+        replace: true,
+        onFinish: () => setIsLoading(false),
+      }
+    );
+  }, [advancedFilters, perPage, searchTerm, searchMode, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
+
+  const handleClearAdvancedFilters = useCallback(() => {
+    // Clear filters in state FIRST
+    setAdvancedFilters([]);
+    // Clear from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('employees_advanced_filters');
+    }
+    
+    // Build clean query params WITHOUT advanced_filters
+    setIsLoading(true);
+    const cleanQueryParams: any = {
+      page: 1,
+      per_page: parseInt(perPage, 10),
+      search: searchTerm || '',
+      search_mode: searchMode,
+      status: statusFilter || '',
+      employee_type: employeeTypeFilter || '',
+      show_deleted: showDeleted,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      visible_columns: JSON.stringify(visibleColumns),
+    };
+    
+    // Add department/position filters if they exist
+    if (Array.isArray(departmentFilter) && departmentFilter.length > 0) {
+      cleanQueryParams.department_ids = departmentFilter;
+    }
+    if (Array.isArray(positionFilter) && positionFilter.length > 0) {
+      cleanQueryParams.position_ids = positionFilter;
+    }
+    
+    // Remove empty values
+    Object.keys(cleanQueryParams).forEach((key) => {
+      if (cleanQueryParams[key] === '' || cleanQueryParams[key] === null || cleanQueryParams[key] === undefined || 
+          (Array.isArray(cleanQueryParams[key]) && cleanQueryParams[key].length === 0)) {
+        delete cleanQueryParams[key];
+      }
+    });
+    
+    // CRITICAL: Do NOT include advanced_filters at all
+    // This ensures the backend doesn't process any filters
+    
+    router.get(
+      route('employees.index'),
+      cleanQueryParams,
+      {
+        preserveState: false, // Don't preserve state to get fresh data
+        preserveScroll: false,
+        replace: true, // Replace URL to remove advanced_filters from query string
+        onFinish: () => setIsLoading(false),
+      }
+    );
+  }, [perPage, searchTerm, searchMode, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
+
+  const removeAdvancedFilter = useCallback((filterId: string) => {
+    // Filter out the removed filter
+    const updated = advancedFilters.filter((f) => f.id !== filterId);
+    
+    // Update state
+    setAdvancedFilters(updated);
+    
+    // Update localStorage
+    if (typeof window !== 'undefined') {
+      if (updated.length > 0) {
+        localStorage.setItem('employees_advanced_filters', JSON.stringify(updated));
+      } else {
+        localStorage.removeItem('employees_advanced_filters');
+      }
+    }
+    
+    // Trigger fetch with updated filters
+    setIsLoading(true);
+    const queryParams: any = {
+      page: 1,
+      per_page: parseInt(perPage, 10),
+      search: searchTerm || '',
+      search_mode: searchMode,
+      status: statusFilter || '',
+      employee_type: employeeTypeFilter || '',
+      show_deleted: showDeleted,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      visible_columns: JSON.stringify(visibleColumns),
+    };
+    
+    // Add department/position filters if they exist
+    if (Array.isArray(departmentFilter) && departmentFilter.length > 0) {
+      queryParams.department_ids = departmentFilter;
+    }
+    if (Array.isArray(positionFilter) && positionFilter.length > 0) {
+      queryParams.position_ids = positionFilter;
+    }
+    
+    // Only add advanced_filters if there are valid filters remaining
+    const validFilters = updated.filter(f => {
+      if (!f || !f.field) return false;
+      if (['is_null', 'is_not_null'].includes(f.operator)) return true;
+      if (f.value === null || f.value === '') return false;
+      if (Array.isArray(f.value) && f.value.length === 0) return false;
+      return true;
+    });
+    
+    if (validFilters.length > 0) {
+      queryParams.advanced_filters = JSON.stringify(validFilters);
+    }
+    
+    // Remove empty values
+    Object.keys(queryParams).forEach((key) => {
+      if (queryParams[key] === '' || queryParams[key] === null || queryParams[key] === undefined || 
+          (Array.isArray(queryParams[key]) && queryParams[key].length === 0)) {
+        delete queryParams[key];
+      }
+    });
+    
+    // Explicitly ensure advanced_filters is not included if empty
+    if (validFilters.length === 0) {
+      delete queryParams.advanced_filters;
+    }
+    
+    router.get(
+      route('employees.index'),
+      queryParams,
+      {
+        preserveState: false,
+        preserveScroll: false,
+        replace: true,
+        onFinish: () => setIsLoading(false),
+      }
+    );
+  }, [advancedFilters, perPage, searchTerm, searchMode, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
 
   // Remove individual filters
   const removeStatusFilter = () => {
@@ -695,15 +958,64 @@ export default function Index() {
     triggerFetch({ employee_type: '', page: 1 });
   };
 
+  // Get filter field label helper
+  const getFilterFieldLabel = (fieldKey: string): string => {
+    if (!filter_fields_config) return fieldKey;
+    for (const group of Object.values(filter_fields_config)) {
+      if (group && typeof group === 'object' && fieldKey in group) {
+        const field = group[fieldKey];
+        if (field && typeof field === 'object' && 'label' in field) {
+          return String(field.label);
+        }
+      }
+    }
+    return fieldKey;
+  };
+
+  // Get operator label helper
+  const getOperatorLabel = (operator: string): string => {
+    const operatorMap: Record<string, string> = {
+      equals: '=',
+      not_equals: '≠',
+      contains: 'contains',
+      not_contains: 'does not contain',
+      starts_with: 'starts with',
+      ends_with: 'ends with',
+      greater_than: '>',
+      greater_than_or_equal: '≥',
+      less_than: '<',
+      less_than_or_equal: '≤',
+      in: 'is one of',
+      not_in: 'is not one of',
+      is_null: 'is empty',
+      is_not_null: 'is not empty',
+      between: 'between',
+    };
+    return operatorMap[operator] || operator;
+  };
+
+  // Format filter value for display
+  const formatFilterValue = (filter: FilterCondition): string => {
+    if (['is_null', 'is_not_null'].includes(filter.operator)) {
+      return '';
+    }
+    if (Array.isArray(filter.value)) {
+      return filter.value.join(', ');
+    }
+    return String(filter.value || '');
+  };
+
   // Active filters count
   const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (statusFilter) count++;
-    if (departmentFilter && departmentFilter.length > 0) count++;
-    if (positionFilter && positionFilter.length > 0) count++;
-    if (employeeTypeFilter) count++;
-    return count;
-  }, [statusFilter, departmentFilter, positionFilter, employeeTypeFilter]);
+    return (
+      (statusFilter ? 1 : 0) +
+      (departmentFilter && departmentFilter.length > 0 ? 1 : 0) +
+      (positionFilter && positionFilter.length > 0 ? 1 : 0) +
+      (employeeTypeFilter ? 1 : 0) +
+      (showDeleted ? 1 : 0) +
+      (advancedFilters && advancedFilters.length > 0 ? advancedFilters.filter(f => f.field).length : 0)
+    );
+  }, [statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, advancedFilters]);
 
   // Pagination data
   const currentPage = employees?.meta?.current_page || 1;
@@ -764,15 +1076,33 @@ export default function Index() {
                   </div>
                 </div>
 
-                {/* Filters Button */}
+                {/* Advanced Filters Button */}
+                {filter_fields_config && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAdvancedFilterOpen(true)}
+                    className="gap-1.5 sm:gap-2 relative h-9 px-2 sm:px-3"
+                  >
+                    <Filter className="h-4 w-4" />
+                    <span className="hidden sm:inline">Advanced Filters</span>
+                    {advancedFilters && advancedFilters.filter(f => f.field).length > 0 && (
+                      <Badge className="ml-0.5 sm:ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
+                        {advancedFilters.filter(f => f.field).length}
+                      </Badge>
+                    )}
+                  </Button>
+                )}
+
+                {/* Quick Filters Button */}
                 <Dialog open={filterModalOpen} onOpenChange={setFilterModalOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-1.5 sm:gap-2 relative h-9 px-2 sm:px-3">
                       <Filter className="h-4 w-4" />
-                      <span className="hidden sm:inline">Filters</span>
-                      {activeFiltersCount > 0 && (
+                      <span className="hidden sm:inline">Quick Filters</span>
+                      {(statusFilter || (departmentFilter && departmentFilter.length > 0) || (positionFilter && positionFilter.length > 0) || employeeTypeFilter) && (
                         <Badge className="ml-0.5 sm:ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
-                          {activeFiltersCount}
+                          {(statusFilter ? 1 : 0) + (departmentFilter && departmentFilter.length > 0 ? 1 : 0) + (positionFilter && positionFilter.length > 0 ? 1 : 0) + (employeeTypeFilter ? 1 : 0)}
                         </Badge>
                       )}
                     </Button>
@@ -1202,10 +1532,10 @@ export default function Index() {
                 {positionFilter && positionFilter.length > 0 && (
                   <Badge variant="outline" className="flex items-center gap-1">
                     Position{positionFilter.length > 1 ? 's' : ''}:{' '}
-                    {positionFilter.length === 1
+                      {positionFilter.length === 1
                       ? (positions.find((p) => p.id.toString() === positionFilter[0]) as any)?.pos_name ||
                         positions.find((p) => p.id.toString() === positionFilter[0])?.name ||
-                        positionFilter[0]
+                        String(positionFilter[0])
                       : `${positionFilter.length} selected`}
                     <button
                       onClick={removePositionFilter}
@@ -1219,6 +1549,7 @@ export default function Index() {
                   <Badge variant="outline" className="flex items-center gap-1">
                     Type: {employeeTypeFilter}
                     <button
+                      type="button"
                       onClick={removeEmployeeTypeFilter}
                       className="ml-1 hover:bg-muted rounded-full p-0.5"
                     >
@@ -1226,6 +1557,29 @@ export default function Index() {
                     </button>
                   </Badge>
                 )}
+                {/* Advanced Filter Badges */}
+                {advancedFilters && advancedFilters.length > 0 && advancedFilters
+                  .filter(filter => filter.field) // Only show filters with a field
+                  .map((filter) => {
+                    const value = formatFilterValue(filter);
+                    return (
+                      <Badge key={filter.id} variant="outline" className="flex items-center gap-1">
+                        {getFilterFieldLabel(filter.field)} {getOperatorLabel(filter.operator)} {value && `"${value}"`}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            removeAdvancedFilter(filter.id);
+                          }}
+                          className="ml-1 hover:bg-muted rounded-full p-0.5 transition-colors"
+                          aria-label="Remove filter"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -1395,6 +1749,19 @@ export default function Index() {
           employee={selectedEmployee as any}
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
+        />
+      )}
+
+      {/* Advanced Filter Panel */}
+      {filter_fields_config && (
+        <AdvancedFilterPanel
+          open={advancedFilterOpen}
+          onOpenChange={setAdvancedFilterOpen}
+          filters={advancedFilters}
+          onFiltersChange={handleAdvancedFiltersChange}
+          filterFieldsConfig={filter_fields_config}
+          onApply={handleApplyAdvancedFilters}
+          onClear={handleClearAdvancedFilters}
         />
       )}
     </AppLayout>
