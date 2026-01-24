@@ -157,15 +157,24 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
             <Head title={`Request ${submission.reference_code}`} />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4 pb-20 sm:pb-4">
-                <div className="space-y-4 sm:space-y-6">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <Link href={route('requests.index')} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back to all requests
-                    </Link>
-                    <Badge className={statusBadgeStyles[submission.status]}>{currentStatusLabel}</Badge>
-                </div>
+            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4 pb-20 sm:pb-4">
+                <div className="space-y-4 md:space-y-6">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <Link href={route('requests.index')} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+                            <ArrowLeft className="mr-1 h-4 w-4" />
+                            Back to all requests
+                        </Link>
+                        <Badge className={statusBadgeStyles[submission.status]}>{currentStatusLabel}</Badge>
+                    </div>
+
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">Request Details</h1>
+                            <p className="text-xs md:text-sm text-muted-foreground">
+                                View request information and track approval status.
+                            </p>
+                        </div>
+                    </div>
 
                 <Card className="grid gap-4 p-4 sm:p-5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                     <div>

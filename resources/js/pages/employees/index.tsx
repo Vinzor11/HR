@@ -10,6 +10,7 @@ import { hasPermission } from '@/utils/authorization';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { IconButton } from '@/components/ui/icon-button';
 import {
   Logs,
   UserPlus,
@@ -110,19 +111,16 @@ const MAX_VISIBLE_COLUMNS = 100;
 const PER_PAGE_OPTIONS = ['5', '10', '25', '50', '100'] as const;
 const LOCAL_STORAGE_KEY = 'employeeTableVisibleColumns';
 
-// Minimal core columns - shown by default
+// Minimal core columns - shown by default (HR-relevant only, no sensitive information)
 const CORE_COLUMNS = [
   'id',
-  'surname',
-  'first_name',
+  'fullname',
   'position.pos_name',
   'department.faculty_name',
   'status',
   'employment_status',
   'employee_type',
   'date_hired',
-  'mobile_no',
-  'email_address',
 ];
 
 // Column group labels
@@ -1030,477 +1028,316 @@ export default function Index() {
       <CustomToast />
 
       <div className="flex flex-col overflow-hidden bg-background" style={{ height: 'calc(100vh - 80px)' }}>
-            {/* Top Section - Controls */}
-            <div className="flex-shrink-0 bg-card border-b border-border shadow-sm z-40">
-              <div className="px-3 md:px-6 py-2 md:py-3">
-            {/* Mobile-first responsive layout */}
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              {/* Search Section - Full width on mobile */}
-              <div className="flex flex-col sm:flex-row gap-2 flex-1">
-                {/* Smart Search Bar */}
-                    <div className="relative flex-1 max-w-full lg:max-w-md">
-                      <div className="flex items-center gap-2">
-                        <Select 
-                          value={searchMode} 
-                          onValueChange={(value: any) => {
-                            setSearchMode(value);
-                            if (searchTerm) {
-                              triggerFetch({ search: searchTerm, search_mode: value, page: 1 });
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="w-[100px] sm:w-[140px] h-9 text-xs sm:text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="any">Any</SelectItem>
-                            <SelectItem value="id">Employee ID</SelectItem>
-                            <SelectItem value="name">Name</SelectItem>
-                            <SelectItem value="position">Position</SelectItem>
-                            <SelectItem value="department">Department</SelectItem>
-                          </SelectContent>
-                        </Select>
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {/* Title and Subtitle - Without card */}
+            <div className="flex-shrink-0 px-3 md:px-6 pt-4 pb-2 flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-xl md:text-2xl font-semibold text-foreground mb-1">Employee Records</h1>
+                <p className="text-xs md:text-sm text-muted-foreground">Manage employee information and track organizational assignments.</p>
+              </div>
+              {hasPermission(permissions, 'create-employee') && (
+                <Button 
+                  size="default" 
+                  className="h-10 px-4 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all flex-shrink-0"
+                  style={{ 
+                    background: 'hsl(146, 100%, 25%)',
+                    color: 'white',
+                  }}
+                  onClick={() => router.visit(route('employees.create'))}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'hsl(146, 100%, 20%)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'hsl(146, 100%, 25%)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Add Employee
+                </Button>
+              )}
+            </div>
+
+            {/* Control Panel Card - Matching system-preview style */}
+            <div className="flex-shrink-0 p-2 sm:p-4">
+              <div className="bg-white rounded-xl border border-[hsl(0,0%,92%)] p-4 shadow-sm">
+                <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+                  {/* Left: Search + Filters */}
+                  <div className="flex-1 flex items-center gap-3 flex-wrap w-full lg:w-auto">
+                    {/* Search - Primary */}
+                    <div className="relative w-full sm:w-[300px] lg:w-[350px]">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(0,0%,55%)] pointer-events-none" />
                       <Input
                         type="text"
-                        placeholder={`Search ${searchMode === 'any' ? 'employees...' : `by ${searchMode}...`}`}
-                        className="pl-10 pr-4 py-2 h-9 text-sm border-border focus:border-primary focus:ring-primary rounded-lg"
                         value={searchTerm}
                         onChange={(e) => {
                           setSearchTerm(e.target.value);
                           handleSearch(e.target.value);
                         }}
+                        placeholder={`Search ${searchMode === 'any' ? 'employees...' : `by ${searchMode}...`}`}
+                        className="w-full pl-10 pr-4 h-10 rounded-lg border border-[hsl(0,0%,88%)] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(146,100%,27%)]/20 focus:border-[hsl(146,100%,27%)]"
+                      />
+                      {isLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(0,0%,55%)] border-t-transparent" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Search Mode Selector */}
+                    <Select 
+                      value={searchMode} 
+                      onValueChange={(value: any) => {
+                        setSearchMode(value);
+                        if (searchTerm) {
+                          triggerFetch({ search: searchTerm, search_mode: value, page: 1 });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-10 w-[100px] sm:w-[140px] text-xs sm:text-sm border border-[hsl(0,0%,88%)]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Any</SelectItem>
+                        <SelectItem value="id">Employee ID</SelectItem>
+                        <SelectItem value="name">Name</SelectItem>
+                        <SelectItem value="position">Position</SelectItem>
+                        <SelectItem value="department">Department</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {/* Page Size Dropdown */}
+                    <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <span className="whitespace-nowrap">Rows:</span>
+                      <Select value={perPage} onValueChange={handlePerPageChange}>
+                        <SelectTrigger className="h-9 w-[70px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PER_PAGE_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Right: Action Buttons - Grouped by Hierarchy */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Secondary Actions - Icon Buttons */}
+                    <div className="flex items-center gap-1 bg-[hsl(0,0%,97%)] p-1 rounded-lg border border-[hsl(0,0%,92%)]">
+                      {/* Advanced Filters Button */}
+                      {filter_fields_config && (
+                        <div className="relative">
+                          <IconButton
+                            icon={<Filter className="h-4 w-4" />}
+                            tooltip="Advanced Filters"
+                            variant="outline"
+                            onClick={() => setAdvancedFilterOpen(true)}
+                            aria-label="Advanced Filters"
+                            className="h-9 w-9 rounded-lg"
+                          />
+                          {advancedFilters && advancedFilters.filter(f => f.field).length > 0 && (
+                            <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs z-10">
+                              {advancedFilters.filter(f => f.field).length}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Column Visibility */}
+                      <Dialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
+                        <DialogTrigger asChild>
+                          <IconButton
+                            icon={<Columns3 className="h-4 w-4" />}
+                            tooltip="Columns"
+                            variant="outline"
+                            aria-label="Columns"
+                            className="h-9 w-9 rounded-lg"
+                          />
+                        </DialogTrigger>
+                        <DialogContent className="!max-w-[95vw] sm:!max-w-4xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
+                          {/* Header Section */}
+                          <div className="px-6 pt-6 pb-4 border-b border-border bg-gradient-to-r from-muted/50 to-transparent">
+                            <DialogTitle className="text-2xl font-bold text-foreground mb-2">
+                              Column Visibility
+                            </DialogTitle>
+                            <DialogDescription className="text-sm text-muted-foreground">
+                              Select which columns to display. Maximum {MAX_VISIBLE_COLUMNS} columns can be visible at once.
+                            </DialogDescription>
+                          </div>
+
+                          {/* Search and Stats Section */}
+                          <div className="px-6 py-4 space-y-4 bg-card border-b border-border">
+                            {/* Column Search */}
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type="text"
+                                placeholder="Search columns..."
+                                className="pl-10 h-10 bg-background border-border focus:border-primary focus:ring-primary"
+                                value={columnSearchTerm}
+                                onChange={(e) => setColumnSearchTerm(e.target.value)}
+                              />
+                            </div>
+
+                            {/* Stats and Actions */}
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-2">
+                                <div className="px-3 py-1.5 bg-primary/10 text-primary rounded-md text-sm font-medium">
+                                  {visibleColumns.length} of {allColumns.filter((col) => !col.alwaysVisible).length} columns visible
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={resetToDefaultColumns}
+                                className="text-sm h-9"
+                              >
+                                Reset to Default
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Column Groups Grid */}
+                          <div className="flex-1 overflow-y-auto px-6 py-4 bg-muted/20">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {filteredColumnGroups.map((group) => {
+                                const groupColumns = groupToColumns[group] || [];
+                                const allGroupColumnsVisible =
+                                  groupColumns.length > 0 &&
+                                  groupColumns.every((key) => visibleColumns.includes(key));
+                                const someGroupColumnsVisible =
+                                  groupColumns.length > 0 &&
+                                  groupColumns.some((key) => visibleColumns.includes(key));
+
+                                return (
+                                  <div
+                                    key={group}
+                                    className="bg-card rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
+                                  >
+                                    {/* Group Header */}
+                                    <div className="bg-gradient-to-r from-muted/50 to-muted/30 px-4 py-3 border-b border-border">
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={allGroupColumnsVisible}
+                                          ref={(el) => {
+                                            if (el) {
+                                              el.indeterminate =
+                                                someGroupColumnsVisible && !allGroupColumnsVisible;
+                                            }
+                                          }}
+                                          onChange={() => toggleGroupColumns(group)}
+                                          className="w-4 h-4 rounded border-2 border-border text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer accent-primary"
+                                        />
+                                        <span className="font-semibold text-sm text-foreground capitalize">
+                                          {COLUMN_GROUP_LABELS[group] || group.replace(/_/g, ' ')}
+                                        </span>
+                                        <span className="ml-auto text-xs text-muted-foreground bg-background px-2 py-0.5 rounded-full">
+                                          {groupColumns.filter((key) => visibleColumns.includes(key)).length}/{groupColumns.length}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Column List */}
+                                    <div className="p-3 space-y-1 max-h-64 overflow-y-auto">
+                                      {EmployeeTableConfig.columns
+                                        .filter((col) => col.group === group && !col.alwaysVisible)
+                                        .map((col) => (
+                                          <label
+                                            key={col.key}
+                                            className="flex items-center gap-3 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded-md transition-colors duration-150 group"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={visibleColumns.includes(col.key)}
+                                              onChange={() => toggleColumn(col.key)}
+                                              className="w-4 h-4 rounded border-2 border-border text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer accent-primary"
+                                            />
+                                            <span className="text-foreground group-hover:text-primary transition-colors duration-150 flex-1">
+                                              {col.label}
+                                            </span>
+                                          </label>
+                                        ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+
+                      {/* View Mode Toggle */}
+                      <div className="flex items-center gap-0.5 border border-[hsl(0,0%,92%)] rounded-lg p-0.5 bg-white">
+                        <IconButton
+                          icon={<Table2 className="h-4 w-4" />}
+                          tooltip="Table View"
+                          variant={viewMode === 'table' ? 'default' : 'ghost'}
+                          onClick={() => setViewMode('table')}
+                          aria-label="Table View"
+                          className="h-9 w-9 rounded-lg"
+                        />
+                        <IconButton
+                          icon={<LayoutGrid className="h-4 w-4" />}
+                          tooltip="Card View"
+                          variant={viewMode === 'card' ? 'default' : 'ghost'}
+                          onClick={() => setViewMode('card')}
+                          aria-label="Card View"
+                          className="h-9 w-9 rounded-lg"
+                        />
+                        <IconButton
+                          icon={<span className="text-xs">Auto</span>}
+                          tooltip="Auto (Switch based on viewport)"
+                          variant={viewMode === 'auto' ? 'default' : 'ghost'}
+                          onClick={() => setViewMode('auto')}
+                          aria-label="Auto View"
+                          className="h-9 w-auto px-2 rounded-lg"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Tertiary Actions */}
+                    <div className="flex items-center gap-1">
+                      {/* Show Deleted Employees Toggle */}
+                      {(hasPermission(permissions, 'restore-employee') || hasPermission(permissions, 'force-delete-employee')) && (
+                        <IconButton
+                          icon={showDeleted ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                          tooltip={showDeleted ? "Show Active" : "Show Deleted"}
+                          variant={showDeleted ? "default" : "outline"}
+                          onClick={() => {
+                            const newValue = !showDeleted;
+                            updateShowDeleted(newValue);
+                            triggerFetch({ show_deleted: newValue, page: 1, per_page: parseInt(perPage, 10) });
+                          }}
+                          aria-label={showDeleted ? "Show Active" : "Show Deleted"}
+                          className="h-9 w-9 rounded-lg"
+                        />
+                      )}
+
+                      {/* Export Button */}
+                      <IconButton
+                        icon={<Download className="h-4 w-4" />}
+                        tooltip="Export"
+                        variant="outline"
+                        onClick={exportToCSV}
+                        aria-label="Export"
+                        className="h-9 w-9 rounded-lg"
                       />
                     </div>
                   </div>
                 </div>
-
-                {/* Advanced Filters Button */}
-                {filter_fields_config && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAdvancedFilterOpen(true)}
-                    className="gap-1.5 sm:gap-2 relative h-9 px-2 sm:px-3"
-                  >
-                    <Filter className="h-4 w-4" />
-                    <span className="hidden sm:inline">Advanced Filters</span>
-                    {advancedFilters && advancedFilters.filter(f => f.field).length > 0 && (
-                      <Badge className="ml-0.5 sm:ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
-                        {advancedFilters.filter(f => f.field).length}
-                      </Badge>
-                    )}
-                  </Button>
-                )}
-
-                {/* Quick Filters Button */}
-                <Dialog open={filterModalOpen} onOpenChange={setFilterModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5 sm:gap-2 relative h-9 px-2 sm:px-3">
-                      <Filter className="h-4 w-4" />
-                      <span className="hidden sm:inline">Quick Filters</span>
-                      {(statusFilter || (departmentFilter && departmentFilter.length > 0) || (positionFilter && positionFilter.length > 0) || employeeTypeFilter) && (
-                        <Badge className="ml-0.5 sm:ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
-                          {(statusFilter ? 1 : 0) + (departmentFilter && departmentFilter.length > 0 ? 1 : 0) + (positionFilter && positionFilter.length > 0 ? 1 : 0) + (employeeTypeFilter ? 1 : 0)}
-                        </Badge>
-                      )}
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto mx-auto">
-                    <DialogTitle className="text-lg font-semibold">Filter Employees</DialogTitle>
-                    <DialogDescription>
-                      Apply filters to narrow down your search results
-                    </DialogDescription>
-
-                    <div className="space-y-4 mt-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Status
-                        </label>
-                        <Select
-                          value={statusFilter || 'all'}
-                          onValueChange={(value) =>
-                            updateStatusFilter(value === 'all' ? '' : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="All Statuses" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
-                            <SelectItem value="on-leave">On Leave</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-foreground">
-                            Department
-                          </label>
-                          {departmentFilter.length > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => updateDepartmentFilter([])}
-                            >
-                              Clear
-                            </Button>
-                          )}
-                        </div>
-                        <div className="border border-border rounded-lg p-3 max-h-[200px] overflow-y-auto">
-                          <div className="space-y-2">
-                            {departments.map((dept) => {
-                              const isChecked = departmentFilter.includes(String(dept.id));
-                              return (
-                                <label
-                                  key={dept.id}
-                                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded"
-                                >
-                                  <Checkbox
-                                    checked={isChecked}
-                                    onCheckedChange={() => toggleDepartmentFilter(String(dept.id))}
-                                  />
-                                  <span>{dept.faculty_name || dept.name}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        {departmentFilter.length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {departmentFilter.length} department{departmentFilter.length !== 1 ? 's' : ''} selected
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-foreground">
-                            Position
-                          </label>
-                          {positionFilter.length > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => updatePositionFilter([])}
-                            >
-                              Clear
-                            </Button>
-                          )}
-                        </div>
-                        <div className="border border-border rounded-lg p-3 max-h-[200px] overflow-y-auto">
-                          <div className="space-y-2">
-                            {positions.map((pos) => {
-                              const isChecked = positionFilter.includes(String(pos.id));
-                              return (
-                                <label
-                                  key={pos.id}
-                                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded"
-                                >
-                                  <Checkbox
-                                    checked={isChecked}
-                                    onCheckedChange={() => togglePositionFilter(String(pos.id))}
-                                  />
-                                  <span>{pos.pos_name || pos.name}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        {positionFilter.length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {positionFilter.length} position{positionFilter.length !== 1 ? 's' : ''} selected
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Employee Type
-                        </label>
-                        <Select
-                          value={employeeTypeFilter || 'all'}
-                          onValueChange={(value) =>
-                            updateEmployeeTypeFilter(value === 'all' ? '' : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="All Types" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Types</SelectItem>
-                            <SelectItem value="Teaching">Teaching</SelectItem>
-                            <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between gap-2 mt-6">
-                      <Button
-                        variant="outline"
-                        onClick={clearFilters}
-                        className="flex-1"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Clear All
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          // Save current filter values to localStorage
-                          if (typeof window !== 'undefined') {
-                            localStorage.setItem('employees_filter_status', statusFilter);
-                            localStorage.setItem('employees_filter_department', departmentFilter);
-                            localStorage.setItem('employees_filter_position', positionFilter);
-                            localStorage.setItem('employees_filter_employee_type', employeeTypeFilter);
-                            localStorage.setItem('employees_filter_show_deleted', String(showDeleted));
-                          }
-                          triggerFetch({ page: 1 });
-                          setFilterModalOpen(false);
-                        }}
-                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-                      >
-                        Apply Filters
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                {/* Page Size Dropdown - Hidden on mobile */}
-                <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <span className="whitespace-nowrap">Rows:</span>
-                  <Select value={perPage} onValueChange={handlePerPageChange}>
-                    <SelectTrigger className="h-9 w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PER_PAGE_OPTIONS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Action Buttons - Scrollable on mobile */}
-              <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 md:overflow-visible">
-              <div className="flex items-center gap-2 min-w-max">
-                {/* View Mode Toggle */}
-                <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 bg-card shadow-sm">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-8 w-8 sm:w-auto sm:px-3 p-0 ${viewMode === 'table' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
-                    onClick={() => setViewMode('table')}
-                    title="Table View"
-                  >
-                    <Table2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-8 w-8 sm:w-auto sm:px-3 p-0 ${viewMode === 'card' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
-                    onClick={() => setViewMode('card')}
-                    title="Card View"
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-8 px-2 sm:px-3 text-xs ${viewMode === 'auto' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground hover:bg-muted'}`}
-                    onClick={() => setViewMode('auto')}
-                    title="Auto (Switch based on viewport)"
-                  >
-                    Auto
-                  </Button>
-                </div>
-
-                {/* Show Deleted Employees Toggle - Only show if user has restore or force delete permission */}
-                {(hasPermission(permissions, 'restore-employee') || hasPermission(permissions, 'force-delete-employee')) && (
-                  <Button 
-                    variant={showDeleted ? "default" : "outline"}
-                    size="sm" 
-                    className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
-                    onClick={() => {
-                      const newValue = !showDeleted;
-                      updateShowDeleted(newValue);
-                      triggerFetch({ show_deleted: newValue, page: 1, per_page: parseInt(perPage, 10) });
-                    }}
-                  >
-                    {showDeleted ? (
-                      <>
-                        <ArchiveRestore className="h-4 w-4" />
-                        <span className="hidden sm:inline">Show Active</span>
-                      </>
-                    ) : (
-                      <>
-                        <Archive className="h-4 w-4" />
-                        <span className="hidden sm:inline">Show Deleted</span>
-                      </>
-                    )}
-                  </Button>
-                )}
-
-                {/* Export Button - Hidden on mobile */}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="hidden sm:flex gap-2 h-9"
-                  onClick={exportToCSV}
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
-
-                {/* Column Visibility - Hidden on mobile */}
-                <Dialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="hidden sm:flex gap-2 h-9">
-                      <Columns3 className="h-4 w-4" />
-                      <span className="hidden md:inline">Columns</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="!max-w-[95vw] sm:!max-w-4xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
-                    {/* Header Section */}
-                    <div className="px-6 pt-6 pb-4 border-b border-border bg-gradient-to-r from-muted/50 to-transparent">
-                      <DialogTitle className="text-2xl font-bold text-foreground mb-2">
-                        Column Visibility
-                      </DialogTitle>
-                      <DialogDescription className="text-sm text-muted-foreground">
-                        Select which columns to display. Maximum {MAX_VISIBLE_COLUMNS} columns can be visible at once.
-                      </DialogDescription>
-                    </div>
-
-                    {/* Search and Stats Section */}
-                    <div className="px-6 py-4 space-y-4 bg-card border-b border-border">
-                      {/* Column Search */}
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="text"
-                          placeholder="Search columns..."
-                          className="pl-10 h-10 bg-background border-border focus:border-primary focus:ring-primary"
-                          value={columnSearchTerm}
-                          onChange={(e) => setColumnSearchTerm(e.target.value)}
-                        />
-                      </div>
-
-                      {/* Stats and Actions */}
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <div className="px-3 py-1.5 bg-primary/10 text-primary rounded-md text-sm font-medium">
-                            {visibleColumns.length} of {allColumns.filter((col) => !col.alwaysVisible).length} columns visible
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={resetToDefaultColumns}
-                          className="text-sm h-9"
-                        >
-                          Reset to Default
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Column Groups Grid */}
-                    <div className="flex-1 overflow-y-auto px-6 py-4 bg-muted/20">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredColumnGroups.map((group) => {
-                          const groupColumns = groupToColumns[group] || [];
-                          const allGroupColumnsVisible =
-                            groupColumns.length > 0 &&
-                            groupColumns.every((key) => visibleColumns.includes(key));
-                          const someGroupColumnsVisible =
-                            groupColumns.length > 0 &&
-                            groupColumns.some((key) => visibleColumns.includes(key));
-
-                          return (
-                            <div
-                              key={group}
-                              className="bg-card rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden"
-                            >
-                              {/* Group Header */}
-                              <div className="bg-gradient-to-r from-muted/50 to-muted/30 px-4 py-3 border-b border-border">
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={allGroupColumnsVisible}
-                                    ref={(el) => {
-                                      if (el) {
-                                        el.indeterminate =
-                                          someGroupColumnsVisible && !allGroupColumnsVisible;
-                                      }
-                                    }}
-                                    onChange={() => toggleGroupColumns(group)}
-                                    className="w-4 h-4 rounded border-2 border-border text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer accent-primary"
-                                  />
-                                  <span className="font-semibold text-sm text-foreground capitalize">
-                                    {COLUMN_GROUP_LABELS[group] || group.replace(/_/g, ' ')}
-                                  </span>
-                                  <span className="ml-auto text-xs text-muted-foreground bg-background px-2 py-0.5 rounded-full">
-                                    {groupColumns.filter((key) => visibleColumns.includes(key)).length}/{groupColumns.length}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Column List */}
-                              <div className="p-3 space-y-1 max-h-64 overflow-y-auto">
-                                {EmployeeTableConfig.columns
-                                  .filter((col) => col.group === group && !col.alwaysVisible)
-                                  .map((col) => (
-                                    <label
-                                      key={col.key}
-                                      className="flex items-center gap-3 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded-md transition-colors duration-150 group"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={visibleColumns.includes(col.key)}
-                                        onChange={() => toggleColumn(col.key)}
-                                        className="w-4 h-4 rounded border-2 border-border text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer accent-primary"
-                                      />
-                                      <span className="text-foreground group-hover:text-primary transition-colors duration-150 flex-1">
-                                        {col.label}
-                                      </span>
-                                    </label>
-                                  ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                {/* Add Employee Button */}
-                {hasPermission(permissions, 'create-employee') && (
-                <Button
-                  onClick={() => router.visit(route('employees.create'))}
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Add New</span>
-                </Button>
-                )}
-              </div>
               </div>
             </div>
 
             {/* Filter Chips - Scrollable on mobile */}
             {activeFiltersCount > 0 && (
-              <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border overflow-x-auto">
-                <span className="text-xs sm:text-sm text-muted-foreground font-medium whitespace-nowrap">Filters:</span>
+              <div className="flex-shrink-0 px-2 sm:px-4 py-2 sm:py-3 border-t border-border bg-background">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center">
+                  <span className="text-xs sm:text-sm text-muted-foreground font-medium whitespace-nowrap">Filters:</span>
                 {statusFilter && (
                   <Badge variant="outline" className="flex items-center gap-1">
                     Status: {statusFilter}
@@ -1580,10 +1417,9 @@ export default function Index() {
                       </Badge>
                     );
                   })}
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
         {/* Table Container - Auto expand/contract based on data */}
         <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
@@ -1762,6 +1598,7 @@ export default function Index() {
           filterFieldsConfig={filter_fields_config}
           onApply={handleApplyAdvancedFilters}
           onClear={handleClearAdvancedFilters}
+          storageKey="employees_saved_filters"
         />
       )}
     </AppLayout>

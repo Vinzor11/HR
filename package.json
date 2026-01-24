@@ -53,6 +53,7 @@
         "clsx": "^2.1.1",
         "concurrently": "^9.0.1",
         "docx-preview": "^0.3.7",
+        "framer-motion": "^12.29.0",
         "globals": "^15.14.0",
         "html2canvas": "^1.4.1",
         "laravel-vite-plugin": "^1.0",

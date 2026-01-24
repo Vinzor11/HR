@@ -120,13 +120,13 @@ export default function LeaveBalancePage({ balances, year, availableYears, error
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My Leave Balance" />
-            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 pb-20 sm:pb-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold">My Leave Balance</h1>
-                        <p className="text-muted-foreground mt-1 text-sm sm:text-base">View your leave entitlements and usage</p>
-                    </div>
-                    <Select value={year.toString()} onValueChange={handleYearChange}>
+            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4 pb-20 sm:pb-4">
+                <div className="space-y-4 md:space-y-6">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">My Leave Balance</h1>
+                        </div>
+                        <Select value={year.toString()} onValueChange={handleYearChange}>
                         <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue placeholder="Select year" />
                         </SelectTrigger>
@@ -306,6 +306,7 @@ export default function LeaveBalancePage({ balances, year, availableYears, error
                         </CardContent>
                     </Card>
                 )}
+                </div>
             </div>
         </AppLayout>
     );

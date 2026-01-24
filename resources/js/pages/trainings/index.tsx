@@ -628,6 +628,12 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
 
             <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
                 <div className="flex-shrink-0 border-b border-border bg-card px-3 sm:px-4 py-2 shadow-sm">
+                    <div className="mb-3 md:mb-4">
+                        <h1 className="text-xl md:text-2xl font-semibold text-foreground">Trainings</h1>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                            Manage training programs and track employee participation.
+                        </p>
+                    </div>
                     <TableToolbar
                         searchValue={searchTerm}
                         onSearchChange={handleSearchChange}

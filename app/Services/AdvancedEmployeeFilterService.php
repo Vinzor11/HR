@@ -216,25 +216,30 @@ class AdvancedEmployeeFilterService
                 'employee_type' => ['type' => 'select', 'label' => 'Employee Type', 'options' => ['Teaching', 'Non-Teaching']],
                 'date_hired' => ['type' => 'date', 'label' => 'Date Hired'],
                 'date_regularized' => ['type' => 'date', 'label' => 'Date Regularized'],
+                'salary' => ['type' => 'number', 'label' => 'Salary'],
                 'department.faculty_name' => ['type' => 'text', 'label' => 'Department'],
                 'position.pos_name' => ['type' => 'text', 'label' => 'Position'],
             ],
 
             // Employee Table - Address (Residential)
             'address_residential' => [
+                'res_house_no' => ['type' => 'text', 'label' => 'Residential House No.'],
+                'res_street' => ['type' => 'text', 'label' => 'Residential Street'],
+                'res_subdivision' => ['type' => 'text', 'label' => 'Residential Subdivision'],
+                'res_barangay' => ['type' => 'text', 'label' => 'Residential Barangay'],
                 'res_city' => ['type' => 'text', 'label' => 'Residential City'],
                 'res_province' => ['type' => 'text', 'label' => 'Residential Province'],
-                'res_barangay' => ['type' => 'text', 'label' => 'Residential Barangay'],
-                'res_street' => ['type' => 'text', 'label' => 'Residential Street'],
                 'res_zip_code' => ['type' => 'text', 'label' => 'Residential ZIP Code'],
             ],
 
             // Employee Table - Address (Permanent)
             'address_permanent' => [
+                'perm_house_no' => ['type' => 'text', 'label' => 'Permanent House No.'],
+                'perm_street' => ['type' => 'text', 'label' => 'Permanent Street'],
+                'perm_subdivision' => ['type' => 'text', 'label' => 'Permanent Subdivision'],
+                'perm_barangay' => ['type' => 'text', 'label' => 'Permanent Barangay'],
                 'perm_city' => ['type' => 'text', 'label' => 'Permanent City'],
                 'perm_province' => ['type' => 'text', 'label' => 'Permanent Province'],
-                'perm_barangay' => ['type' => 'text', 'label' => 'Permanent Barangay'],
-                'perm_street' => ['type' => 'text', 'label' => 'Permanent Street'],
                 'perm_zip_code' => ['type' => 'text', 'label' => 'Permanent ZIP Code'],
             ],
 
@@ -245,6 +250,20 @@ class AdvancedEmployeeFilterService
                 'telephone_no' => ['type' => 'text', 'label' => 'Telephone Number'],
             ],
 
+            // Employee Table - Government IDs
+            'government_ids' => [
+                'gsis_id_no' => ['type' => 'text', 'label' => 'GSIS ID No.'],
+                'pagibig_id_no' => ['type' => 'text', 'label' => 'Pag-IBIG ID No.'],
+                'philhealth_no' => ['type' => 'text', 'label' => 'PhilHealth No.'],
+                'sss_no' => ['type' => 'text', 'label' => 'SSS No.'],
+                'tin_no' => ['type' => 'text', 'label' => 'TIN No.'],
+                'agency_employee_no' => ['type' => 'text', 'label' => 'Agency Employee No.'],
+                'government_issued_id' => ['type' => 'text', 'label' => 'Government Issued ID'],
+                'id_number' => ['type' => 'text', 'label' => 'ID Number'],
+                'id_date_issued' => ['type' => 'date', 'label' => 'ID Date Issued'],
+                'id_place_of_issue' => ['type' => 'text', 'label' => 'ID Place of Issue'],
+            ],
+
             // Employee Table - Personal
             'personal' => [
                 'birth_date' => ['type' => 'date', 'label' => 'Birth Date'],
@@ -252,6 +271,15 @@ class AdvancedEmployeeFilterService
                 'sex' => ['type' => 'select', 'label' => 'Sex', 'options' => ['Male', 'Female']],
                 'civil_status' => ['type' => 'text', 'label' => 'Civil Status'],
                 'citizenship' => ['type' => 'text', 'label' => 'Citizenship'],
+                'height_m' => ['type' => 'number', 'label' => 'Height (m)'],
+                'weight_kg' => ['type' => 'number', 'label' => 'Weight (kg)'],
+                'blood_type' => ['type' => 'text', 'label' => 'Blood Type'],
+                'dual_citizenship' => ['type' => 'boolean', 'label' => 'Dual Citizenship'],
+                'citizenship_type' => ['type' => 'select', 'label' => 'Citizenship Type', 'options' => ['By birth', 'By naturalization']],
+                'dual_citizenship_country' => ['type' => 'text', 'label' => 'Dual Citizenship Country'],
+                'indigenous_group' => ['type' => 'text', 'label' => 'Indigenous Group'],
+                'pwd_id_no' => ['type' => 'text', 'label' => 'PWD ID No.'],
+                'solo_parent_id_no' => ['type' => 'text', 'label' => 'Solo Parent ID No.'],
             ],
 
             // Family Background
@@ -290,8 +318,12 @@ class AdvancedEmployeeFilterService
             'work_experience' => [
                 'work_experience.position_title' => ['type' => 'text', 'label' => 'Position Title'],
                 'work_experience.company_name' => ['type' => 'text', 'label' => 'Company Name'],
+                'work_experience.company_address' => ['type' => 'text', 'label' => 'Company Address'],
                 'work_experience.date_from' => ['type' => 'date', 'label' => 'Work Start Date'],
                 'work_experience.date_to' => ['type' => 'date', 'label' => 'Work End Date'],
+                'work_experience.monthly_salary' => ['type' => 'number', 'label' => 'Monthly Salary'],
+                'work_experience.salary_grade_step' => ['type' => 'text', 'label' => 'Salary Grade/Step'],
+                'work_experience.status_of_appointment' => ['type' => 'text', 'label' => 'Status of Appointment'],
                 'work_experience.is_gov_service' => ['type' => 'boolean', 'label' => 'Government Service'],
             ],
 
@@ -303,6 +335,25 @@ class AdvancedEmployeeFilterService
                 'training.date_to' => ['type' => 'date', 'label' => 'Training End Date'],
                 'training.conducted_by' => ['type' => 'text', 'label' => 'Conducted By'],
                 'training.venue' => ['type' => 'text', 'label' => 'Venue'],
+            ],
+
+            // Voluntary Work
+            'voluntary_work' => [
+                'voluntary_work.organization_name' => ['type' => 'text', 'label' => 'Organization Name'],
+                'voluntary_work.organization_address' => ['type' => 'text', 'label' => 'Organization Address'],
+                'voluntary_work.date_from' => ['type' => 'date', 'label' => 'Voluntary Work Start Date'],
+                'voluntary_work.date_to' => ['type' => 'date', 'label' => 'Voluntary Work End Date'],
+                'voluntary_work.hours_rendered' => ['type' => 'number', 'label' => 'Hours Rendered'],
+                'voluntary_work.position_or_nature' => ['type' => 'text', 'label' => 'Position/Nature'],
+            ],
+
+            // References
+            'references' => [
+                'references.first_name' => ['type' => 'text', 'label' => 'Reference First Name'],
+                'references.middle_initial' => ['type' => 'text', 'label' => 'Reference Middle Initial'],
+                'references.surname' => ['type' => 'text', 'label' => 'Reference Surname'],
+                'references.address' => ['type' => 'text', 'label' => 'Reference Address'],
+                'references.telephone_no' => ['type' => 'text', 'label' => 'Reference Telephone No.'],
             ],
 
             // Other Information

@@ -253,7 +253,16 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
             <Head title="Training History" />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
+            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4">
+                <div className="space-y-4 md:space-y-6">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">Training History</h1>
+                            <p className="text-xs md:text-sm text-muted-foreground">
+                                View your training participation history and download certificates.
+                            </p>
+                        </div>
+                    </div>
                 <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -467,6 +476,7 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
                         </div>
                     )}
                 </section>
+                </div>
             </div>
         </AppLayout>
     );

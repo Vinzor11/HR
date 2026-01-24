@@ -130,12 +130,9 @@ export default function LeaveBalanceAdminIndex({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Users className="h-8 w-8 text-primary" />
-              Leave Balance Management
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Set initial balances, grant special leaves, and manage employee leave credits
+            <h1 className="text-xl md:text-2xl font-semibold text-foreground">Leave Balance Management</h1>
+            <p className="text-xs md:text-sm text-muted-foreground">
+              Set initial balances and manage employee leave credits.
             </p>
           </div>
         </div>

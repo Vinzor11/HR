@@ -11,8 +11,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Plus, Trash2, Search, Filter, Sparkles, Info, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Plus, Trash2, Search, Filter, Sparkles, Info, Check, ChevronDown, ChevronRight, Save, FolderOpen } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 export interface FilterCondition {
   id: string;
@@ -22,7 +31,7 @@ export interface FilterCondition {
 }
 
 interface FilterFieldConfig {
-  type: 'text' | 'select' | 'date' | 'boolean';
+  type: 'text' | 'select' | 'date' | 'boolean' | 'number';
   label: string;
   options?: string[];
 }
@@ -41,16 +50,35 @@ interface AdvancedFilterPanelProps {
   filterFieldsConfig: FilterFieldsConfig;
   onApply: (filters?: FilterCondition[]) => void;
   onClear: () => void;
+  storageKey?: string; // Optional storage key for saved filters
+}
+
+interface SavedFilter {
+  id: string;
+  name: string;
+  filters: FilterCondition[];
+  createdAt: string;
 }
 
 const OPERATORS = {
   text: [
     { value: 'contains', label: 'Contains' },
     { value: 'not_contains', label: 'Does not contain' },
-    { value: 'equals', label: 'Equals' },
-    { value: 'not_equals', label: 'Does not equal' },
+    { value: 'equals', label: 'Equals (=)' },
+    { value: 'not_equals', label: 'Does not equal (≠)' },
     { value: 'starts_with', label: 'Starts with' },
     { value: 'ends_with', label: 'Ends with' },
+    { value: 'is_null', label: 'Is empty' },
+    { value: 'is_not_null', label: 'Is not empty' },
+  ],
+  number: [
+    { value: 'equals', label: 'Equals (=)' },
+    { value: 'not_equals', label: 'Does not equal (≠)' },
+    { value: 'greater_than', label: 'Greater than (>)' },
+    { value: 'greater_than_or_equal', label: 'Greater than or equal (≥)' },
+    { value: 'less_than', label: 'Less than (<)' },
+    { value: 'less_than_or_equal', label: 'Less than or equal (≤)' },
+    { value: 'between', label: 'Between' },
     { value: 'is_null', label: 'Is empty' },
     { value: 'is_not_null', label: 'Is not empty' },
   ],
@@ -62,10 +90,10 @@ const OPERATORS = {
   ],
   date: [
     { value: 'equals', label: 'Equals' },
-    { value: 'greater_than', label: 'After' },
-    { value: 'greater_than_or_equal', label: 'On or after' },
-    { value: 'less_than', label: 'Before' },
-    { value: 'less_than_or_equal', label: 'On or before' },
+    { value: 'greater_than', label: 'After (>)' },
+    { value: 'greater_than_or_equal', label: 'On or after (≥)' },
+    { value: 'less_than', label: 'Before (<)' },
+    { value: 'less_than_or_equal', label: 'On or before (≤)' },
     { value: 'between', label: 'Between' },
   ],
   boolean: [
@@ -81,11 +109,27 @@ export function AdvancedFilterPanel({
   filterFieldsConfig,
   onApply,
   onClear,
+  storageKey = 'saved_filters',
 }: AdvancedFilterPanelProps) {
   const [fieldSearchTerm, setFieldSearchTerm] = useState('');
   const [showFieldSelector, setShowFieldSelector] = useState<Record<string, boolean>>({});
   // Track which groups are expanded - empty set means all collapsed by default
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [filterName, setFilterName] = useState('');
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return [];
+        }
+      }
+    }
+    return [];
+  });
 
   // Flatten filter fields config for easier access
   const allFields = useMemo(() => {
@@ -106,12 +150,15 @@ export function AdvancedFilterPanel({
     address_permanent: 'Permanent Address',
     contact: 'Contact Information',
     personal: 'Personal Details',
+    government_ids: 'Government IDs',
     family_background: 'Family Background',
     children: 'Children',
     educational_background: 'Educational Background',
     eligibility: 'Eligibility & Licenses',
     work_experience: 'Work Experience',
+    voluntary_work: 'Voluntary Work',
     training: 'Training & Development',
+    references: 'References',
     other_information: 'Other Information',
   };
 
@@ -303,6 +350,51 @@ export function AdvancedFilterPanel({
           />
         );
 
+      case 'number':
+        if (filter.operator === 'between') {
+          const numbers = Array.isArray(filter.value) ? filter.value : filter.value ? [filter.value, ''] : ['', ''];
+          return (
+            <div className="flex gap-2">
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={numbers[0]}
+                  onChange={(e) => {
+                    const updated = [e.target.value, numbers[1]];
+                    updateFilter(filter.id, { value: updated });
+                  }}
+                  placeholder="Min value"
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={numbers[1]}
+                  onChange={(e) => {
+                    const updated = [numbers[0], e.target.value];
+                    updateFilter(filter.id, { value: updated });
+                  }}
+                  placeholder="Max value"
+                />
+              </div>
+            </div>
+          );
+        }
+        return (
+          <Input
+            type="number"
+            step="any"
+            value={filter.value as string || ''}
+            onChange={(e) => updateFilter(filter.id, { value: e.target.value })}
+            placeholder="Enter number"
+            className="w-full"
+          />
+        );
+
       case 'boolean':
         const boolValue = filter.value === true || filter.value === 'true' ? 'true' : 'false';
         return (
@@ -357,19 +449,135 @@ export function AdvancedFilterPanel({
 
   const validFilters = filters.filter(f => f.field && (['is_null', 'is_not_null'].includes(f.operator) || f.value !== null && f.value !== ''));
 
+  // Save current filters as a preset
+  const handleSaveFilter = () => {
+    if (!filterName.trim()) return;
+    
+    const newSavedFilter: SavedFilter = {
+      id: `filter-${Date.now()}`,
+      name: filterName.trim(),
+      filters: [...validFilters],
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...savedFilters, newSavedFilter];
+    setSavedFilters(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    }
+    setFilterName('');
+    setSaveDialogOpen(false);
+  };
+
+  // Load a saved filter preset
+  const handleLoadFilter = (savedFilter: SavedFilter) => {
+    onFiltersChange(savedFilter.filters);
+    // Auto-apply the loaded filters
+    setTimeout(() => {
+      onApply(savedFilter.filters);
+    }, 100);
+  };
+
+  // Delete a saved filter preset
+  const handleDeleteSavedFilter = (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const updated = savedFilters.filter(f => f.id !== id);
+    setSavedFilters(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-2xl overflow-hidden p-0 flex flex-col">
         <SheetHeader className="border-b border-border px-6 py-5 bg-gradient-to-b from-background to-muted/20">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-              <Filter className="h-5 w-5" />
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                <Filter className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <SheetTitle className="text-2xl font-bold text-foreground">Advanced Filters</SheetTitle>
+                <SheetDescription className="mt-1.5 text-sm">
+                  Filter employees by any field across all related data tables. Filters are combined with AND logic.
+                </SheetDescription>
+              </div>
             </div>
-            <div className="flex-1">
-              <SheetTitle className="text-2xl font-bold text-foreground">Advanced Filters</SheetTitle>
-              <SheetDescription className="mt-1.5 text-sm">
-                Filter employees by any field across all related data tables. Filters are combined with AND logic.
-              </SheetDescription>
+            
+            {/* Save/Load Actions - Separate Row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Save Filter Dialog */}
+              <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    disabled={validFilters.length === 0}
+                    onClick={() => setSaveDialogOpen(true)}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Preset
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Save Filter Preset</DialogTitle>
+                    <DialogDescription>
+                      Give this filter preset a name so you can reuse it later.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4">
+                    <Input
+                      placeholder="Enter filter name..."
+                      value={filterName}
+                      onChange={(e) => setFilterName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && filterName.trim()) {
+                          handleSaveFilter();
+                        }
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => {
+                      setSaveDialogOpen(false);
+                      setFilterName('');
+                    }}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSaveFilter} disabled={!filterName.trim()}>
+                      Save Preset
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Load Saved Filters */}
+              {savedFilters.length > 0 && (
+                <Select
+                  value=""
+                  onValueChange={(value) => {
+                    const saved = savedFilters.find(f => f.id === value);
+                    if (saved) handleLoadFilter(saved);
+                  }}
+                >
+                  <SelectTrigger className="h-9 min-w-[160px]">
+                    <SelectValue placeholder="Load preset..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedFilters.map((saved) => (
+                      <SelectItem key={saved.id} value={saved.id}>
+                        {saved.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </SheetHeader>
@@ -644,6 +852,50 @@ export function AdvancedFilterPanel({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Saved Filter Presets */}
+            {savedFilters.length > 0 && (
+              <div className="space-y-3 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-sm text-foreground">Saved Presets ({savedFilters.length})</h3>
+                </div>
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {savedFilters.map((saved) => (
+                    <div
+                      key={saved.id}
+                      className="flex items-center justify-between gap-3 p-3 border border-border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{saved.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {saved.filters.length} filter{saved.filters.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs"
+                          onClick={() => handleLoadFilter(saved)}
+                        >
+                          Load
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => handleDeleteSavedFilter(saved.id)}
+                          title="Delete preset"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

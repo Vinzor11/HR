@@ -222,10 +222,20 @@ export default function UserActivities() {
             <Head title="User Activities" />
             <CustomToast />
 
-            <div className="space-y-6">
+            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4">
+                <div className="space-y-4 md:space-y-6">
+                    {/* Header */}
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">User Activities</h1>
+                            <p className="text-xs md:text-sm text-muted-foreground">
+                                Showing {filteredActivities.length} of {activities.length} log entries
+                            </p>
+                        </div>
+                    </div>
 
-                {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-lg">
+                    {/* Filters */}
+                    <div className="flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-lg">
                     <div className="relative max-w-md">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -420,12 +430,13 @@ export default function UserActivities() {
                     )}
                 </div>
 
-                {/* Summary */}
-                {filteredActivities.length > 0 && (
-                    <div className="text-sm text-muted-foreground text-center">
-                        Showing {filteredActivities.length} of {activities.length} activity entries
-                    </div>
-                )}
+                    {/* Summary */}
+                    {filteredActivities.length > 0 && (
+                        <div className="text-sm text-muted-foreground text-center">
+                            Showing {filteredActivities.length} of {activities.length} activity entries
+                        </div>
+                    )}
+                </div>
             </div>
         </AppLayout>
     );

@@ -2,6 +2,7 @@ import { usePage } from '@inertiajs/react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { IconButton } from './ui/icon-button';
 import { hasPermission } from '@/utils/authorization';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { ChevronDown, ChevronRight, Eye, Pencil, Trash2, MoreVertical, RotateCcw } from 'lucide-react';
@@ -352,10 +353,13 @@ export const EnterpriseEmployeeTable = ({
     }
   }, [data, isCardMode]);
 
-  const renderCellValue = (col: TableColumn, cellValue: any, row: TableRow) => {
+  const renderCellValue = (col: TableColumn, cellValue: any, row: TableRow, colIndex?: number) => {
     if (col.isAction) {
       return renderActionButtons(row);
     }
+
+    // Check if this is the first data column (should be more prominent) - passes to next if Employee ID is hidden
+    const isFirstDataColumn = colIndex === 0;
 
     // Check for format function first - it might need to handle null values
     if (col.format) {
@@ -369,11 +373,19 @@ export const EnterpriseEmployeeTable = ({
         return formattedValue;
       }
       
-      return <span className="text-sm text-foreground">{formattedValue ?? '-'}</span>;
+      return (
+        <span className={`text-sm ${isFirstDataColumn ? 'font-medium text-foreground' : 'text-foreground/80'}`}>
+          {formattedValue ?? '-'}
+        </span>
+      );
     }
 
     if (cellValue === null || cellValue === undefined) {
-      return <span className="text-muted-foreground">-</span>;
+      return (
+        <span className={`text-sm ${isFirstDataColumn ? 'text-foreground/60' : 'text-muted-foreground'}`}>
+          -
+        </span>
+      );
     }
 
     if (col.key === 'status') {
@@ -413,8 +425,12 @@ export const EnterpriseEmployeeTable = ({
     }
 
     const text = String(cellValue);
+    
     return (
-      <span className="text-sm text-foreground" title={text.length > 30 ? text : undefined}>
+      <span 
+        className={`text-sm ${isFirstDataColumn ? 'font-medium text-foreground' : 'text-foreground/70'}`}
+        title={text.length > 30 ? text : undefined}
+      >
         {truncateText(text, 30)}
       </span>
     );
@@ -467,46 +483,32 @@ export const EnterpriseEmployeeTable = ({
       return (
         <div className="flex items-center gap-1">
           {onRestore && hasPermission(permissions, restorePermission) && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:text-green-300 dark:hover:bg-green-900/30"
-                    onClick={() => {
-                      if (confirm('Are you sure you want to restore this item?')) {
-                        onRestore(row.id!);
-                      }
-                    }}
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Restore</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <IconButton
+              icon={<RotateCcw className="h-4 w-4" />}
+              tooltip="Restore"
+              variant="ghost"
+              onClick={() => {
+                if (confirm('Are you sure you want to restore this item?')) {
+                  onRestore(row.id!);
+                }
+              }}
+              aria-label="Restore"
+              className="h-9 w-9 rounded-lg"
+            />
           )}
           {onForceDelete && hasPermission(permissions, forceDeletePermission) && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/30"
-                    onClick={() => {
-                      if (confirm('Are you sure you want to permanently delete this item? This action cannot be undone.')) {
-                        onForceDelete(row.id!);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Permanently Delete</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <IconButton
+              icon={<Trash2 className="h-4 w-4" />}
+              tooltip="Permanently Delete"
+              variant="ghost"
+              onClick={() => {
+                if (confirm('Are you sure you want to permanently delete this item? This action cannot be undone.')) {
+                  onForceDelete(row.id!);
+                }
+              }}
+              aria-label="Permanently Delete"
+              className="h-9 w-9 rounded-lg"
+            />
           )}
         </div>
       );
@@ -523,72 +525,7 @@ export const EnterpriseEmployeeTable = ({
       return <span className="text-muted-foreground text-xs">No actions</span>;
     }
 
-    // Use dropdown menu for 3+ actions, otherwise show icon buttons
-    if (availableActions.length > 2) {
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {availableActions.map((action) => {
-              const IconComponent = (LucideIcons as any)[action.icon] || LucideIcons.Circle;
-              
-              if (action.label === 'View' && onView) {
-                return (
-                  <DropdownMenuItem key={action.label} onClick={() => onView(row)}>
-                    <IconComponent className="mr-2 h-4 w-4" />
-                    View
-                  </DropdownMenuItem>
-                );
-              }
-              
-              if (action.label === 'Edit' && onEdit) {
-                return (
-                  <DropdownMenuItem key={action.label} onClick={() => onEdit(row)}>
-                    <IconComponent className="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                );
-              }
-              
-              if ((action.label === 'Delete' || action.label === 'Delete/Deactivate') && action.route && onDelete) {
-                const confirmMessage = getDeleteConfirmMessage(row);
-                // For users, determine if it's deactivate or delete
-                const actionLabel = resourceType === 'user' && row.employee_id 
-                  ? 'Deactivate' 
-                  : 'Delete';
-                
-                return (
-                  <DropdownMenuItem
-                    key={action.label}
-                    onClick={() => {
-                      if (!confirm(confirmMessage)) return;
-                      const rowId = getRowId(row);
-                      if (!rowId) {
-                        console.error('Delete action: row ID is missing', row);
-                        return;
-                      }
-                      onDelete(buildRoute(action.route!, rowId));
-                    }}
-                    className="text-red-600"
-                  >
-                    <IconComponent className="mr-2 h-4 w-4" />
-                    {actionLabel}
-                  </DropdownMenuItem>
-                );
-              }
-              
-              return null;
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    }
-
-    // Show icon buttons with tooltips for 1-2 actions
+    // Always show icon buttons directly (no dropdown menu)
     return (
       <div className="flex items-center gap-1">
         {availableActions.map((action) => {
@@ -596,41 +533,29 @@ export const EnterpriseEmployeeTable = ({
           
           if (action.label === 'View' && onView) {
             return (
-              <TooltipProvider key={action.label}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={() => onView(row)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>View</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <IconButton
+                key={action.label}
+                icon={<IconComponent className="h-4 w-4 text-sky-600" />}
+                tooltip="View"
+                variant="ghost"
+                onClick={() => onView(row)}
+                aria-label="View"
+                className="h-9 w-9 rounded-lg"
+              />
             );
           }
           
           if (action.label === 'Edit' && onEdit) {
             return (
-              <TooltipProvider key={action.label}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                      onClick={() => onEdit(row)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <IconButton
+                key={action.label}
+                icon={<IconComponent className="h-4 w-4 text-blue-600" />}
+                tooltip="Edit"
+                variant="ghost"
+                onClick={() => onEdit(row)}
+                aria-label="Edit"
+                className="h-9 w-9 rounded-lg"
+              />
             );
           }
           
@@ -642,29 +567,23 @@ export const EnterpriseEmployeeTable = ({
               : 'Delete';
             
             return (
-              <TooltipProvider key={action.label}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => {
-                        if (!confirm(confirmMessage)) return;
-                        const rowId = getRowId(row);
-                        if (!rowId) {
-                          console.error('Delete action: row ID is missing', row);
-                          return;
-                        }
-                        onDelete(buildRoute(action.route!, rowId));
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{actionLabel}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <IconButton
+                key={action.label}
+                icon={<IconComponent className="h-4 w-4 text-red-600" />}
+                tooltip={actionLabel}
+                variant="ghost"
+                onClick={() => {
+                  if (!confirm(confirmMessage)) return;
+                  const rowId = getRowId(row);
+                  if (!rowId) {
+                    console.error('Delete action: row ID is missing', row);
+                    return;
+                  }
+                  onDelete(buildRoute(action.route!, rowId));
+                }}
+                aria-label={actionLabel}
+                className="h-9 w-9 rounded-lg"
+              />
             );
           }
           
@@ -700,14 +619,14 @@ export const EnterpriseEmployeeTable = ({
       const zIndex = isHeader ? 'z-30' : 'z-10';
       const bgColor = isHeader ? 'bg-muted/70 dark:bg-muted-dark/70' : 'bg-card';
       const shadow = colIndex > 0 ? 'shadow-[2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]' : '';
-      return `sticky ${bgColor} ${zIndex} border-r border-border ${shadow}`;
+      return `sticky ${bgColor} ${zIndex} ${shadow}`;
     } else {
       // When expand is enabled: 0 = expand, 1 = row #, 2 = employee ID
       if (colIndex > 2) return '';
       const zIndex = isHeader ? 'z-30' : 'z-10';
       const bgColor = isHeader ? 'bg-muted/70 dark:bg-muted-dark/70' : 'bg-card';
       const shadow = colIndex > 0 ? 'shadow-[2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]' : '';
-      return `sticky ${bgColor} ${zIndex} border-r border-border ${shadow}`;
+      return `sticky ${bgColor} ${zIndex} ${shadow}`;
     }
   };
 
@@ -1027,16 +946,16 @@ export const EnterpriseEmployeeTable = ({
     <div ref={containerRef} className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
       <div ref={scrollContainerRef} className="overflow-x-auto">
         <table ref={tableRef} className="w-full divide-y divide-border/50">
-          <thead className="bg-muted/70 dark:bg-muted-dark/70 sticky top-0 z-30 border-b border-border">
+          <thead className="bg-muted/90 dark:bg-muted-dark/90 sticky top-0 z-30 border-b-2 border-border">
             <tr>
               {/* Expand/Collapse column */}
               {enableExpand && (
-                <th className="sticky left-0 z-30 bg-muted/70 dark:bg-muted-dark/70 w-12 px-3 py-3 border-r border-border"></th>
+                <th className="sticky left-0 z-30 bg-muted/90 dark:bg-muted-dark/90 w-12 px-3 py-3"></th>
               )}
               
               {/* Row # */}
               <th 
-                className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-30 bg-muted/70 dark:bg-muted-dark/70 px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r border-border ${getStickyClass(enableExpand ? 1 : 0, true)}`}
+                className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-30 bg-muted/90 dark:bg-muted-dark/90 px-4 py-3.5 text-left text-xs font-bold text-foreground uppercase tracking-wider ${getStickyClass(enableExpand ? 1 : 0, true)}`}
                 style={getStickyStyle(enableExpand ? 1 : 0)}
               >
                 #
@@ -1054,20 +973,20 @@ export const EnterpriseEmployeeTable = ({
                 return (
                   <th
                     key={`header-${column.key}`}
-                    className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider ${
+                    className={`px-4 py-3.5 text-left text-xs font-bold text-foreground uppercase tracking-wider ${
                       isSticky ? getStickyClass(stickyIndex, true) : ''
-                    } ${column.className || ''} ${canSort ? 'cursor-pointer hover:bg-muted select-none transition-colors' : ''}`}
+                    } ${column.className || ''} ${canSort ? 'cursor-pointer hover:bg-muted/80 select-none transition-colors' : ''}`}
                     style={isSticky ? getStickyStyle(stickyIndex) : {}}
                     onClick={canSort ? () => onSort(column.key) : undefined}
                   >
                     <div className="flex items-center gap-2">
-                      <span>{column.label}</span>
+                      <span className="font-bold">{column.label}</span>
                       {canSort && (
-                        <span className="text-muted-foreground">
+                        <span className="text-foreground/70">
                           {isCurrentSort ? (
                             sortOrder === 'asc' ? '↑' : '↓'
                           ) : (
-                            <span className="opacity-30">⇅</span>
+                            <span className="opacity-40">⇅</span>
                           )}
                         </span>
                       )}
@@ -1078,7 +997,7 @@ export const EnterpriseEmployeeTable = ({
               
               {/* Actions column - sticky right */}
               {actionColumn && (
-                <th className="sticky right-0 z-30 bg-muted/70 dark:bg-muted-dark/70 px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider border-l border-border shadow-[-2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[-2px_0_4px_rgba(0,0,0,0.3)]">
+                <th className="sticky right-0 z-30 bg-muted/90 dark:bg-muted-dark/90 px-4 py-3.5 text-left text-xs font-bold text-foreground uppercase tracking-wider shadow-[-2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[-2px_0_4px_rgba(0,0,0,0.3)]">
                   {actionColumn.label}
                 </th>
               )}
@@ -1090,17 +1009,20 @@ export const EnterpriseEmployeeTable = ({
               // Loading skeleton
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={`skeleton-${idx}`} className="hover:bg-muted/30">
-                  <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4 border-r border-border"></td>
-                  <td className="sticky left-12 z-10 bg-card px-4 py-4 border-r border-border">
-                    <div className="h-4 w-8 bg-muted rounded animate-pulse"></div>
+                  <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4"></td>
+                  <td className="sticky left-12 z-10 bg-card px-4 py-4">
+                    <div className="h-4 w-8 bg-foreground/20 rounded animate-pulse"></div>
                   </td>
-                  {dataColumns.map((col) => (
-                    <td key={`skeleton-${idx}-${col.key}`} className="px-4 py-4">
-                      <div className="h-4 bg-muted rounded animate-pulse"></div>
-                    </td>
-                  ))}
+                  {dataColumns.map((col, colIdx) => {
+                    const isEmployeeId = colIdx === 0;
+                    return (
+                      <td key={`skeleton-${idx}-${col.key}`} className="px-4 py-4">
+                        <div className={`h-4 rounded animate-pulse ${isEmployeeId ? 'bg-foreground/20' : 'bg-muted'}`}></div>
+                      </td>
+                    );
+                  })}
                   {actionColumn && (
-                    <td className="sticky right-0 z-10 bg-card px-4 py-4 border-l border-border">
+                    <td className="sticky right-0 z-10 bg-card px-4 py-4">
                       <div className="h-4 w-16 bg-muted rounded animate-pulse"></div>
                     </td>
                   )}
@@ -1121,7 +1043,7 @@ export const EnterpriseEmployeeTable = ({
                     >
                       {/* Expand/Collapse icon */}
                       {enableExpand && (
-                        <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4 border-r border-border">
+                        <td className="sticky left-0 z-10 bg-card w-12 px-3 py-4">
                           <div className="flex items-center justify-center">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -1134,7 +1056,7 @@ export const EnterpriseEmployeeTable = ({
                       
                       {/* Row # */}
                       <td 
-                        className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-10 bg-card px-4 py-4 text-sm text-muted-foreground border-r border-border ${getStickyClass(enableExpand ? 1 : 0)}`}
+                        className={`sticky ${enableExpand ? 'left-12' : 'left-0'} z-10 bg-card px-4 py-4 text-sm font-medium text-foreground ${getStickyClass(enableExpand ? 1 : 0)}`}
                         style={getStickyStyle(enableExpand ? 1 : 0)}
                       >
                         {rowNumber}
@@ -1161,7 +1083,7 @@ export const EnterpriseEmployeeTable = ({
                               }
                             }}
                           >
-                            {renderCellValue(col, cellValue, row)}
+                            {renderCellValue(col, cellValue, row, colIndex)}
                           </td>
                         );
                       })}
@@ -1169,7 +1091,7 @@ export const EnterpriseEmployeeTable = ({
                       {/* Actions cell - sticky right */}
                       {actionColumn && (
                         <td 
-                          className="sticky right-0 z-10 bg-card px-4 py-4 border-l border-border"
+                          className="sticky right-0 z-10 bg-card px-4 py-4"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {renderActionButtons(row)}

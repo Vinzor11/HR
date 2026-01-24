@@ -117,13 +117,16 @@ export default function LeaveHistoryPage({ requests, leaveTypes, filters, error 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Leave History" />
-            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 pb-20 sm:pb-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold">Leave History</h1>
-                        <p className="text-muted-foreground mt-1 text-sm sm:text-base">View your leave request history</p>
+            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4 pb-20 sm:pb-4">
+                <div className="space-y-4 md:space-y-6">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">Leave History</h1>
+                            <p className="text-xs md:text-sm text-muted-foreground">
+                                View your leave request history and track approvals.
+                            </p>
+                        </div>
                     </div>
-                </div>
 
                 <Card>
                     <CardHeader>
@@ -230,6 +233,7 @@ export default function LeaveHistoryPage({ requests, leaveTypes, filters, error 
                         )}
                     </CardContent>
                 </Card>
+                </div>
             </div>
         </AppLayout>
     );

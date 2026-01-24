@@ -1,7 +1,8 @@
 import { CustomModalForm } from '@/components/custom-modal-form'
 import { EnterpriseEmployeeTable } from '@/components/EnterpriseEmployeeTable'
 import { CustomToast, toast } from '@/components/custom-toast'
-import { TableToolbar } from '@/components/table-toolbar'
+import { PageHeader } from '@/components/page-header'
+import { IconButton } from '@/components/ui/icon-button'
 import { OfficeModalFormConfig } from '@/config/forms/office-modal-form'
 import { OfficeTableConfig } from '@/config/tables/office-table'
 import AppLayout from '@/layouts/app-layout'
@@ -10,7 +11,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/react'
 import { route } from 'ziggy-js'
 import { hasPermission } from '@/utils/authorization'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react'
+import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -340,80 +341,78 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
       <CustomToast />
 
       <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
-        <div className="flex-shrink-0 border-b border-border bg-card px-3 sm:px-4 py-2 shadow-sm">
-          <TableToolbar
-            searchValue={searchTerm}
-            onSearchChange={handleSearchChange}
-            perPage={perPage}
-            onPerPageChange={handlePerPageChange}
-            isSearching={isSearching}
-            actionSlot={
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                {/* Sort Dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-1.5 sm:gap-2 px-2 sm:px-3">
-                      <ArrowUpDown className="h-4 w-4" />
-                      <span className="hidden sm:inline">Sort</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>A → Z</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>Z → A</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>Oldest First</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSortKeyChange('date-desc')}>Newest First</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+        <PageHeader
+          title="Offices"
+          subtitle="Manage administrative offices and organizational structure."
+          searchValue={searchTerm}
+          onSearchChange={handleSearchChange}
+          isSearching={isSearching}
+          filtersSlot={
+            <>
+              {/* Per Page */}
+              <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span className="whitespace-nowrap">Rows:</span>
+                <Select value={perPage} onValueChange={handlePerPageChange}>
+                  <SelectTrigger className="h-9 w-[70px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['5', '10', '25', '50', '100'].map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          }
+          actionsSlot={
+            <>
+              {/* Sort Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <IconButton
+                    icon={<ArrowUpDown className="h-4 w-4" />}
+                    tooltip="Sort"
+                    variant="outline"
+                    aria-label="Sort"
+                  />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>A → Z</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>Z → A</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>Oldest First</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleSortKeyChange('date-desc')}>Newest First</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-                {/* Per Page - Hidden on mobile */}
-                <div className="hidden sm:flex items-center">
-                  <Select value={perPage} onValueChange={handlePerPageChange}>
-                    <SelectTrigger className="h-9 w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {['5', '10', '25', '50', '100'].map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Show Deleted Toggle */}
+              {(hasPermission(permissions, 'restore-office') || hasPermission(permissions, 'force-delete-office')) && (
+                <IconButton
+                  icon={showDeleted ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                  tooltip={showDeleted ? "Show Active" : "Show Deleted"}
+                  variant={showDeleted ? "default" : "outline"}
+                  onClick={() => {
+                    const newValue = !showDeleted
+                    setShowDeleted(newValue)
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('offices_filter_show_deleted', String(newValue))
+                    }
+                    triggerFetch({ show_deleted: newValue, page: 1, perPage })
+                  }}
+                  aria-label={showDeleted ? "Show Active" : "Show Deleted"}
+                />
+              )}
 
-                {/* Show Deleted Toggle */}
-                {(hasPermission(permissions, 'restore-office') || hasPermission(permissions, 'force-delete-office')) && (
-                  <Button
-                    variant={showDeleted ? "default" : "outline"}
-                    size="sm"
-                    className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
-                    onClick={() => {
-                      const newValue = !showDeleted
-                      setShowDeleted(newValue)
-                      if (typeof window !== 'undefined') {
-                        localStorage.setItem('offices_filter_show_deleted', String(newValue))
-                      }
-                      triggerFetch({ show_deleted: newValue, page: 1, perPage })
-                    }}
-                  >
-                    {showDeleted ? (
-                      <>
-                        <ArchiveRestore className="h-4 w-4" />
-                        <span className="hidden sm:inline">Show Active</span>
-                      </>
-                    ) : (
-                      <>
-                        <Archive className="h-4 w-4" />
-                        <span className="hidden sm:inline">Show Deleted</span>
-                      </>
-                    )}
-                  </Button>
-                )}
-
-                <div className="flex-shrink-0">
-                  <CustomModalForm
-                    addButtonWrapperClassName="flex mb-0"
-                  addButton={OfficeModalFormConfig.addButton}
+              {/* Add Button */}
+              <CustomModalForm
+                addButtonWrapperClassName="flex mb-0"
+                addButton={{
+                  ...OfficeModalFormConfig.addButton,
+                  label: '',
+                  className: 'h-9 w-9 p-0',
+                }}
                   title={
                     mode === 'view'
                       ? 'View Office'
@@ -433,11 +432,9 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
                   onOpenChange={handleModalToggle}
                   mode={mode}
                 />
-                </div>
-              </div>
-            }
-          />
-        </div>
+            </>
+          }
+        />
 
         <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
           <EnterpriseEmployeeTable

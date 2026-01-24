@@ -191,15 +191,16 @@ export default function Dashboard() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
-            <div className="flex h-full flex-1 flex-col gap-4 md:gap-6 rounded-xl p-4 md:p-6">
-                {/* Header with Notifications */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-foreground">HR Dashboard</h1>
-                        <p className="text-xs md:text-sm text-muted-foreground mt-1">
-                            Welcome back, {auth.user.name}! Here's your HR overview.
-                        </p>
-                    </div>
+            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4">
+                <div className="space-y-4 md:space-y-6">
+                    {/* Header with Notifications */}
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">HR Dashboard</h1>
+                            <p className="text-xs md:text-sm text-muted-foreground">
+                                Welcome back, {auth.user.name}! Here's your HR overview.
+                            </p>
+                        </div>
                     {props.notifications && props.notifications.length > 0 && (
                         <DropdownMenu open={notificationOpen} onOpenChange={setNotificationOpen}>
                             <DropdownMenuTrigger asChild>
@@ -597,6 +598,7 @@ export default function Dashboard() {
                         </CardContent>
                     </Card>
                 )}
+                </div>
             </div>
         </AppLayout>
     );
