@@ -1,64 +1,49 @@
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
-import { UserInfo } from '@/components/user-info';
+import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
-import { cn } from '@/lib/utils';
-import { UserMenuContent } from '@/components/user-menu-content';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { type SharedData } from '@/types';
-import { usePage } from '@inertiajs/react';
-import { ChevronsUpDown } from 'lucide-react';
+import { usePage, router } from '@inertiajs/react';
 
 export function NavUser({ position }: { position: 'left' | 'right' }) {
-    const { auth } = usePage<SharedData>().props;
-    const { state } = useSidebar();
-    const isMobile = useIsMobile();
-    const isCollapsed = state === 'collapsed';
+    const page = usePage<SharedData>();
+    const { auth } = page.props;
     const getInitials = useInitials();
+    
+    // Check if user has employee_id
+    const hasEmployeeId = (auth.user as any)?.employee_id;
+    
+    // Handle username button click
+    const handleProfileClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (hasEmployeeId) {
+            router.visit(route('employees.my-profile'));
+        } else {
+            router.visit(route('profile.edit'));
+        }
+    };
 
     return (
         <SidebarMenu>
             <SidebarMenuItem>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <SidebarMenuButton
-                            size={isCollapsed ? 'default' : 'lg'}
-                            className={cn(
-                                'text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent group flex items-center gap-2 w-full',
-                                isCollapsed &&
-                                    'w-auto justify-center rounded-full bg-transparent text-sidebar-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none p-0'
-                            )}
-                            tooltip={isCollapsed ? { children: auth.user.name } : undefined}
-                        >
-                            {isCollapsed ? (
-                                <Avatar className="h-8 w-8 overflow-hidden rounded-full">
-                                    <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
-                                    <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                        {getInitials(auth.user.name)}
-                                    </AvatarFallback>
-                                </Avatar>
-                            ) : position === 'right' ? (
-                                <>
-                                    <UserInfo user={auth.user} className="text-right" position={position} />
-                                    <ChevronsUpDown className="size-4 text-current" />
-                                </>
-                            ) : (
-                                <>
-                                    <ChevronsUpDown className="size-4 text-current" />
-                                    <UserInfo user={auth.user} className="text-left" position={position} />
-                                </>
-                            )}
-                        </SidebarMenuButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-                        align="end"
-                        side={isMobile ? 'bottom' : state === 'collapsed' ? 'left' : 'bottom'}
+                <div className="w-full px-2 py-1.5">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 h-auto py-2 text-white hover:text-white hover:bg-white/10 transition-all"
+                        onClick={handleProfileClick}
                     >
-                        <UserMenuContent user={auth.user} />
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                        <Avatar className="size-8 overflow-hidden rounded-full border-2 border-white/30">
+                            <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
+                            <AvatarFallback className="rounded-full bg-white/20 text-white font-semibold text-sm border border-white/30">
+                                {getInitials(auth.user.name)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-semibold text-white truncate flex-1 text-left">
+                            {auth.user.name}
+                        </span>
+                    </Button>
+                </div>
             </SidebarMenuItem>
         </SidebarMenu>
     );

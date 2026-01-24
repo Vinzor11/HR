@@ -6,12 +6,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { NavigationMenu, NavigationMenuItem, NavigationMenuList, navigationMenuTriggerStyle } from '@/components/ui/navigation-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { UserMenuContent } from '@/components/user-menu-content';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type NavItem, type SharedData } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
+import { Link, usePage, router } from '@inertiajs/react';
+import { BookOpen, Folder, LayoutGrid, Menu, Search, Settings, Bell } from 'lucide-react';
+import { useState } from 'react';
 import AppLogo from './app-logo';
 import AppLogoIcon from './app-logo-icon';
 
@@ -46,6 +46,24 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
     const page = usePage<SharedData>();
     const { auth } = page.props;
     const getInitials = useInitials();
+    const [notificationOpen, setNotificationOpen] = useState(false);
+    
+    // Get notifications from page props if available
+    const notifications = (page.props as any).notifications || [];
+    
+    // Check if user has employee_id
+    const hasEmployeeId = (auth.user as any)?.employee_id;
+    
+    // Handle username/avatar click - navigate to profile
+    const handleProfileClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (hasEmployeeId) {
+            router.visit(route('employees.my-profile'));
+        } else {
+            router.visit(route('profile.edit'));
+        }
+    };
+    
     return (
         <>
             <div className="border-sidebar-border/80 border-b">
@@ -152,21 +170,99 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                 ))}
                             </div>
                         </div>
-                        <DropdownMenu>
+                        
+                        {/* Settings Button */}
+                        <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
+                                        <Link href={route('profile.edit')}>
+                                            <Settings className="h-5 w-5 opacity-80 hover:opacity-100" />
+                                        </Link>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Settings</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+
+                        {/* Notification Button */}
+                        <DropdownMenu open={notificationOpen} onOpenChange={setNotificationOpen}>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="size-10 rounded-full p-1">
-                                    <Avatar className="size-8 overflow-hidden rounded-full">
-                                        <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
-                                        <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                            {getInitials(auth.user.name)}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                <Button variant="ghost" size="icon" className="relative h-9 w-9">
+                                    <Bell className="h-5 w-5 opacity-80 hover:opacity-100" />
+                                    {notifications.length > 0 && (
+                                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
+                                            {notifications.length > 9 ? '9+' : notifications.length}
+                                        </span>
+                                    )}
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-56" align="end">
-                                <UserMenuContent user={auth.user} />
+                            <DropdownMenuContent align="end" className="w-80">
+                                <div className="p-2">
+                                    <div className="mb-2 px-2 text-sm font-semibold">Notifications</div>
+                                    <div className="space-y-1 max-h-96 overflow-y-auto">
+                                        {notifications.length > 0 ? (
+                                            notifications.map((notification: any, idx: number) => (
+                                                <Link
+                                                    key={idx}
+                                                    href={notification.link || '#'}
+                                                    className="flex items-start gap-3 rounded-lg p-3 hover:bg-muted transition-colors"
+                                                    onClick={() => setNotificationOpen(false)}
+                                                >
+                                                    <div className={`mt-0.5 rounded-full p-1.5 ${
+                                                        notification.type === 'urgent' ? 'bg-red-100 dark:bg-red-900/30' :
+                                                        notification.type === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' :
+                                                        'bg-blue-100 dark:bg-blue-900/30'
+                                                    }`}>
+                                                        <Bell className={`h-4 w-4 ${
+                                                            notification.type === 'urgent' ? 'text-red-600 dark:text-red-400' :
+                                                            notification.type === 'warning' ? 'text-amber-600 dark:text-amber-400' :
+                                                            'text-blue-600 dark:text-blue-400'
+                                                        }`} />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium">{notification.title}</p>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">{notification.message}</p>
+                                                    </div>
+                                                </Link>
+                                            ))
+                                        ) : (
+                                            <div className="py-6 text-center text-sm text-muted-foreground">
+                                                No notifications
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </DropdownMenuContent>
                         </DropdownMenu>
+
+                        {/* User Profile Button - Click to go to profile */}
+                        <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button 
+                                        variant="ghost" 
+                                        className="h-9 px-2.5 gap-2.5 rounded-lg hover:bg-accent/50 transition-colors"
+                                        onClick={handleProfileClick}
+                                    >
+                                        <Avatar className="size-7 overflow-hidden rounded-full ring-2 ring-background ring-offset-1">
+                                            <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
+                                            <AvatarFallback className="rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold text-xs border border-primary/20">
+                                                {getInitials(auth.user.name)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <span className="hidden md:inline-block text-sm font-semibold text-foreground truncate max-w-[140px]">
+                                            {auth.user.name}
+                                        </span>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>View Profile</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
                 </div>
             </div>

@@ -6,10 +6,11 @@ import { Transition } from '@headlessui/react';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useRef } from 'react';
 
-import HeadingSmall from '@/components/heading-small';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Lock, CheckCircle2 } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -58,78 +59,106 @@ export default function Password() {
             <Head title="Profile settings" />
 
             <SettingsLayout>
-                <div className="space-y-6">
-                    <HeadingSmall title="Update password" description="Ensure your account is using a long, random password to stay secure" />
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Lock className="h-5 w-5" />
+                            Update Password
+                        </CardTitle>
+                        <CardDescription>
+                            Ensure your account is using a long, random password to stay secure
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={updatePassword} className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="current_password" className="text-sm font-medium">
+                                    Current Password
+                                </Label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        id="current_password"
+                                        ref={currentPasswordInput}
+                                        value={data.current_password}
+                                        onChange={(e) => setData('current_password', e.target.value)}
+                                        type="password"
+                                        showPasswordToggle
+                                        className="h-10 pl-9"
+                                        autoComplete="current-password"
+                                        placeholder="Enter your current password"
+                                    />
+                                </div>
+                                <InputError message={errors.current_password} />
+                            </div>
 
-                    <form onSubmit={updatePassword} className="space-y-6">
-                        <div className="grid gap-2">
-                            <Label htmlFor="current_password">Current password</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="password" className="text-sm font-medium">
+                                    New Password
+                                </Label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        id="password"
+                                        ref={passwordInput}
+                                        value={data.password}
+                                        onChange={(e) => setData('password', e.target.value)}
+                                        type="password"
+                                        showPasswordToggle
+                                        className="h-10 pl-9"
+                                        autoComplete="new-password"
+                                        placeholder="Enter your new password"
+                                    />
+                                </div>
+                                <InputError message={errors.password} />
+                            </div>
 
-                            <Input
-                                id="current_password"
-                                ref={currentPasswordInput}
-                                value={data.current_password}
-                                onChange={(e) => setData('current_password', e.target.value)}
-                                type="password"
-                            showPasswordToggle
-                                className="mt-1 block w-full"
-                                autoComplete="current-password"
-                                placeholder="Current password"
-                            />
+                            <div className="space-y-2">
+                                <Label htmlFor="password_confirmation" className="text-sm font-medium">
+                                    Confirm New Password
+                                </Label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        id="password_confirmation"
+                                        value={data.password_confirmation}
+                                        onChange={(e) => setData('password_confirmation', e.target.value)}
+                                        type="password"
+                                        showPasswordToggle
+                                        className="h-10 pl-9"
+                                        autoComplete="new-password"
+                                        placeholder="Confirm your new password"
+                                    />
+                                </div>
+                                <InputError message={errors.password_confirmation} />
+                            </div>
 
-                            <InputError message={errors.current_password} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="password">New password</Label>
-
-                            <Input
-                                id="password"
-                                ref={passwordInput}
-                                value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
-                                type="password"
-                            showPasswordToggle
-                                className="mt-1 block w-full"
-                                autoComplete="new-password"
-                                placeholder="New password"
-                            />
-
-                            <InputError message={errors.password} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="password_confirmation">Confirm password</Label>
-
-                            <Input
-                                id="password_confirmation"
-                                value={data.password_confirmation}
-                                onChange={(e) => setData('password_confirmation', e.target.value)}
-                                type="password"
-                            showPasswordToggle
-                                className="mt-1 block w-full"
-                                autoComplete="new-password"
-                                placeholder="Confirm password"
-                            />
-
-                            <InputError message={errors.password_confirmation} />
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <Button disabled={processing}>Save password</Button>
-
-                            <Transition
-                                show={recentlySuccessful}
-                                enter="transition ease-in-out"
-                                enterFrom="opacity-0"
-                                leave="transition ease-in-out"
-                                leaveTo="opacity-0"
-                            >
-                                <p className="text-sm text-neutral-600">Saved</p>
-                            </Transition>
-                        </div>
-                    </form>
-                </div>
+                            <div className="flex items-center justify-between pt-4 border-t">
+                                <Transition
+                                    show={recentlySuccessful}
+                                    enter="transition ease-in-out duration-300"
+                                    enterFrom="opacity-0 translate-x-2"
+                                    enterTo="opacity-100 translate-x-0"
+                                    leave="transition ease-in-out duration-300"
+                                    leaveFrom="opacity-100 translate-x-0"
+                                    leaveTo="opacity-0 translate-x-2"
+                                >
+                                    <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        <span className="font-medium">Password updated successfully</span>
+                                    </div>
+                                </Transition>
+                                <Button 
+                                    type="submit" 
+                                    disabled={processing}
+                                    className="ml-auto"
+                                >
+                                    {processing ? 'Updating...' : 'Update Password'}
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
             </SettingsLayout>
         </AppLayout>
     );
