@@ -1,15 +1,16 @@
 import { CustomModalForm } from '@/components/custom-modal-form';
 import { EnterpriseEmployeeTable } from '@/components/EnterpriseEmployeeTable';
 import { CustomToast, toast } from '@/components/custom-toast';
-import { TableToolbar } from '@/components/table-toolbar';
+import { PageLayout } from '@/components/page-layout';
+import { IconButton } from '@/components/ui/icon-button';
 import { TrainingsModalFormConfig } from '@/config/forms/trainings-modal-form';
 import { TrainingsTableConfig } from '@/config/tables/trainings-table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { hasPermission } from '@/utils/authorization';
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus, Download } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -406,6 +407,44 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         triggerFetch({ page: validPage, search: searchTerm, perPage });
     };
 
+    // Export to CSV function
+    const exportToCSV = useCallback(() => {
+        const columns = TrainingsTableConfig.columns.filter(col => !col.isAction && !col.alwaysVisible);
+        const headers = columns.map(col => col.label);
+        
+        const rows = tableData.map(item => 
+            columns.map(col => {
+                const value = getNestedValue(item, col.key);
+                return value || '-';
+            })
+        );
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `trainings_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('Data exported to CSV');
+    }, [tableData]);
+
+    // Helper function for nested values
+    const getNestedValue = (obj: any, path: string): any => {
+        if (!obj || typeof obj !== 'object') return null;
+        return path.split('.').reduce((acc, key) => {
+            if (acc === null || acc === undefined || typeof acc !== 'object') return null;
+            return acc[key] !== undefined ? acc[key] : null;
+        }, obj);
+    };
+
     const closeModal = () => {
         setMode('create');
         setSelectedTraining(null);
@@ -626,291 +665,213 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
             <Head title="Trainings" />
             <CustomToast />
 
-            <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
-                <div className="flex-shrink-0 border-b border-border bg-card px-3 sm:px-4 py-2 shadow-sm">
-                    <div className="mb-3 md:mb-4">
-                        <h1 className="text-xl md:text-2xl font-semibold text-foreground">Trainings</h1>
-                        <p className="text-xs md:text-sm text-muted-foreground">
-                            Manage training programs and track employee participation.
-                        </p>
-                    </div>
-                    <TableToolbar
-                        searchValue={searchTerm}
-                        onSearchChange={handleSearchChange}
-                        perPage={perPage}
-                        onPerPageChange={handlePerPageChange}
-                        isSearching={isSearching}
-                        actionSlot={
-                            <div className="flex items-center gap-1.5 sm:gap-2">
-                                {/* Sort Dropdown */}
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="outline" size="sm" className="h-9 gap-1.5 sm:gap-2 px-2 sm:px-3">
-                                            <ArrowUpDown className="h-4 w-4" />
-                                            <span className="hidden sm:inline">Sort</span>
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => {
-                                            const value = 'title-asc' as typeof sortKey;
-                                            setSortKey(value);
-                                            if (typeof window !== 'undefined') {
-                                                localStorage.setItem('trainings_sortKey', value);
-                                            }
-                                            const sortParams = getSortParams(value);
-                                            triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
-                                        }}>
-                                            A → Z
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => {
-                                            const value = 'title-desc' as typeof sortKey;
-                                            setSortKey(value);
-                                            if (typeof window !== 'undefined') {
-                                                localStorage.setItem('trainings_sortKey', value);
-                                            }
-                                            const sortParams = getSortParams(value);
-                                            triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
-                                        }}>
-                                            Z → A
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => {
-                                            const value = 'date-asc' as typeof sortKey;
-                                            setSortKey(value);
-                                            if (typeof window !== 'undefined') {
-                                                localStorage.setItem('trainings_sortKey', value);
-                                            }
-                                            const sortParams = getSortParams(value);
-                                            triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
-                                        }}>
-                                            Oldest First
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => {
-                                            const value = 'date-desc' as typeof sortKey;
-                                            setSortKey(value);
-                                            if (typeof window !== 'undefined') {
-                                                localStorage.setItem('trainings_sortKey', value);
-                                            }
-                                            const sortParams = getSortParams(value);
-                                            triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
-                                        }}>
-                                            Newest First
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-
-                                {/* Per Page - Hidden on mobile */}
-                                <div className="hidden sm:flex items-center">
-                                    <Select value={perPage} onValueChange={handlePerPageChange}>
-                                        <SelectTrigger className="h-9 w-[70px]">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {['5', '10', '25', '50', '100'].map((option) => (
-                                                <SelectItem key={option} value={option}>
-                                                    {option}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Show Deleted Trainings Toggle */}
-                                {(hasPermission(permissions, 'restore-training') || hasPermission(permissions, 'force-delete-training')) && (
-                                    <Button 
-                                        variant={showDeleted ? "default" : "outline"}
-                                        size="sm" 
-                                        className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
-                                        onClick={() => {
-                                            const newValue = !showDeleted;
-                                            setShowDeleted(newValue);
-                                            triggerFetch({ show_deleted: newValue, page: 1, perPage });
-                                        }}
-                                    >
-                                        {showDeleted ? (
-                                            <>
-                                                <ArchiveRestore className="h-4 w-4" />
-                                                <span className="hidden sm:inline">Show Active</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Archive className="h-4 w-4" />
-                                                <span className="hidden sm:inline">Show Deleted</span>
-                                            </>
-                                        )}
-                                    </Button>
-                                )}
-
-                                <div className="flex-shrink-0">
-                                    <CustomModalForm
-                                        addButtonWrapperClassName="flex mb-0"
-                                        addButton={TrainingsModalFormConfig.addButton}
-                                        title={
-                                            mode === 'view'
-                                                ? 'View Training'
-                                                : mode === 'edit'
-                                                    ? 'Update Training'
-                                                    : TrainingsModalFormConfig.title
-                                        }
-                                        description={TrainingsModalFormConfig.description}
-                                        fields={TrainingsModalFormConfig.fields}
-                                        buttons={TrainingsModalFormConfig.buttons}
-                                        data={data}
-                                        setData={(name: string, value: any) => {
-                                            if (name === 'organization_type') {
-                                                handleOrganizationTypeChange(value);
-                                            } else {
-                                                setData(name, value);
-                                            }
-                                        }}
-                                        errors={errors}
-                                        processing={processing}
-                                        handleSubmit={handleSubmit}
-                                        open={modalOpen}
-                                        onOpenChange={handleModalToggle}
-                                        mode={mode}
-                                        extraData={{
-                                            faculties: formOptions.faculties || [],
-                                            departments: filteredDepartments,
-                                            positions: filteredPositions,
-                                        }}
+            <PageLayout
+                title="Trainings"
+                subtitle="Manage training programs and track employee participation."
+                primaryAction={{
+                    label: 'Add Training',
+                    icon: <Plus className="h-4 w-4" />,
+                    onClick: () => openModal('create'),
+                    permission: hasPermission(permissions, 'create-training'),
+                }}
+                searchValue={searchTerm}
+                onSearchChange={handleSearchChange}
+                isSearching={isSearching}
+                searchPlaceholder="Search trainings..."
+                perPage={{
+                    value: perPage,
+                    onChange: handlePerPageChange,
+                }}
+                filtersSlot={null}
+                actionsSlot={
+                    <>
+                        <div className="flex items-center gap-1">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <IconButton
+                                        icon={<ArrowUpDown className="h-4 w-4" />}
+                                        tooltip="Sort"
+                                        variant="outline"
+                                        aria-label="Sort"
+                                        className="h-9 w-9 rounded-lg"
                                     />
-                                </div>
-                            </div>
-                        }
-                    />
-                </div>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => {
+                                        const value = 'title-asc' as typeof sortKey;
+                                        setSortKey(value);
+                                        if (typeof window !== 'undefined') {
+                                            localStorage.setItem('trainings_sortKey', value);
+                                        }
+                                        const sortParams = getSortParams(value);
+                                        triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
+                                    }}>A → Z</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                        const value = 'title-desc' as typeof sortKey;
+                                        setSortKey(value);
+                                        if (typeof window !== 'undefined') {
+                                            localStorage.setItem('trainings_sortKey', value);
+                                        }
+                                        const sortParams = getSortParams(value);
+                                        triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
+                                    }}>Z → A</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                        const value = 'date-asc' as typeof sortKey;
+                                        setSortKey(value);
+                                        if (typeof window !== 'undefined') {
+                                            localStorage.setItem('trainings_sortKey', value);
+                                        }
+                                        const sortParams = getSortParams(value);
+                                        triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
+                                    }}>Oldest First</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                        const value = 'date-desc' as typeof sortKey;
+                                        setSortKey(value);
+                                        if (typeof window !== 'undefined') {
+                                            localStorage.setItem('trainings_sortKey', value);
+                                        }
+                                        const sortParams = getSortParams(value);
+                                        triggerFetch({ sort_by: sortParams.sort_by, sort_order: sortParams.sort_order, page: 1 });
+                                    }}>Newest First</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
 
-                <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
-                    <EnterpriseEmployeeTable
-                        columns={TrainingsTableConfig.columns}
-                        actions={TrainingsTableConfig.actions}
-                        data={tableData}
-                        from={trainings.from}
-                        onDelete={handleDelete}
-                        onView={handleViewTraining}
-                        onEdit={(training) => openModal('edit', training)}
-                        onRestore={handleRestore}
-                        onForceDelete={handleForceDelete}
-                        resourceType="training"
-                        enableExpand={false}
-                        viewMode="table"
-                    />
-                </div>
-
-                {/* Pagination - Fixed at bottom of viewport */}
-                <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3">
-                        {/* Results Info */}
-                        <div className="text-sm text-muted-foreground">
-                            Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
-                            <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-                            <span className="font-semibold text-foreground">{total || 0}</span> trainings
+                            {(hasPermission(permissions, 'restore-training') || hasPermission(permissions, 'force-delete-training')) && (
+                                <IconButton
+                                    icon={showDeleted ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                                    tooltip={showDeleted ? "Show Active" : "Show Deleted"}
+                                    variant={showDeleted ? "default" : "outline"}
+                                    onClick={() => {
+                                        const newValue = !showDeleted;
+                                        setShowDeleted(newValue);
+                                        triggerFetch({ show_deleted: newValue, page: 1, perPage });
+                                    }}
+                                    aria-label={showDeleted ? "Show Active" : "Show Deleted"}
+                                    className="h-9 w-9 rounded-lg"
+                                />
+                            )}
                         </div>
 
-                        {/* Pagination Controls */}
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handlePageChange(currentPage - 1)}
-                                disabled={currentPage === 1}
-                                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronLeft className="h-4 w-4 mr-1" />
-                                Previous
+                        {/* Export Button */}
+                        <IconButton
+                            icon={<Download className="h-4 w-4" />}
+                            tooltip="Export"
+                            variant="outline"
+                            onClick={exportToCSV}
+                            aria-label="Export"
+                            className="h-9 w-9 rounded-lg"
+                        />
+                    </>
+                }
+                pagination={
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
+                        <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+                            <span className="hidden sm:inline">
+                                Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
+                                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                                <span className="font-semibold text-foreground">{total || 0}</span> trainings
+                            </span>
+                            <span className="sm:hidden">
+                                <span className="font-semibold text-foreground">{from || 0}</span>-
+                                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                                <span className="font-semibold text-foreground">{total || 0}</span>
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1 sm:gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
+                                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <ChevronLeft className="h-4 w-4" />
+                                <span className="hidden sm:inline ml-1">Previous</span>
                             </Button>
-
-                            <div className="flex items-center gap-1">
+                            <div className="hidden sm:flex items-center gap-1">
                                 {lastPage > 1 ? (
                                     <>
-                                        {/* First Page */}
                                         {currentPage > 1 && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handlePageChange(1)}
-                                                className="h-9 min-w-[40px] hover:bg-muted"
-                                            >
-                                                1
-                                            </Button>
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(1)} className="h-9 min-w-[40px] hover:bg-muted">1</Button>
                                         )}
-
-                                        {/* Ellipsis before current pages */}
-                                        {currentPage > 3 && (
-                                            <span className="px-2 text-muted-foreground">...</span>
-                                        )}
-
-                                        {/* Current page range */}
+                                        {currentPage > 3 && <span className="px-2 text-muted-foreground">...</span>}
                                         {Array.from({ length: Math.min(5, lastPage - 2) }, (_, i) => {
-                                            const page =
-                                                Math.max(2, Math.min(currentPage - 2, lastPage - 4)) + i;
+                                            const page = Math.max(2, Math.min(currentPage - 2, lastPage - 4)) + i;
                                             if (page >= 2 && page < lastPage) {
                                                 return (
-                                                    <Button
-                                                        key={page}
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handlePageChange(page)}
-                                                        className={`h-9 min-w-[40px] ${
-                                                            currentPage === page
-                                                                ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-                                                                : 'hover:bg-muted'
-                                                        }`}
-                                                    >
+                                                    <Button key={page} variant="outline" size="sm" onClick={() => handlePageChange(page)}
+                                                        className={`h-9 min-w-[40px] ${currentPage === page ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
                                                         {page}
                                                     </Button>
                                                 );
                                             }
                                             return null;
                                         })}
-
-                                        {/* Ellipsis after current pages */}
-                                        {currentPage < lastPage - 2 && (
-                                            <span className="px-2 text-muted-foreground">...</span>
-                                        )}
-
-                                        {/* Last Page */}
+                                        {currentPage < lastPage - 2 && <span className="px-2 text-muted-foreground">...</span>}
                                         {lastPage > 1 && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handlePageChange(lastPage)}
-                                                className={`h-9 min-w-[40px] ${
-                                                    currentPage === lastPage
-                                                        ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-                                                        : 'hover:bg-muted'
-                                                }`}
-                                            >
+                                            <Button variant="outline" size="sm" onClick={() => handlePageChange(lastPage)}
+                                                className={`h-9 min-w-[40px] ${currentPage === lastPage ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
                                                 {lastPage}
                                             </Button>
                                         )}
                                     </>
                                 ) : (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled
-                                        className="h-9 min-w-[40px] bg-primary text-primary-foreground border-primary"
-                                    >
-                                        1
-                                    </Button>
+                                    <Button variant="outline" size="sm" disabled className="h-9 min-w-[40px] bg-primary text-primary-foreground border-primary">1</Button>
                                 )}
                             </div>
-
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handlePageChange(currentPage + 1)}
-                                disabled={currentPage === lastPage || lastPage === 0}
-                                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Next
-                                <ChevronRight className="h-4 w-4 ml-1" />
+                            <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
+                                <span className="font-semibold text-foreground">{currentPage}</span>
+                                <span className="text-muted-foreground">/</span>
+                                <span className="text-muted-foreground">{lastPage || 1}</span>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === lastPage || lastPage === 0}
+                                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span className="hidden sm:inline mr-1">Next</span>
+                                <ChevronRight className="h-4 w-4" />
                             </Button>
                         </div>
                     </div>
-                </div>
-            </div>
+                }
+            >
+                <EnterpriseEmployeeTable
+                    columns={TrainingsTableConfig.columns}
+                    actions={TrainingsTableConfig.actions}
+                    data={tableData}
+                    from={trainings.from}
+                    onDelete={handleDelete}
+                    onView={handleViewTraining}
+                    onEdit={(training) => openModal('edit', training)}
+                    onRestore={handleRestore}
+                    onForceDelete={handleForceDelete}
+                    resourceType="training"
+                    enableExpand={false}
+                    viewMode="table"
+                />
+            </PageLayout>
+
+            {/* Training Modal */}
+            <CustomModalForm
+                addButtonWrapperClassName="hidden"
+                addButton={TrainingsModalFormConfig.addButton}
+                title={mode === 'view' ? 'View Training' : mode === 'edit' ? 'Update Training' : TrainingsModalFormConfig.title}
+                description={TrainingsModalFormConfig.description}
+                fields={TrainingsModalFormConfig.fields}
+                buttons={TrainingsModalFormConfig.buttons}
+                data={data}
+                setData={(name: string, value: any) => {
+                    if (name === 'organization_type') {
+                        handleOrganizationTypeChange(value);
+                    } else {
+                        setData(name, value);
+                    }
+                }}
+                errors={errors}
+                processing={processing}
+                handleSubmit={handleSubmit}
+                open={modalOpen}
+                onOpenChange={handleModalToggle}
+                mode={mode}
+                extraData={{
+                    faculties: formOptions.faculties || [],
+                    departments: filteredDepartments,
+                    positions: filteredPositions,
+                }}
+            />
 
             {/* Training Detail Drawer */}
             {selectedTrainingForView && (

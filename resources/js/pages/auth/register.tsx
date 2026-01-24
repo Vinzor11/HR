@@ -45,18 +45,18 @@ export default function Register() {
             <form className="flex flex-col gap-6" onSubmit={submit}>
                 <div className="grid gap-6">
                     <div className="grid gap-2">
-                        <Label htmlFor="name">Name</Label>
+                        <Label htmlFor="name">Username</Label>
                         <Input
                             id="name"
                             type="text"
                             required
                             autoFocus
                             tabIndex={1}
-                            autoComplete="name"
+                            autoComplete="username"
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             disabled={processing}
-                            placeholder="Full name"
+                            placeholder="Enter username"
                         />
                         <InputError message={errors.name} className="mt-2" />
                     </div>

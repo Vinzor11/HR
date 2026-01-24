@@ -1,7 +1,7 @@
 import { CustomModalForm } from '@/components/custom-modal-form'
 import { EnterpriseEmployeeTable } from '@/components/EnterpriseEmployeeTable'
 import { CustomToast, toast } from '@/components/custom-toast'
-import { PageHeader } from '@/components/page-header'
+import { PageLayout } from '@/components/page-layout'
 import { IconButton } from '@/components/ui/icon-button'
 import { FacultyModalFormConfig } from '@/config/forms/faculty-modal-form'
 import { FacultyTableConfig } from '@/config/tables/faculty-table'
@@ -10,8 +10,8 @@ import { type BreadcrumbItem } from '@/types'
 import { Head, router, useForm, usePage } from '@inertiajs/react'
 import { route } from 'ziggy-js'
 import { hasPermission } from '@/utils/authorization'
-import { useEffect, useRef, useState } from 'react'
-import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus, Download } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -318,6 +318,44 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
     triggerFetch({ page: validPage })
   }
 
+  // Export to CSV function
+  const exportToCSV = useCallback(() => {
+    const columns = FacultyTableConfig.columns.filter(col => !col.isAction && !col.alwaysVisible)
+    const headers = columns.map(col => col.label)
+    
+    const rows = tableData.map(item => 
+      columns.map(col => {
+        const value = getNestedValue(item, col.key)
+        return value || '-'
+      })
+    )
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `faculties_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast.success('Data exported to CSV')
+  }, [tableData])
+
+  // Helper function for nested values
+  const getNestedValue = (obj: any, path: string): any => {
+    if (!obj || typeof obj !== 'object') return null
+    return path.split('.').reduce((acc, key) => {
+      if (acc === null || acc === undefined || typeof acc !== 'object') return null
+      return acc[key] !== undefined ? acc[key] : null
+    }, obj)
+  }
+
   useEffect(() => {
     return () => {
       if (searchTimeout.current) {
@@ -359,53 +397,43 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
       <Head title="Faculties" />
       <CustomToast />
 
-      <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
-        <PageHeader
-          title="Faculties"
-          subtitle="Manage academic faculties and organizational structure."
-          searchValue={searchTerm}
-          onSearchChange={handleSearchChange}
-          isSearching={isSearching}
-          filtersSlot={
-            <>
-              {/* Per Page */}
-              <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
-                <span className="whitespace-nowrap">Rows:</span>
-                <Select value={perPage} onValueChange={handlePerPageChange}>
-                  <SelectTrigger className="h-9 w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['5', '10', '25', '50', '100'].map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Status Filter */}
-              <div className="hidden md:flex items-center">
-                <Select
-                  value={statusFilter || 'all'}
-                  onValueChange={handleStatusFilterChange}
-                >
-                  <SelectTrigger className="h-9 w-[120px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          }
-          actionsSlot={
-            <>
-              {/* Sort Dropdown */}
+      <PageLayout
+        title="Faculties"
+        subtitle="Manage academic faculties and organizational structure."
+        primaryAction={{
+          label: 'Add Faculty',
+          icon: <Plus className="h-4 w-4" />,
+          onClick: () => openModal('create'),
+          permission: hasPermission(permissions, 'create-faculty'),
+        }}
+        searchValue={searchTerm}
+        onSearchChange={handleSearchChange}
+        isSearching={isSearching}
+        searchPlaceholder="Search faculties..."
+        perPage={{
+          value: perPage,
+          onChange: handlePerPageChange,
+        }}
+        filtersSlot={
+          <>
+            {/* Status Filter */}
+            <div className="hidden md:flex items-center">
+              <Select value={statusFilter || 'all'} onValueChange={handleStatusFilterChange}>
+                <SelectTrigger className="h-9 w-[120px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        }
+        actionsSlot={
+          <>
+            <div className="flex items-center gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <IconButton
@@ -413,6 +441,7 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
                     tooltip="Sort"
                     variant="outline"
                     aria-label="Sort"
+                    className="h-9 w-9 rounded-lg"
                   />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -423,7 +452,6 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Show Deleted Toggle */}
               {(hasPermission(permissions, 'restore-faculty') || hasPermission(permissions, 'force-delete-faculty')) && (
                 <IconButton
                   icon={showDeleted ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
@@ -438,134 +466,124 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
                     triggerFetch({ show_deleted: newValue, page: 1, perPage })
                   }}
                   aria-label={showDeleted ? "Show Active" : "Show Deleted"}
+                  className="h-9 w-9 rounded-lg"
                 />
               )}
-
-              {/* Add Button */}
-              <CustomModalForm
-                addButtonWrapperClassName="flex mb-0"
-                addButton={{
-                  ...FacultyModalFormConfig.addButton,
-                  label: '',
-                  className: 'h-9 w-9 p-0',
-                }}
-                  title={
-                    mode === 'view'
-                      ? 'View Faculty'
-                      : mode === 'edit'
-                      ? 'Update Faculty'
-                      : FacultyModalFormConfig.title
-                  }
-                  description={FacultyModalFormConfig.description}
-                  fields={FacultyModalFormConfig.fields}
-                  buttons={FacultyModalFormConfig.buttons}
-                  data={data}
-                  setData={setData}
-                  errors={errors}
-                  processing={processing}
-                  handleSubmit={handleSubmit}
-                  open={modalOpen}
-                  onOpenChange={handleModalToggle}
-                  mode={mode}
-                />
-            </>
-          }
-        />
-
-        <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
-          <EnterpriseEmployeeTable
-            columns={FacultyTableConfig.columns}
-            actions={FacultyTableConfig.actions}
-            data={tableData}
-            from={faculties.from}
-            onDelete={handleDelete}
-            onView={handleViewFaculty}
-            onEdit={(item) => openModal('edit', item)}
-            onRestore={handleRestore}
-            onForceDelete={handleForceDelete}
-            resourceType="faculty"
-            enableExpand={false}
-            viewMode="table"
-          />
-        </div>
-
-        <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3">
-            <div className="text-sm text-muted-foreground">
-              Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
-              <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-              <span className="font-semibold text-foreground">{total || 0}</span> faculties
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
+
+            {/* Export Button */}
+            <IconButton
+              icon={<Download className="h-4 w-4" />}
+              tooltip="Export"
+              variant="outline"
+              onClick={exportToCSV}
+              aria-label="Export"
+              className="h-9 w-9 rounded-lg"
+            />
+          </>
+        }
+        pagination={
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
+            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+              <span className="hidden sm:inline">
+                Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
+                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                <span className="font-semibold text-foreground">{total || 0}</span> faculties
+              </span>
+              <span className="sm:hidden">
+                <span className="font-semibold text-foreground">{from || 0}</span>-
+                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                <span className="font-semibold text-foreground">{total || 0}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
+                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">Previous</span>
               </Button>
-              <div className="flex items-center gap-1">
+              <div className="hidden sm:flex items-center gap-1">
                 {lastPage > 1 ? (
                   <>
                     {currentPage > 1 && (
-                      <Button variant="outline" size="sm" onClick={() => handlePageChange(1)} className="h-9 px-3">
-                        1
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handlePageChange(1)} className="h-9 min-w-[40px] hover:bg-muted">1</Button>
                     )}
-                    {currentPage > 3 && <span className="px-1 text-muted-foreground">...</span>}
-                    {currentPage > 2 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        className="h-9 px-3"
-                      >
-                        {currentPage - 1}
-                      </Button>
-                    )}
-                    <Button variant="default" size="sm" className="h-9 px-3">
-                      {currentPage}
-                    </Button>
-                    {currentPage < lastPage - 1 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        className="h-9 px-3"
-                      >
-                        {currentPage + 1}
-                      </Button>
-                    )}
-                    {currentPage < lastPage - 2 && <span className="px-1 text-muted-foreground">...</span>}
-                    {currentPage < lastPage && (
-                      <Button variant="outline" size="sm" onClick={() => handlePageChange(lastPage)} className="h-9 px-3">
+                    {currentPage > 3 && <span className="px-2 text-muted-foreground">...</span>}
+                    {Array.from({ length: Math.min(5, lastPage - 2) }, (_, i) => {
+                      const page = Math.max(2, Math.min(currentPage - 2, lastPage - 4)) + i;
+                      if (page >= 2 && page < lastPage) {
+                        return (
+                          <Button key={page} variant="outline" size="sm" onClick={() => handlePageChange(page)}
+                            className={`h-9 min-w-[40px] ${currentPage === page ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
+                            {page}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })}
+                    {currentPage < lastPage - 2 && <span className="px-2 text-muted-foreground">...</span>}
+                    {lastPage > 1 && (
+                      <Button variant="outline" size="sm" onClick={() => handlePageChange(lastPage)}
+                        className={`h-9 min-w-[40px] ${currentPage === lastPage ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
                         {lastPage}
                       </Button>
                     )}
                   </>
                 ) : (
-                  <Button variant="outline" size="sm" className="h-9 px-3">
-                    1
-                  </Button>
+                  <Button variant="outline" size="sm" disabled className="h-9 min-w-[40px] bg-primary text-primary-foreground border-primary">1</Button>
                 )}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage >= lastPage}
-                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
+              <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
+                <span className="font-semibold text-foreground">{currentPage}</span>
+                <span className="text-muted-foreground">/</span>
+                <span className="text-muted-foreground">{lastPage || 1}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === lastPage || lastPage === 0}
+                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
+                <span className="hidden sm:inline mr-1">Next</span>
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+        }
+      >
+        <EnterpriseEmployeeTable
+          columns={FacultyTableConfig.columns}
+          actions={FacultyTableConfig.actions}
+          data={tableData}
+          from={faculties.from}
+          onDelete={handleDelete}
+          onView={handleViewFaculty}
+          onEdit={(item) => openModal('edit', item)}
+          onRestore={handleRestore}
+          onForceDelete={handleForceDelete}
+          resourceType="faculty"
+          enableExpand={false}
+          viewMode="table"
+        />
+      </PageLayout>
+
+      {/* Faculty Modal */}
+      <CustomModalForm
+        addButtonWrapperClassName="hidden"
+        addButton={{
+          ...FacultyModalFormConfig.addButton,
+          label: '',
+          className: 'h-9 w-9 p-0',
+        }}
+        title={mode === 'view' ? 'View Faculty' : mode === 'edit' ? 'Update Faculty' : FacultyModalFormConfig.title}
+        description={FacultyModalFormConfig.description}
+        fields={FacultyModalFormConfig.fields}
+        buttons={FacultyModalFormConfig.buttons}
+        data={data}
+        setData={setData}
+        errors={errors}
+        processing={processing}
+        handleSubmit={handleSubmit}
+        open={modalOpen}
+        onOpenChange={handleModalToggle}
+        mode={mode}
+      />
 
       {/* Faculty Detail Drawer */}
       {selectedFacultyForView && (

@@ -1127,7 +1127,7 @@ export default function Index() {
                   {/* Right: Action Buttons - Grouped by Hierarchy */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {/* Secondary Actions - Icon Buttons */}
-                    <div className="flex items-center gap-1 bg-[hsl(0,0%,97%)] p-1 rounded-lg border border-[hsl(0,0%,92%)]">
+                    <div className="flex items-center gap-1">
                       {/* Advanced Filters Button */}
                       {filter_fields_config && (
                         <div className="relative">

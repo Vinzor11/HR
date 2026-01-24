@@ -26,7 +26,7 @@ class PositionController extends Controller
         $sortOrder = $request->input('sort_order', 'asc');
 
         // Validate sort_by to prevent SQL injection
-        $allowedSortColumns = ['pos_name', 'pos_code', 'created_at', 'updated_at'];
+        $allowedSortColumns = ['pos_name', 'pos_code', 'created_at', 'updated_at', 'hierarchy_level'];
         if (!in_array($sortBy, $allowedSortColumns)) {
             $sortBy = 'created_at';
         }

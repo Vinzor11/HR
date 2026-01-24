@@ -1,7 +1,7 @@
 import { CustomModalForm } from '@/components/custom-modal-form'
 import { EnterpriseEmployeeTable } from '@/components/EnterpriseEmployeeTable'
 import { CustomToast, toast } from '@/components/custom-toast'
-import { PageHeader } from '@/components/page-header'
+import { PageLayout } from '@/components/page-layout'
 import { IconButton } from '@/components/ui/icon-button'
 import { PositionModalFormConfig, POSITION_CATEGORY_OPTIONS, POSITION_CATEGORY_DESCRIPTIONS } from '@/config/forms/position-modal-form'
 import { PositionTableConfig } from '@/config/tables/position-table'
@@ -10,8 +10,8 @@ import { type BreadcrumbItem } from '@/types'
 import { Head, router, useForm, usePage } from '@inertiajs/react'
 import { route } from 'ziggy-js'
 import { hasPermission } from '@/utils/authorization'
-import { useEffect, useRef, useState, useMemo } from 'react'
-import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus } from 'lucide-react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus, Download } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -109,14 +109,14 @@ export default function PositionIndex({ positions, departments, faculties, filte
   const [selectedItem, setSelectedItem] = useState<Position | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedPositionForView, setSelectedPositionForView] = useState<Position | null>(null)
-  const [sortKey, setSortKey] = useState<'name-asc' | 'name-desc' | 'date-asc' | 'date-desc'>(() => {
+  const [sortKey, setSortKey] = useState<'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'hierarchy-desc' | 'hierarchy-asc'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('positions_sortKey')
-      if (saved && ['name-asc', 'name-desc', 'date-asc', 'date-desc'].includes(saved)) {
+      if (saved && ['name-asc', 'name-desc', 'date-asc', 'date-desc', 'hierarchy-desc', 'hierarchy-asc'].includes(saved)) {
         return saved as typeof sortKey
       }
     }
-    return 'name-asc'
+    return 'hierarchy-desc' // Default to highest hierarchy first
   })
   const [searchTerm, setSearchTerm] = useState(filters?.search ?? '')
   const [perPage, setPerPage] = useState(() => {
@@ -165,6 +165,19 @@ export default function PositionIndex({ positions, departments, faculties, filte
     if (flash?.success) toast.success(flash.success);
     if (flash?.error) toast.error(flash.error);
   }, [flash]);
+
+  // Auto-set hierarchy level to 8 when position name contains "Department Head"
+  useEffect(() => {
+    if (data.pos_name && data.pos_name.includes('Department Head')) {
+      const currentLevel = parseInt(data.hierarchy_level || '1')
+      if (currentLevel < 8) {
+        setData('hierarchy_level', '8')
+        if (mode === 'edit' || mode === 'create') {
+          toast.info('Department Head hierarchy level automatically set to 8')
+        }
+      }
+    }
+  }, [data.pos_name, mode])
 
   // Get position category to determine field visibility
   const positionCategory = data.position_category
@@ -379,16 +392,32 @@ const handleCategoryFilterChange = (value: string) => {
     setMode(mode)
     if (item) {
       setSelectedItem(item)
+      
+      // Auto-fix Department Head hierarchy level if it's incorrect
+      let hierarchyLevel = item.hierarchy_level !== undefined && item.hierarchy_level !== null
+        ? String(item.hierarchy_level)
+        : DEFAULT_HIERARCHY_LEVEL
+      
+      // Check if this is a Department Head position with incorrect hierarchy level
+      const isDepartmentHead = (
+        item.pos_name?.includes('Department Head') || 
+        item.pos_code?.includes('DHEAD') ||
+        (item as any).position_type === 'department_leadership'
+      ) && item.pos_name?.includes('Department Head')
+      
+      if (isDepartmentHead && (parseInt(hierarchyLevel) < 8 || hierarchyLevel === DEFAULT_HIERARCHY_LEVEL)) {
+        hierarchyLevel = '8'
+        // Show a toast notification
+        toast.success('Auto-corrected Department Head hierarchy level to 8')
+      }
+      
       setData({
         pos_code: item.pos_code,
         pos_name: item.pos_name,
         position_category: (item as any).position_category || '',
         faculty_id: item.faculty_id ? String(item.faculty_id) : '',
         department_id: item.department_id ? String(item.department_id) : '',
-        hierarchy_level:
-          item.hierarchy_level !== undefined && item.hierarchy_level !== null
-            ? String(item.hierarchy_level)
-            : DEFAULT_HIERARCHY_LEVEL,
+        hierarchy_level: hierarchyLevel,
         capacity: item.capacity !== undefined && item.capacity !== null
           ? String(item.capacity)
           : '',
@@ -495,6 +524,7 @@ const handleCategoryFilterChange = (value: string) => {
     const sortByMap: Record<string, string> = {
       'name': 'pos_name',
       'date': 'created_at',
+      'hierarchy': 'hierarchy_level',
     }
     return {
       sort_by: sortByMap[field] || 'created_at',
@@ -541,7 +571,7 @@ const handleCategoryFilterChange = (value: string) => {
     triggerFetch({ perPage: value })
   }
 
-  const handleSortKeyChange = (value: 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc') => {
+  const handleSortKeyChange = (value: 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'hierarchy-desc' | 'hierarchy-asc') => {
     setSortKey(value)
     if (typeof window !== 'undefined') {
       localStorage.setItem('positions_sortKey', value)
@@ -561,6 +591,44 @@ const handleCategoryFilterChange = (value: string) => {
     // Ensure page is a valid positive number
     const validPage = Math.max(1, Math.min(page, lastPage || 1))
     triggerFetch({ page: validPage })
+  }
+
+  // Export to CSV function
+  const exportToCSV = useCallback(() => {
+    const columns = PositionTableConfig.columns.filter(col => !col.isAction && !col.alwaysVisible)
+    const headers = columns.map(col => col.label)
+    
+    const rows = tableData.map(item => 
+      columns.map(col => {
+        const value = getNestedValue(item, col.key)
+        return value || '-'
+      })
+    )
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `positions_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast.success('Data exported to CSV')
+  }, [tableData])
+
+  // Helper function for nested values
+  const getNestedValue = (obj: any, path: string): any => {
+    if (!obj || typeof obj !== 'object') return null
+    return path.split('.').reduce((acc, key) => {
+      if (acc === null || acc === undefined || typeof acc !== 'object') return null
+      return acc[key] !== undefined ? acc[key] : null
+    }, obj)
   }
 
   useEffect(() => {
@@ -607,70 +675,63 @@ const handleCategoryFilterChange = (value: string) => {
       <Head title="Positions" />
       <CustomToast />
 
-      <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
-        <PageHeader
-          title="Positions"
-          subtitle="Manage job positions and organizational hierarchy."
-          searchValue={searchTerm}
-          onSearchChange={handleSearchChange}
-          isSearching={isSearching}
-          filtersSlot={
-            <>
-              {/* Per Page */}
-              <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
-                <span className="whitespace-nowrap">Rows:</span>
-                <Select value={perPage} onValueChange={handlePerPageChange}>
-                  <SelectTrigger className="h-9 w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['5', '10', '25', '50', '100'].map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      <PageLayout
+        title="Positions"
+        subtitle="Manage job positions and organizational hierarchy."
+        primaryAction={{
+          label: 'Add Position',
+          icon: <Plus className="h-4 w-4" />,
+          onClick: () => openModal('create'),
+          permission: hasPermission(permissions, 'create-position'),
+        }}
+        searchValue={searchTerm}
+        onSearchChange={handleSearchChange}
+        isSearching={isSearching}
+        searchPlaceholder="Search positions..."
+        perPage={{
+          value: perPage,
+          onChange: handlePerPageChange,
+        }}
+        filtersSlot={
+          <>
+            {/* Department filter */}
+            <div className="hidden md:flex items-center">
+              <Select value={departmentFilter || 'all'} onValueChange={handleDepartmentFilterChange}>
+                <SelectTrigger className="h-9 w-[160px]">
+                  <SelectValue placeholder="Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Depts</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={String(dept.id)}>
+                      {dept.name || dept.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              {/* Department filter */}
-              <div className="hidden md:flex items-center">
-                <Select value={departmentFilter || 'all'} onValueChange={handleDepartmentFilterChange}>
-                  <SelectTrigger className="h-9 w-[160px]">
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Depts</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={String(dept.id)}>
-                        {dept.name || dept.code}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Category filter */}
-              <div className="hidden lg:flex items-center">
-                <Select value={categoryFilter || 'all'} onValueChange={handleCategoryFilterChange}>
-                  <SelectTrigger className="h-9 w-[160px]">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {POSITION_CATEGORY_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          }
-          actionsSlot={
-            <>
-              {/* Sort Dropdown */}
+            {/* Category filter */}
+            <div className="hidden lg:flex items-center">
+              <Select value={categoryFilter || 'all'} onValueChange={handleCategoryFilterChange}>
+                <SelectTrigger className="h-9 w-[160px]">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {POSITION_CATEGORY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        }
+        actionsSlot={
+          <>
+            <div className="flex items-center gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <IconButton
@@ -678,25 +739,19 @@ const handleCategoryFilterChange = (value: string) => {
                     tooltip="Sort"
                     variant="outline"
                     aria-label="Sort"
+                    className="h-9 w-9 rounded-lg"
                   />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>
-                    A → Z
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>
-                    Z → A
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>
-                    Oldest First
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleSortKeyChange('date-desc')}>
-                    Newest First
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('hierarchy-desc')}>Highest Hierarchy First</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('hierarchy-asc')}>Lowest Hierarchy First</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>A → Z</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>Z → A</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>Oldest First</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('date-desc')}>Newest First</DropdownMenuItem>
+                                </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Show Deleted Toggle */}
               {(hasPermission(permissions, 'restore-position') || hasPermission(permissions, 'force-delete-position')) && (
                 <IconButton
                   icon={showDeleted ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
@@ -711,175 +766,128 @@ const handleCategoryFilterChange = (value: string) => {
                     triggerFetch({ show_deleted: newValue, page: 1, perPage })
                   }}
                   aria-label={showDeleted ? "Show Active" : "Show Deleted"}
+                  className="h-9 w-9 rounded-lg"
                 />
               )}
-
-              {/* Add Button */}
-              <CustomModalForm
-                addButtonWrapperClassName="flex mb-0"
-                addButton={{
-                  ...PositionModalFormConfig.addButton,
-                  label: '',
-                  className: 'h-9 w-9 p-0',
-                }}
-                  title={
-                    mode === 'view'
-                      ? 'View Position'
-                      : mode === 'edit'
-                      ? 'Update Position'
-                      : PositionModalFormConfig.title
-                  }
-                  description={PositionModalFormConfig.description}
-                  fields={modalFields}
-                  buttons={PositionModalFormConfig.buttons}
-                  data={data}
-                  setData={setData}
-                  errors={errors}
-                  processing={processing}
-                  handleSubmit={handleSubmit}
-                  open={modalOpen}
-                  onOpenChange={handleModalToggle}
-                  mode={mode}
-                  extraData={{
-                    faculties: facultyOptions,
-                    departments: departmentOptions,
-                  }}
-                />
-            </>
-          }
-        />
-
-        <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
-          <EnterpriseEmployeeTable
-            columns={PositionTableConfig.columns}
-            actions={PositionTableConfig.actions}
-            data={tableData}
-            from={positions.from}
-            onDelete={handleDelete}
-            onView={handleViewPosition}
-            onEdit={(item) => openModal('edit', item)}
-            onRestore={handleRestore}
-            onForceDelete={handleForceDelete}
-            resourceType="position"
-            enableExpand={false}
-            viewMode="table"
-          />
-        </div>
-
-        {/* Pagination - Fixed at bottom of viewport */}
-        <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3">
-            {/* Results Info */}
-            <div className="text-sm text-muted-foreground">
-              Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
-              <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-              <span className="font-semibold text-foreground">{total || 0}</span> positions
             </div>
 
-            {/* Pagination Controls */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Previous
+            {/* Export Button */}
+            <IconButton
+              icon={<Download className="h-4 w-4" />}
+              tooltip="Export"
+              variant="outline"
+              onClick={exportToCSV}
+              aria-label="Export"
+              className="h-9 w-9 rounded-lg"
+            />
+          </>
+        }
+        pagination={
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
+            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+              <span className="hidden sm:inline">
+                Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
+                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                <span className="font-semibold text-foreground">{total || 0}</span> positions
+              </span>
+              <span className="sm:hidden">
+                <span className="font-semibold text-foreground">{from || 0}</span>-
+                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                <span className="font-semibold text-foreground">{total || 0}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
+                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">Previous</span>
               </Button>
-
-              <div className="flex items-center gap-1">
+              <div className="hidden sm:flex items-center gap-1">
                 {lastPage > 1 ? (
                   <>
-                    {/* First Page */}
                     {currentPage > 1 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(1)}
-                        className="h-9 min-w-[40px] hover:bg-muted"
-                      >
-                        1
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handlePageChange(1)} className="h-9 min-w-[40px] hover:bg-muted">1</Button>
                     )}
-
-                    {/* Ellipsis before current pages */}
-                    {currentPage > 3 && (
-                      <span className="px-2 text-muted-foreground">...</span>
-                    )}
-
-                    {/* Current page range */}
+                    {currentPage > 3 && <span className="px-2 text-muted-foreground">...</span>}
                     {Array.from({ length: Math.min(5, lastPage - 2) }, (_, i) => {
-                      const page =
-                        Math.max(2, Math.min(currentPage - 2, lastPage - 4)) + i;
+                      const page = Math.max(2, Math.min(currentPage - 2, lastPage - 4)) + i;
                       if (page >= 2 && page < lastPage) {
                         return (
-                          <Button
-                            key={page}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePageChange(page)}
-                            className={`h-9 min-w-[40px] ${
-                              currentPage === page
-                                ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-                                : 'hover:bg-muted'
-                            }`}
-                          >
+                          <Button key={page} variant="outline" size="sm" onClick={() => handlePageChange(page)}
+                            className={`h-9 min-w-[40px] ${currentPage === page ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
                             {page}
                           </Button>
                         );
                       }
                       return null;
                     })}
-
-                    {/* Ellipsis after current pages */}
-                    {currentPage < lastPage - 2 && (
-                      <span className="px-2 text-muted-foreground">...</span>
-                    )}
-
-                    {/* Last Page */}
+                    {currentPage < lastPage - 2 && <span className="px-2 text-muted-foreground">...</span>}
                     {lastPage > 1 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(lastPage)}
-                        className={`h-9 min-w-[40px] ${
-                          currentPage === lastPage
-                            ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
-                            : 'hover:bg-muted'
-                        }`}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handlePageChange(lastPage)}
+                        className={`h-9 min-w-[40px] ${currentPage === lastPage ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
                         {lastPage}
                       </Button>
                     )}
                   </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled
-                    className="h-9 min-w-[40px] bg-primary text-primary-foreground border-primary"
-                  >
-                    1
-                  </Button>
+                  <Button variant="outline" size="sm" disabled className="h-9 min-w-[40px] bg-primary text-primary-foreground border-primary">1</Button>
                 )}
               </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === lastPage || lastPage === 0}
-                className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-1" />
+              <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
+                <span className="font-semibold text-foreground">{currentPage}</span>
+                <span className="text-muted-foreground">/</span>
+                <span className="text-muted-foreground">{lastPage || 1}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === lastPage || lastPage === 0}
+                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
+                <span className="hidden sm:inline mr-1">Next</span>
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+        }
+      >
+        <EnterpriseEmployeeTable
+          columns={PositionTableConfig.columns}
+          actions={PositionTableConfig.actions}
+          data={tableData}
+          from={positions.from}
+          onDelete={handleDelete}
+          onView={handleViewPosition}
+          onEdit={(item) => openModal('edit', item)}
+          onRestore={handleRestore}
+          onForceDelete={handleForceDelete}
+          resourceType="position"
+          enableExpand={false}
+          viewMode="table"
+        />
+      </PageLayout>
+
+      {/* Position Modal */}
+      <CustomModalForm
+        addButtonWrapperClassName="hidden"
+        addButton={{
+          ...PositionModalFormConfig.addButton,
+          label: '',
+          className: 'h-9 w-9 p-0',
+        }}
+        title={mode === 'view' ? 'View Position' : mode === 'edit' ? 'Update Position' : PositionModalFormConfig.title}
+        description={PositionModalFormConfig.description}
+        fields={modalFields}
+        buttons={PositionModalFormConfig.buttons}
+        data={data}
+        setData={setData}
+        errors={errors}
+        processing={processing}
+        handleSubmit={handleSubmit}
+        open={modalOpen}
+        onOpenChange={handleModalToggle}
+        mode={mode}
+        extraData={{
+          faculties: facultyOptions,
+          departments: departmentOptions,
+        }}
+      />
 
       {/* Position Detail Drawer */}
       {selectedPositionForView && (

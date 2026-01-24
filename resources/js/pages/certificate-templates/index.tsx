@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { TableToolbar } from '@/components/table-toolbar';
+import { PageLayout } from '@/components/page-layout';
 import { CustomToast, toast } from '@/components/custom-toast';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
@@ -170,53 +170,103 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
             <Head title="Certificate Templates" />
             <CustomToast />
 
-            <div className="flex flex-col overflow-hidden bg-background rounded-xl pb-14 sm:pb-0" style={{ height: 'calc(100vh - 80px)' }}>
-                <div className="flex-shrink-0 border-b border-border bg-card px-3 sm:px-4 py-2 shadow-sm">
-                    <div className="mb-3 md:mb-4">
-                        <h1 className="text-xl md:text-2xl font-semibold text-foreground">Certificate Templates</h1>
-                        <p className="text-xs md:text-sm text-muted-foreground">
-                            Create and manage certificate templates with customizable layouts.
-                        </p>
-                    </div>
-                    <TableToolbar
-                        searchValue={searchTerm}
-                        onSearchChange={handleSearchChange}
-                        placeholder="Search templates..."
-                        perPage={perPage}
-                        onPerPageChange={handlePerPageChange}
-                        isSearching={isSearching}
-                        actionSlot={
-                            <div className="flex items-center gap-1.5 sm:gap-2">
-                                {/* Per Page - Hidden on mobile */}
-                                <div className="hidden sm:flex items-center">
-                                    <Select value={perPage} onValueChange={handlePerPageChange}>
-                                        <SelectTrigger className="h-9 w-[70px]">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {['5', '10', '25', '50', '100'].map((option) => (
-                                                <SelectItem key={option} value={option}>
-                                                    {option}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <Button 
-                                    onClick={() => router.visit('/certificate-templates/create')} 
-                                    size="sm" 
-                                    className="gap-1.5 sm:gap-2 h-9 px-2 sm:px-3"
+            <PageLayout
+                title="Certificate Templates"
+                subtitle="Create and manage certificate templates with customizable layouts."
+                primaryAction={{
+                    label: 'Create Template',
+                    icon: <Plus className="h-4 w-4" />,
+                    onClick: () => router.visit('/certificate-templates/create'),
+                    permission: true,
+                }}
+                searchValue={searchTerm}
+                onSearchChange={handleSearchChange}
+                isSearching={isSearching}
+                searchPlaceholder="Search templates..."
+                perPage={{
+                    value: perPage,
+                    onChange: handlePerPageChange,
+                }}
+                filtersSlot={null}
+                actionsSlot={null}
+                pagination={
+                    templates.data.length > 0 && templates.links && templates.links.length > 0 ? (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
+                            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+                                <span className="hidden sm:inline">
+                                    Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
+                                    <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                                    <span className="font-semibold text-foreground">{total || 0}</span> templates
+                                </span>
+                                <span className="sm:hidden">
+                                    <span className="font-semibold text-foreground">{from || 0}</span>-
+                                    <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
+                                    <span className="font-semibold text-foreground">{total || 0}</span>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1 sm:gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        const prevLink = templates.links?.find((link, index) => 
+                                            index < currentPage - 1 && link.url !== null
+                                        );
+                                        if (prevLink?.url) {
+                                            router.visit(prevLink.url, { preserveState: true, preserveScroll: false });
+                                        }
+                                    }}
+                                    disabled={currentPage === 1}
+                                    className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <Plus className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Create</span>
+                                    <ChevronLeft className="h-4 w-4" />
+                                    <span className="hidden sm:inline ml-1">Previous</span>
+                                </Button>
+                                <div className="hidden sm:flex items-center gap-1">
+                                    {templates.links?.map((link, index) => {
+                                        if (link.label === '...' || !link.url) {
+                                            return <span key={index} className="px-2 text-muted-foreground">...</span>;
+                                        }
+                                        return (
+                                            <Button
+                                                key={index}
+                                                variant={link.active ? "default" : "outline"}
+                                                size="sm"
+                                                onClick={() => link.url && router.visit(link.url, { preserveState: true, preserveScroll: false })}
+                                                className="h-9 min-w-[40px]"
+                                            >
+                                                {link.label}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
+                                    <span className="font-semibold text-foreground">{currentPage}</span>
+                                    <span className="text-muted-foreground">/</span>
+                                    <span className="text-muted-foreground">{lastPage || 1}</span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        const nextLink = templates.links?.find((link, index) => 
+                                            index > currentPage - 1 && link.url !== null
+                                        );
+                                        if (nextLink?.url) {
+                                            router.visit(nextLink.url, { preserveState: true, preserveScroll: false });
+                                        }
+                                    }}
+                                    disabled={currentPage >= lastPage}
+                                    className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span className="hidden sm:inline mr-1">Next</span>
+                                    <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </div>
-                        }
-                    />
-                </div>
-
-                <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
+                        </div>
+                    ) : null
+                }
+            >
                     {templates.data.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center py-12">
                             <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -321,75 +371,7 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
                             })}
                         </div>
                     )}
-                </div>
-
-                {templates.data.length > 0 && templates.links && templates.links.length > 0 && (
-                    <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3">
-                            <div className="text-sm text-muted-foreground">
-                                Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
-                                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-                                <span className="font-semibold text-foreground">{total || 0}</span> templates
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        const prevLink = templates.links?.find((link, index) => 
-                                            index < currentPage - 1 && link.url !== null
-                                        );
-                                        if (prevLink?.url) {
-                                            router.visit(prevLink.url, { preserveState: true, preserveScroll: false });
-                                        }
-                                    }}
-                                    disabled={currentPage === 1}
-                                    className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronLeft className="h-4 w-4 mr-1" />
-                                    Previous
-                                </Button>
-                                <div className="flex items-center gap-1">
-                                    {templates.links?.map((link, index) => {
-                                        if (link.label === '...' || !link.url) {
-                                            return <span key={index} className="px-1 text-muted-foreground">...</span>;
-                                        }
-                                        const pageNum = index + 1;
-                                        return (
-                                            <Button
-                                                key={index}
-                                                variant={link.active ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => link.url && router.visit(link.url, { preserveState: true, preserveScroll: false })}
-                                                className="h-9 px-3"
-                                            >
-                                                {link.label}
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        const nextLink = templates.links?.find((link, index) => 
-                                            index > currentPage - 1 && link.url !== null
-                                        );
-                                        if (nextLink?.url) {
-                                            router.visit(nextLink.url, { preserveState: true, preserveScroll: false });
-                                        }
-                                    }}
-                                    disabled={currentPage >= lastPage}
-                                    className="h-9 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Next
-                                    <ChevronRight className="h-4 w-4 ml-1" />
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
+            </PageLayout>
         </AppLayout>
     );
 }
