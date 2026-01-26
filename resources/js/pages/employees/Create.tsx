@@ -160,6 +160,29 @@ const formatDate = (dateString: string): string => {
   return dateString;
 };
 
+// Utility function to format numbers with commas
+const formatNumberWithCommas = (value: string | number): string => {
+  if (!value && value !== 0) return '';
+  const strValue = String(value);
+  // Remove existing commas
+  const numStr = strValue.replace(/,/g, '');
+  // Check if it's a valid number
+  if (numStr === '' || numStr === '.') return '';
+  const num = parseFloat(numStr);
+  if (isNaN(num)) return strValue;
+  
+  // Split into integer and decimal parts
+  const parts = numStr.split('.');
+  const integerPart = parts[0] || '0';
+  const decimalPart = parts[1];
+  
+  // Format integer part with commas
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  
+  // Combine with decimal if exists
+  return decimalPart !== undefined ? `${formattedInteger}.${decimalPart}` : formattedInteger;
+};
+
 export default function CreateEmployee({ employee, departments, positions, faculties, mode = 'create' }: CreateEmployeeProps) {
   const { csrf, errors, importedData } = usePage<PageProps & { importedData?: Record<string, unknown> | null }>().props;
   const isEdit = !!employee;
@@ -3838,13 +3861,23 @@ export default function CreateEmployee({ employee, departments, positions, facul
                             </Label>
                             <Input
                               id="salary"
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={data.salary || ''}
-                              onChange={(e) => setData('salary', e.target.value)}
+                              type="text"
+                              value={data.salary ? formatNumberWithCommas(data.salary) : ''}
+                              onChange={(e) => {
+                                const rawValue = e.target.value.replace(/,/g, '');
+                                if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+                                  setData('salary', rawValue);
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const rawValue = e.target.value.replace(/,/g, '');
+                                if (rawValue && parseFloat(rawValue) >= 0) {
+                                  setData('salary', rawValue);
+                                }
+                              }}
                               className="h-12"
                               disabled={isView}
+                              placeholder="0.00"
                             />
                             {getError('salary') && (
                               <p
@@ -5034,12 +5067,22 @@ export default function CreateEmployee({ employee, departments, positions, facul
                           />
                           <FloatingInput
                             label="Monthly Salary"
-                            type="number"
-                            step="0.01"
-                            value={work.monthly_salary}
-                            onChange={e => updateSection('work_experience', idx, 'monthly_salary', e.target.value)}
+                            type="text"
+                            value={work.monthly_salary ? formatNumberWithCommas(work.monthly_salary) : ''}
+                            onChange={e => {
+                              const rawValue = e.target.value.replace(/,/g, '');
+                              if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+                                updateSection('work_experience', idx, 'monthly_salary', rawValue);
+                              }
+                            }}
+                            onBlur={e => {
+                              const rawValue = e.target.value.replace(/,/g, '');
+                              if (rawValue && parseFloat(rawValue) >= 0) {
+                                updateSection('work_experience', idx, 'monthly_salary', rawValue);
+                              }
+                            }}
                             readOnly={isView}
-                            helperText="e.g., 50000.00"
+                            helperText="e.g., 50,000.00"
                           />
                           <FloatingInput
                             label="Salary Grade/Step"

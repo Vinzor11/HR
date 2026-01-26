@@ -144,7 +144,8 @@ class EmployeeScopeService
      */
     public function getManageableDepartmentIds(User $user): ?array
     {
-        if ($user->hasRole(['super-admin', 'admin'])) {
+        // Use permission-based check instead of role names (more flexible)
+        if ($user->can('view-all-employees')) {
             // Return null to indicate no restrictions (all departments)
             return null;
         }
@@ -191,7 +192,8 @@ class EmployeeScopeService
      */
     public function getManageableFacultyIds(User $user): ?array
     {
-        if ($user->hasRole(['super-admin', 'admin'])) {
+        // Use permission-based check instead of role names (more flexible)
+        if ($user->can('view-all-employees')) {
             // Return null to indicate no restrictions (all faculties)
             return null;
         }

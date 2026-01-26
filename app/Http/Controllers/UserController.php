@@ -5,7 +5,7 @@ use App\Http\Requests\UserRequest;
 use App\Models\Role;
 use App\Models\Employee;
 use App\Models\User;
-use App\Models\UserAuditLog;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -64,20 +64,21 @@ class UserController extends Controller
         ]);
 
         if ($user) {
-            $roles = SpatieRole::whereIn('id', $request->roles)->pluck('name');
+            $roles = !empty($request->roles) 
+                ? SpatieRole::whereIn('id', $request->roles)->pluck('name')
+                : collect([]);
             $user->syncRoles($roles);
 
             // Log user creation
             $userName = $this->getUserName($user);
-            UserAuditLog::create([
-                'user_id' => $user->id,
-                'action_type' => 'CREATE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Created a New User Record: {$userName}",
-                'action_date' => now(),
-                'performed_by' => Auth::user()->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logCreated(
+                'users',
+                'User',
+                (string)$user->id,
+                "Created a New User: {$userName}",
+                null,
+                $user
+            );
 
             return redirect()->route('users.index')->with('success', 'User created with roles');
         }
@@ -118,7 +119,9 @@ class UserController extends Controller
             }
             $user->save();
 
-            $roles = SpatieRole::whereIn('id', $request->roles)->pluck('name');
+            $roles = !empty($request->roles) 
+                ? SpatieRole::whereIn('id', $request->roles)->pluck('name')
+                : collect([]);
             $user->syncRoles($roles);
             $newRoles = $roles->toArray();
 
@@ -139,17 +142,58 @@ class UserController extends Controller
             if ($oldRoles !== $newRoles) {
                 $changes['roles'] = ['old' => $oldRoles, 'new' => $newRoles];
             }
+            
+            // Collect all changes for a single audit log entry
+            $auditOldValues = [];
+            $auditNewValues = [];
+            $changeDescriptions = [];
 
             foreach ($changes as $field => $change) {
-                UserAuditLog::create([
-                    'user_id' => $user->id,
-                    'action_type' => 'UPDATE',
-                    'field_changed' => $field,
-                    'old_value' => $change['old'],
-                    'new_value' => $change['new'],
-                    'action_date' => now(),
-                    'performed_by' => Auth::user()->name ?? 'System',
-                ]);
+                if ($field === 'roles') {
+                    // Handle roles as array diff (added/removed)
+                    $added = array_diff($change['new'], $change['old']);
+                    $removed = array_diff($change['old'], $change['new']);
+                    
+                    $changeParts = [];
+                    if (!empty($added)) {
+                        $changeParts[] = "Added: " . implode(', ', $added);
+                    }
+                    if (!empty($removed)) {
+                        $changeParts[] = "Removed: " . implode(', ', $removed);
+                    }
+                    
+                    if (!empty($changeParts)) {
+                        $auditOldValues['roles'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                        $auditNewValues['roles'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                        $changeDescriptions[] = "Roles: " . implode('; ', $changeParts);
+                    }
+                } else {
+                    // Handle regular field changes
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    $oldValue = is_array($change['old']) ? implode(', ', $change['old']) : (string)$change['old'];
+                    $newValue = is_array($change['new']) ? implode(', ', $change['new']) : (string)$change['new'];
+                    
+                    $auditOldValues[$field] = $change['old'];
+                    $auditNewValues[$field] = $change['new'];
+                    $changeDescriptions[] = "{$fieldName}: {$oldValue} > {$newValue}";
+                }
+            }
+
+            // Create a single audit log entry if there are any changes
+            if (!empty($auditOldValues) && !empty($auditNewValues)) {
+                $description = implode('; ', $changeDescriptions);
+                
+                app(AuditLogService::class)->logUpdated(
+                    'users',
+                    'User',
+                    (string)$user->id,
+                    $description,
+                    $auditOldValues,
+                    $auditNewValues,
+                    $user
+                );
             }
 
             return redirect()->route('users.index')->with('success', 'User updated with roles');
@@ -169,28 +213,26 @@ class UserController extends Controller
                 $user->delete(); // Soft delete
                 
                 // Log user soft deletion
-                UserAuditLog::create([
-                    'user_id' => $userId,
-                    'action_type' => 'DELETE',
-                    'field_changed' => null,
-                    'old_value' => null,
-                    'new_value' => "Soft Deleted: {$userName}",
-                    'action_date' => now(),
-                    'performed_by' => Auth::user()->name ?? 'System',
-                ]);
+                app(AuditLogService::class)->logDeleted(
+                    'users',
+                    'User',
+                    (string)$userId,
+                    "Record was marked inactive and hidden from normal views.",
+                    null,
+                    $user
+                );
                 
                 return redirect()->route('users.index')->with('success', 'User deactivated successfully');
             } else {
                 // Log permanent deletion before force delete
-                UserAuditLog::create([
-                    'user_id' => $userId,
-                    'action_type' => 'DELETE',
-                    'field_changed' => null,
-                    'old_value' => null,
-                    'new_value' => "Permanently Deleted: {$userName}",
-                    'action_date' => now(),
-                    'performed_by' => Auth::user()->name ?? 'System',
-                ]);
+                app(AuditLogService::class)->logPermanentlyDeleted(
+                    'users',
+                    'User',
+                    (string)$userId,
+                    "Record was permanently removed and cannot be recovered.",
+                    null,
+                    $user
+                );
                 
                 $user->forceDelete(); // Hard delete
                 return redirect()->route('users.index')->with('success', 'User deleted successfully');
@@ -212,19 +254,16 @@ class UserController extends Controller
             return redirect()->route('users.index')->with('error', 'User is not deactivated.');
         }
 
-        $deletedAt = $user->deleted_at;
-        $user->restore();
+        // Log user restoration BEFORE restoring
+        app(AuditLogService::class)->logRestored(
+            'users',
+            'User',
+            (string)$user->id,
+            "Record was restored and returned to active use.",
+            $user
+        );
 
-        // Log user restoration
-        UserAuditLog::create([
-            'user_id' => $user->id,
-            'action_type' => 'UPDATE',
-            'field_changed' => 'restored',
-            'old_value' => ['deleted_at' => $deletedAt ? $deletedAt->toDateTimeString() : null],
-            'new_value' => ['deleted_at' => null],
-            'action_date' => now(),
-            'performed_by' => Auth::user()->name ?? 'System',
-        ]);
+        $user->restore();
 
         return redirect()->route('users.index')->with('success', 'User has been restored successfully.');
     }
@@ -241,15 +280,14 @@ class UserController extends Controller
         $userName = $this->getUserName($user);
         
         // Log permanent deletion before force delete
-        UserAuditLog::create([
-            'user_id' => $userId,
-            'action_type' => 'DELETE',
-            'field_changed' => null,
-            'old_value' => null,
-            'new_value' => "Permanently Deleted: {$userName}",
-            'action_date' => now(),
-            'performed_by' => Auth::user()->name ?? 'System',
-        ]);
+        app(AuditLogService::class)->logPermanentlyDeleted(
+            'users',
+            'User',
+            (string)$userId,
+            "Record was permanently removed and cannot be recovered.",
+            null,
+            $user
+        );
         
         $user->forceDelete();
 
@@ -257,25 +295,12 @@ class UserController extends Controller
     }
 
     /**
-     * Get user logs
+     * Get user logs - redirects to unified audit logs
      */
     public function logs(Request $request)
     {
-        abort_unless($request->user()->can('view-user-log'), 403, 'Unauthorized action.');
-
-        $logs = UserAuditLog::with('user:id,name,email')
-            ->orderBy('action_date', 'desc')
-            ->limit(500)
-            ->get();
-
-        $users = User::select('id', 'name', 'email')
-            ->orderBy('name')
-            ->get();
-
-        return Inertia::render('users/logs', [
-            'logs' => $logs,
-            'users' => $users,
-        ]);
+        // Redirect to unified audit logs filtered by users module
+        return redirect()->route('audit-logs.index', ['module' => 'users']);
     }
 
     /**

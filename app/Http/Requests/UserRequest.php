@@ -24,7 +24,7 @@ class UserRequest extends FormRequest
             ],
             'password'         => $this->isMethod('POST') ? 'required|string|min:6' : 'nullable|string|min:6',
             'confirm_password' => $this->isMethod('POST') ? 'required|same:password' : 'nullable|same:password',
-            'roles'            => 'required|array',
+            'roles'            => 'nullable|array',
             'roles.*'          => 'exists:roles,id',
         ];
         

@@ -14,6 +14,7 @@ use App\Models\RequestType;
 use App\Models\Role;
 use App\Models\Training;
 use App\Models\User;
+use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -91,6 +92,16 @@ class RequestTypeController extends Controller
 
             $this->syncFields($type, $validated['fields'] ?? []);
 
+            // Log request type creation
+            app(AuditLogService::class)->logCreated(
+                'request-types',
+                'RequestType',
+                (string)$type->id,
+                "Created a New Request Type: {$type->name}",
+                null,
+                $type
+            );
+
             return $type;
         });
 
@@ -138,6 +149,9 @@ class RequestTypeController extends Controller
         $validated = $request->validated();
 
         DB::transaction(function () use ($requestType, $validated) {
+            // Get original values before update
+            $original = $requestType->getOriginal();
+            
             $requestType->update([
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
@@ -152,6 +166,42 @@ class RequestTypeController extends Controller
             ]);
 
             $this->syncFields($requestType, $validated['fields'] ?? []);
+
+            // Collect all changes for a single audit log entry
+            $oldValues = [];
+            $newValues = [];
+            $changeDescriptions = [];
+            
+            foreach (['name', 'description', 'has_fulfillment', 'is_published'] as $field) {
+                if (isset($original[$field]) && $original[$field] != $requestType->$field) {
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    $oldValue = $original[$field];
+                    $newValue = $requestType->$field;
+                    
+                    $oldValueFormatted = is_array($oldValue) ? implode(', ', $oldValue) : (string)($oldValue ?? '');
+                    $newValueFormatted = is_array($newValue) ? implode(', ', $newValue) : (string)($newValue ?? '');
+                    
+                    $oldValues[$field] = $oldValue;
+                    $newValues[$field] = $newValue;
+                    $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+                }
+            }
+
+            // Create a single audit log entry if there are any changes
+            if (!empty($oldValues) && !empty($newValues)) {
+                $description = implode('; ', $changeDescriptions);
+                app(AuditLogService::class)->logUpdated(
+                    'request-types',
+                    'RequestType',
+                    (string)$requestType->id,
+                    $description,
+                    $oldValues,
+                    $newValues,
+                    $requestType
+                );
+            }
         });
 
         return redirect()
@@ -163,6 +213,16 @@ class RequestTypeController extends Controller
     {
         abort_unless($request->user()->can('delete-request-type'), 403, 'Unauthorized action.');
         
+        // Log request type deletion
+        app(AuditLogService::class)->logDeleted(
+            'request-types',
+            'RequestType',
+            (string)$requestType->id,
+            "Record was marked inactive and hidden from normal views.",
+            null,
+            $requestType
+        );
+
         $requestType->delete();
 
         return redirect()->route('request-types.index')->with('success', 'Request type deleted successfully.');
@@ -177,10 +237,25 @@ class RequestTypeController extends Controller
         ]);
 
         $isPublishing = (bool) $request->boolean('is_published');
+        $originalPublished = $requestType->is_published;
+        
         $requestType->update([
             'is_published' => $isPublishing,
             'published_at' => $isPublishing ? now() : null,
         ]);
+
+        // Log publish/unpublish action
+        if ($originalPublished !== $isPublishing) {
+            app(AuditLogService::class)->log(
+                $isPublishing ? 'published' : 'unpublished',
+                'requests',
+                'RequestType',
+                (string)$requestType->id,
+                $isPublishing ? "Published Request Type: {$requestType->name}" : "Unpublished Request Type: {$requestType->name}",
+                ['is_published' => $originalPublished],
+                ['is_published' => $isPublishing]
+            );
+        }
 
         return back()->with('success', $isPublishing ? 'Request type published.' : 'Request type unpublished.');
     }

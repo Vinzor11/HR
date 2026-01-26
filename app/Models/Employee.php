@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Concerns\FormatsDates;
 
 class Employee extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, FormatsDates;
 
     protected $primaryKey = 'id';
     public $incrementing = false;
@@ -147,7 +148,10 @@ class Employee extends Model
 
     public function auditLogs()
     {
-        return $this->hasMany(EmployeeAuditLog::class, 'employee_id', 'id')->orderBy('action_date', 'desc');
+        return $this->hasMany(AuditLog::class, 'entity_id', 'id')
+            ->where('module', 'employees')
+            ->where('entity_type', 'Employee')
+            ->orderBy('created_at', 'desc');
     }
 
     public function documents()

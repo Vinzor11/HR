@@ -15,6 +15,7 @@ use App\Models\Department;
 use App\Models\Position;
 use App\Models\User;
 use App\Notifications\RequestFulfilledNotification;
+use App\Services\AuditLogService;
 use App\Services\LeaveService;
 use App\Services\HierarchicalApproverService;
 use Carbon\Carbon;
@@ -197,6 +198,16 @@ class RequestSubmissionController extends Controller
                 $this->initializeApprovalFlow($submission, $requestType);
             }
 
+            // Log request submission
+            app(AuditLogService::class)->logCreated(
+                'requests',
+                'RequestSubmission',
+                (string)$submission->id,
+                "Submitted Request: {$requestType->name} (Ref: {$submission->reference_code})",
+                null,
+                $submission
+            );
+
             return $submission;
         });
 
@@ -261,6 +272,15 @@ class RequestSubmissionController extends Controller
 
             $this->updateApprovalState($submission, $action);
             $this->advanceOrComplete($submission);
+
+            // Log approval action
+            app(AuditLogService::class)->logApproved(
+                'requests',
+                'RequestSubmission',
+                (string)$submission->id,
+                "Approved Request: {$submission->requestType->name} (Ref: {$submission->reference_code})",
+                ['notes' => $request->input('notes')]
+            );
         });
 
         return back()->with('success', 'Request approved successfully.');
@@ -299,6 +319,15 @@ class RequestSubmissionController extends Controller
             
             // Handle training application rejection
             $this->handleTrainingApplicationRejection($submission);
+
+            // Log rejection action
+            app(AuditLogService::class)->logRejected(
+                'requests',
+                'RequestSubmission',
+                (string)$submission->id,
+                "Rejected Request: {$submission->requestType->name} (Ref: {$submission->reference_code})",
+                ['notes' => $request->input('notes')]
+            );
         });
 
         return back()->with('success', 'Request rejected and requester has been notified.');
@@ -332,11 +361,34 @@ class RequestSubmissionController extends Controller
                 'status' => RequestSubmission::STATUS_COMPLETED,
                 'fulfilled_at' => now(),
             ]);
+
+            // Log fulfillment action
+            $submission->load('requestType');
+            app(AuditLogService::class)->log(
+                'fulfilled',
+                'requests',
+                'RequestSubmission',
+                (string)$submission->id,
+                "Fulfilled Request: {$submission->requestType->name} (Ref: {$submission->reference_code})",
+                null,
+                ['file' => $request->file('file')->getClientOriginalName(), 'notes' => $request->input('notes')]
+            );
         });
 
         if ($submission->user) {
             $submission->load('user', 'requestType', 'fulfillment');
             $submission->user->notify(new RequestFulfilledNotification($submission));
+
+            // Log fulfillment action
+            app(AuditLogService::class)->log(
+                'fulfilled',
+                'requests',
+                'RequestSubmission',
+                (string)$submission->id,
+                "Fulfilled Request: {$submission->requestType->name} (Ref: {$submission->reference_code})",
+                null,
+                ['file' => $submission->fulfillment->original_filename, 'notes' => $submission->fulfillment->notes]
+            );
         }
 
         return back()->with('success', 'Request marked as completed and requester notified.');

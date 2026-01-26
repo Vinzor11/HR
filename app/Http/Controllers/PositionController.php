@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\PositionRequest;
 use App\Models\Department;
 use App\Models\Faculty;
-use App\Models\OrganizationalAuditLog;
+use App\Services\AuditLogService;
 use App\Models\Position;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -101,16 +101,14 @@ class PositionController extends Controller
 
         if ($position) {
             // Log position creation
-            OrganizationalAuditLog::create([
-                'unit_type' => 'position',
-                'unit_id' => $position->id,
-                'action_type' => 'CREATE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Created a New Position Record: {$position->pos_name}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logCreated(
+                'positions',
+                'Position',
+                (string)$position->id,
+                "Created a New Position: {$position->pos_name}",
+                null,
+                $position
+            );
 
             return redirect()
                 ->route('positions.index')
@@ -164,23 +162,44 @@ class PositionController extends Controller
                 // Update the position
                 $position->update($validated);
                 
-                // Log each field change
+                // Collect all changes for a single audit log entry
+                $oldValues = [];
+                $newValues = [];
+                $changeDescriptions = [];
+                
                 foreach ($changes as $field => $change) {
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    // Format old and new values for display
+                    $oldValueFormatted = is_array($change['old']) ? implode(', ', $change['old']) : (string)($change['old'] ?? '');
+                    $newValueFormatted = is_array($change['new']) ? implode(', ', $change['new']) : (string)($change['new'] ?? '');
+                    
+                    $oldValues[$field] = $change['old'];
+                    $newValues[$field] = $change['new'];
+                    $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+                }
+                
+                // Create a single audit log entry if there are any changes
+                if (!empty($oldValues) && !empty($newValues)) {
                     try {
-                        OrganizationalAuditLog::create([
-                            'unit_type' => 'position',
-                            'unit_id' => $position->id,
-                            'action_type' => 'UPDATE',
-                            'field_changed' => $field,
-                            'old_value' => $change['old'],
-                            'new_value' => $change['new'],
-                            'action_date' => now(),
-                            'performed_by' => auth()->user()?->name ?? 'System',
-                        ]);
+                        $description = implode('; ', $changeDescriptions);
+                        $positionCode = $position->pos_code ?? '';
+                        $positionId = (string)$position->id;
+                        $descriptionWithCode = $description . ($positionCode ? " (ID: {$positionId}, {$positionCode})" : " (ID: {$positionId})");
+                        app(AuditLogService::class)->logUpdated(
+                            'positions',
+                            'Position',
+                            $positionId,
+                            $descriptionWithCode,
+                            $oldValues,
+                            $newValues,
+                            $position
+                        );
                     } catch (\Exception $e) {
                         \Log::error('Failed to create audit log: ' . $e->getMessage(), [
                             'position_id' => $position->id,
-                            'field' => $field,
+                            'error' => $e->getTraceAsString()
                         ]);
                     }
                 }
@@ -214,18 +233,17 @@ class PositionController extends Controller
 
             $positionId = $position->id;
             $positionName = $position->pos_name ?? 'Unknown';
+            $positionCode = $position->pos_code ?? '';
             
             // Log position deletion before deleting
-            OrganizationalAuditLog::create([
-                'unit_type' => 'position',
-                'unit_id' => $positionId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Soft Deleted: {$positionName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logDeleted(
+                'positions',
+                'Position',
+                (string)$positionId,
+                "Record was marked inactive and hidden from normal views." . ($positionCode ? " (ID: {$positionId}, {$positionCode})" : " (ID: {$positionId})"),
+                null,
+                $position
+            );
 
             $position->delete();
             return redirect()
@@ -252,20 +270,18 @@ class PositionController extends Controller
         }
 
         $positionId = $position->id;
+        $positionCode = $position->pos_code ?? '';
         $deletedAt = $position->deleted_at;
         
-        DB::transaction(function () use ($position, $positionId, $deletedAt) {
+        DB::transaction(function () use ($position, $positionId, $positionCode) {
             // Log the restoration BEFORE restoring
-            OrganizationalAuditLog::create([
-                'unit_type' => 'position',
-                'unit_id' => $positionId,
-                'action_type' => 'UPDATE',
-                'field_changed' => 'restored',
-                'old_value' => ['deleted_at' => $deletedAt ? $deletedAt->toDateTimeString() : null],
-                'new_value' => ['deleted_at' => null],
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logRestored(
+                'positions',
+                'Position',
+                (string)$positionId,
+                "Record was restored and returned to active use." . ($positionCode ? " (ID: {$positionId}, {$positionCode})" : " (ID: {$positionId})"),
+                $position
+            );
             
             // Restore the position
             $position->restore();
@@ -286,19 +302,18 @@ class PositionController extends Controller
         
         $positionId = $position->id;
         $positionName = $position->pos_name ?? 'Unknown';
+        $positionCode = $position->pos_code ?? '';
         
-        DB::transaction(function () use ($position, $positionId, $positionName) {
+        DB::transaction(function () use ($position, $positionId, $positionName, $positionCode) {
             // Log permanent deletion
-            OrganizationalAuditLog::create([
-                'unit_type' => 'position',
-                'unit_id' => $positionId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Permanently Deleted: {$positionName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logPermanentlyDeleted(
+                'positions',
+                'Position',
+                (string)$positionId,
+                "Record was permanently removed and cannot be recovered." . ($positionCode ? " (ID: {$positionId}, {$positionCode})" : " (ID: {$positionId})"),
+                null,
+                $position
+            );
             
             // Permanently delete the position
             $position->forceDelete();

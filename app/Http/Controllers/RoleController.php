@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\Role;
 use Inertia\Inertia;
 use App\Models\Permission;
+use App\Services\AuditLogService;
 use Illuminate\Support\Str;
 use App\Http\Requests\RoleRequest;
 use Illuminate\Http\Request;
@@ -138,7 +139,18 @@ class RoleController extends Controller
         ]);
 
         if ($role) {
-            $role->syncPermissions($request->permissions);
+            $permissions = $request->permissions ?? [];
+            $role->syncPermissions($permissions);
+
+            // Log role creation
+            app(AuditLogService::class)->logCreated(
+                'roles',
+                'Role',
+                (string)$role->id,
+                "Created a New Role: {$role->label}",
+                null,
+                $role
+            );
 
             return redirect()->route('roles.index')->with('success', 'Role created successfully with Permissions!');
         }
@@ -183,6 +195,10 @@ class RoleController extends Controller
                     ->withInput();
             }
             
+            // Get original values before update
+            $original = $role->getOriginal();
+            $oldPermissions = $role->permissions->pluck('id')->toArray();
+            
             $role->label       = $request->label;
             $role->name        = $newName;
             $role->description = $request->description;
@@ -190,7 +206,70 @@ class RoleController extends Controller
             $role->save();
 
             # Update the permissions
-            $role->syncPermissions($request->permissions);
+            $permissions = $request->permissions ?? [];
+            $role->syncPermissions($permissions);
+            $role->refresh(); // Refresh to get updated permissions
+            $newPermissions = $role->permissions->pluck('id')->toArray();
+
+            // Collect all changes for a single audit log entry
+            $oldValues = [];
+            $newValues = [];
+            $changeDescriptions = [];
+
+            // Track field changes
+            $fieldsToTrack = ['label', 'name', 'description'];
+            foreach ($fieldsToTrack as $field) {
+                $oldValue = $original[$field] ?? null;
+                $newValue = $role->$field;
+                
+                if ($oldValue !== $newValue) {
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    $oldValues[$field] = $oldValue;
+                    $newValues[$field] = $newValue;
+                    $changeDescriptions[] = "{$fieldName}: {$oldValue} > {$newValue}";
+                }
+            }
+
+            // Track permission changes - show added/removed instead of full lists
+            if ($oldPermissions !== $newPermissions) {
+                $oldPermissionNames = \App\Models\Permission::whereIn('id', $oldPermissions)->pluck('label')->toArray();
+                $newPermissionNames = \App\Models\Permission::whereIn('id', $newPermissions)->pluck('label')->toArray();
+                
+                // Calculate added and removed permissions
+                $added = array_diff($newPermissionNames, $oldPermissionNames);
+                $removed = array_diff($oldPermissionNames, $newPermissionNames);
+                
+                $changeParts = [];
+                if (!empty($added)) {
+                    $changeParts[] = "Added: " . implode(', ', $added);
+                }
+                if (!empty($removed)) {
+                    $changeParts[] = "Removed: " . implode(', ', $removed);
+                }
+                
+                if (!empty($changeParts)) {
+                    $oldValues['permissions'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $newValues['permissions'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $changeDescriptions[] = "Permissions: " . implode('; ', $changeParts);
+                }
+            }
+
+            // Create a single audit log entry if there are any changes
+            if (!empty($oldValues) && !empty($newValues)) {
+                $description = implode('; ', $changeDescriptions);
+                
+                app(AuditLogService::class)->logUpdated(
+                    'roles',
+                    'Role',
+                    (string)$role->id,
+                    $description,
+                    $oldValues,
+                    $newValues,
+                    $role
+                );
+            }
 
             return redirect()->route('roles.index')->with('success', 'Role updated successfully with Permissions!');
         }
@@ -213,6 +292,16 @@ class RoleController extends Controller
                     ->route('roles.index')
                     ->with('error', "Cannot delete role. It has {$userCount} user(s) assigned. Please reassign users to other roles first.");
             }
+
+            // Log role soft deletion
+            app(AuditLogService::class)->logDeleted(
+                'roles',
+                'Role',
+                (string)$role->id,
+                "Record was marked inactive and hidden from normal views.",
+                null,
+                $role
+            );
 
             $role->delete();
 

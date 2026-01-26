@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
+use App\Models\Concerns\FormatsDates;
 
 class Holiday extends Model
 {
-    use HasFactory;
+    use HasFactory, FormatsDates;
 
     protected $fillable = [
         'name',

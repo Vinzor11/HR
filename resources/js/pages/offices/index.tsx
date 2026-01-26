@@ -380,7 +380,7 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
 
       <PageLayout
         title="Offices"
-        subtitle="Manage administrative offices and organizational structure."
+        subtitle={showDeleted ? "Viewing deleted offices. You can restore or permanently delete them." : "Manage administrative offices and organizational structure."}
         primaryAction={{
           label: 'Add Office',
           icon: <Plus className="h-4 w-4" />,
@@ -512,6 +512,15 @@ export default function OfficeIndex({ offices, filters }: IndexProps) {
           </div>
         }
       >
+        {/* Subtle Status Indicator */}
+        {showDeleted && (
+          <div className="mb-3 px-3 md:px-6">
+            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+              <Archive className="h-4 w-4" />
+              <span>Viewing deleted offices</span>
+            </div>
+          </div>
+        )}
         <EnterpriseEmployeeTable
           columns={OfficeTableConfig.columns}
           actions={OfficeTableConfig.actions}

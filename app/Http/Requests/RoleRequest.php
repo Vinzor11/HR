@@ -47,7 +47,7 @@ class RoleRequest extends FormRequest
                 },
             ],
             'description' => 'nullable|string',
-            'permissions' => 'required|array',
+            'permissions' => 'nullable|array',
             'permissions.*' => 'string|exists:permissions,name',
         ];
     }

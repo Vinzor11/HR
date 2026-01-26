@@ -609,10 +609,12 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         router.post(route('trainings.restore', id), {}, {
             preserveScroll: true,
             onSuccess: () => {
-                triggerFetch({ search: searchTerm, perPage });
+                // Refresh with current filters, but switch to active view after restore
+                triggerFetch({ search: searchTerm, perPage, show_deleted: false });
             },
             onError: (errors) => {
                 console.error('Restore error:', errors);
+                toast.error('Failed to restore training');
             },
         });
     };
@@ -623,10 +625,12 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
             onSuccess: (response: { props: { flash?: { success?: string } } }) => {
                 const successMessage = response.props.flash?.success;
                 if (successMessage) toast.success(successMessage);
-                triggerFetch({ search: searchTerm, perPage });
+                // Keep current view (deleted) after force delete
+                triggerFetch({ search: searchTerm, perPage, show_deleted: showDeleted });
             },
             onError: (errors) => {
                 console.error('Force delete error:', errors);
+                toast.error('Failed to permanently delete training');
             },
         });
     };
@@ -650,8 +654,9 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         setData('_method', isEdit ? 'PUT' : 'POST');
 
         post(routePath, {
-            onSuccess: () => {
-                // Flash message will be available in next render via flash prop
+            onSuccess: (response: { props: { flash?: { success?: string } } }) => {
+                const successMessage = response.props.flash?.success;
+                if (successMessage) toast.success(successMessage);
                 closeModal();
             },
             onError: (error: any) => {
@@ -667,7 +672,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
 
             <PageLayout
                 title="Trainings"
-                subtitle="Manage training programs and track employee participation."
+                subtitle={showDeleted ? "Viewing deleted training programs. You can restore or permanently delete them." : "Manage training programs and track employee participation."}
                 primaryAction={{
                     label: 'Add Training',
                     icon: <Plus className="h-4 w-4" />,
@@ -828,6 +833,15 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                     </div>
                 }
             >
+                {/* Subtle Status Indicator */}
+                {showDeleted && (
+                    <div className="mb-3 px-3 md:px-6">
+                        <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                            <Archive className="h-4 w-4" />
+                            <span>Viewing deleted trainings</span>
+                        </div>
+                    </div>
+                )}
                 <EnterpriseEmployeeTable
                     columns={TrainingsTableConfig.columns}
                     actions={TrainingsTableConfig.actions}

@@ -70,7 +70,7 @@ interface BuilderProps {
 }
 
 const breadcrumbs = (mode: 'create' | 'edit', name?: string | null): BreadcrumbItem[] => [
-    { title: 'Dynamic Request Builder', href: '/request-types' },
+    { title: 'Request Builder', href: '/request-types' },
     {
         title: mode === 'edit' ? `Edit: ${name ?? 'Request Type'}` : 'Create Request Type',
         href: mode === 'edit' ? '/request-types' : '/request-types/create',

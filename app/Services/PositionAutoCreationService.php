@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\Department;
 use App\Models\Faculty;
-use App\Models\OrganizationalAuditLog;
+use App\Services\AuditLogService;
 use App\Models\Position;
 use Illuminate\Support\Str;
 
@@ -374,16 +374,14 @@ class PositionAutoCreationService
             // Build a clean, readable log message
             $message = $this->buildAutoCreatedLogMessage($position, $parentType, $facultyId, $departmentId);
 
-            OrganizationalAuditLog::create([
-                'unit_type' => 'position',
-                'unit_id' => $position->id,
-                'action_type' => 'CREATE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => $message, // String will be handled by custom accessor
-                'action_date' => now(),
-                'performed_by' => 'System',
-            ]);
+            app(AuditLogService::class)->logCreated(
+                'organizational',
+                'Position',
+                (string)$position->id,
+                $message,
+                null,
+                $position
+            );
         } catch (\Exception $e) {
             // Log error but don't fail position creation
             \Log::error('Failed to log auto-created position', [

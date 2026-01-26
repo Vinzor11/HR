@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\OfficeRequest;
 use App\Models\Department;
-use App\Models\OrganizationalAuditLog;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -71,16 +71,14 @@ class OfficeController extends Controller
 
         if ($office) {
             // Log office creation
-            OrganizationalAuditLog::create([
-                'unit_type' => 'office',
-                'unit_id' => $office->id,
-                'action_type' => 'CREATE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Created a New Office Record: {$office->name}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logCreated(
+                'offices',
+                'Office',
+                (string)$office->id,
+                "Created a New Office: {$office->name}",
+                null,
+                $office
+            );
 
             return redirect()
                 ->route('offices.index')
@@ -135,23 +133,41 @@ class OfficeController extends Controller
                 // Update the office
                 $office->update($validated);
                 
-                // Log each field change
+                // Collect all changes for a single audit log entry
+                $oldValues = [];
+                $newValues = [];
+                $changeDescriptions = [];
+                
                 foreach ($changes as $field => $change) {
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    // Format old and new values for display
+                    $oldValueFormatted = is_array($change['old']) ? implode(', ', $change['old']) : (string)($change['old'] ?? '');
+                    $newValueFormatted = is_array($change['new']) ? implode(', ', $change['new']) : (string)($change['new'] ?? '');
+                    
+                    $oldValues[$field] = $change['old'];
+                    $newValues[$field] = $change['new'];
+                    $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+                }
+                
+                // Create a single audit log entry if there are any changes
+                if (!empty($oldValues) && !empty($newValues)) {
                     try {
-                        OrganizationalAuditLog::create([
-                            'unit_type' => 'office',
-                            'unit_id' => $office->id,
-                            'action_type' => 'UPDATE',
-                            'field_changed' => $field,
-                            'old_value' => $change['old'],
-                            'new_value' => $change['new'],
-                            'action_date' => now(),
-                            'performed_by' => auth()->user()?->name ?? 'System',
-                        ]);
+                        $description = implode('; ', $changeDescriptions);
+                        app(AuditLogService::class)->logUpdated(
+                            'offices',
+                            'Office',
+                            (string)$office->id,
+                            $description,
+                            $oldValues,
+                            $newValues,
+                            $office
+                        );
                     } catch (\Exception $e) {
                         \Log::error('Failed to create audit log: ' . $e->getMessage(), [
                             'office_id' => $office->id,
-                            'field' => $field,
+                            'error' => $e->getTraceAsString()
                         ]);
                     }
                 }
@@ -201,16 +217,14 @@ class OfficeController extends Controller
             $officeName = $office->name ?? 'Unknown';
             
             // Log office deletion before deleting
-            OrganizationalAuditLog::create([
-                'unit_type' => 'office',
-                'unit_id' => $officeId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Soft Deleted: {$officeName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logDeleted(
+                'offices',
+                'Office',
+                (string)$officeId,
+                "Record was marked inactive and hidden from normal views.",
+                null,
+                $office
+            );
 
             $office->delete();
             return redirect()
@@ -244,18 +258,15 @@ class OfficeController extends Controller
         $officeId = $office->id;
         $deletedAt = $office->deleted_at;
         
-        DB::transaction(function () use ($office, $officeId, $deletedAt) {
+        DB::transaction(function () use ($office, $officeId) {
             // Log the restoration BEFORE restoring
-            OrganizationalAuditLog::create([
-                'unit_type' => 'office',
-                'unit_id' => $officeId,
-                'action_type' => 'UPDATE',
-                'field_changed' => 'restored',
-                'old_value' => ['deleted_at' => $deletedAt ? $deletedAt->toDateTimeString() : null],
-                'new_value' => ['deleted_at' => null],
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logRestored(
+                'offices',
+                'Office',
+                (string)$officeId,
+                "Record was restored and returned to active use.",
+                $office
+            );
             
             // Restore the office
             $office->restore();
@@ -284,16 +295,14 @@ class OfficeController extends Controller
         
         DB::transaction(function () use ($office, $officeId, $officeName) {
             // Log permanent deletion
-            OrganizationalAuditLog::create([
-                'unit_type' => 'office',
-                'unit_id' => $officeId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Permanently Deleted: {$officeName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logPermanentlyDeleted(
+                'offices',
+                'Office',
+                (string)$officeId,
+                "Record was permanently removed and cannot be recovered.",
+                null,
+                $office
+            );
             
             // Permanently delete the office
             $office->forceDelete();

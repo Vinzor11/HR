@@ -17,7 +17,8 @@ use App\Models\Faculty;
 use App\Models\Position;
 use App\Models\Questionnaire;
 use App\Models\Reference;
-use App\Models\EmployeeAuditLog;
+use App\Services\AuditLogService;
+use App\Models\AuditLog;
 use App\Models\LeaveType;
 use App\Services\LeaveService;
 use App\Rules\PhilHealthNumber;
@@ -289,7 +290,7 @@ class EmployeeController extends Controller
         return Inertia::render('employees/index', [
             'employees' => [
                 'data' => $employees->items(),
-                'links' => $employees->links()->elements,
+                'links' => $employees->linkCollection()->toArray(),
                 'meta' => [
                     'current_page' => $employees->currentPage(),
                     'from' => $employees->firstItem(),
@@ -323,21 +324,8 @@ class EmployeeController extends Controller
 
     public function logs(Request $request)
     {
-        $logs = EmployeeAuditLog::with(['employee' => function ($query) {
-                $query->withTrashed()->select('id', 'first_name', 'surname', 'middle_name');
-            }])
-            ->orderBy('action_date', 'desc')
-            ->limit(500)
-            ->get();
-
-        $employees = Employee::select('id', 'first_name', 'surname')
-            ->orderBy('first_name')
-            ->get();
-
-        return Inertia::render('employees/logs', [
-            'logs' => $logs,
-            'employees' => $employees,
-        ]);
+        // Redirect to unified audit logs filtered by employees module
+        return redirect()->route('audit-logs.index', ['module' => 'employees']);
     }
 
     public function create(Request $request)
@@ -1151,17 +1139,16 @@ class EmployeeController extends Controller
             $employee = Employee::create($validated);
             $this->handleRelatedData($request, $employee);
             
-            // Log employee creation - simple text message
+            // Log employee creation
             $employeeName = $this->getEmployeeFullName($employee);
-            EmployeeAuditLog::create([
-                'employee_id' => $employee->id,
-                'action_type' => 'CREATE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Created a New Employee Record: {$employeeName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logCreated(
+                'employees',
+                'Employee',
+                $employee->id,
+                "Created a New Employee: {$employeeName}",
+                null,
+                $employee
+            );
             
             // Don't log position assignment during creation - it's already part of the CREATE log
             // Position assignment logging only happens during updates
@@ -1499,13 +1486,16 @@ class EmployeeController extends Controller
             ]
         ]);
 
-        // Get employment history from audit logs (position, department, salary changes)
+        // Get employment history from unified audit logs (position, department, salary changes)
         $historyFields = ['position_id', 'department_id', 'salary', 'employee_type', 'employment_status'];
-        $employmentHistory = EmployeeAuditLog::where('employee_id', $employee->id)
-            ->whereIn('field_changed', $historyFields)
-            ->orderBy('action_date', 'desc')
+        $employmentHistory = AuditLog::with('user:id,name')
+            ->where('module', 'employees')
+            ->where('entity_type', 'Employee')
+            ->where('entity_id', $employee->id)
+            ->where('action', 'updated')
+            ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($log) {
+            ->map(function ($log) use ($historyFields) {
                 $fieldLabels = [
                     'position_id' => 'Position',
                     'department_id' => 'Department/Office',
@@ -1514,31 +1504,56 @@ class EmployeeController extends Controller
                     'employment_status' => 'Employment Status',
                 ];
                 
-                // For position and department, try to get the actual names
-                $oldValue = $log->old_value;
-                $newValue = $log->new_value;
+                $oldValues = $log->old_values ?? [];
+                $newValues = $log->new_values ?? [];
                 
-                if ($log->field_changed === 'position_id') {
-                    // For position_id changes, the audit log already contains position names
-                    // Handle null values and clean up empty strings
-                    if ($oldValue === null || trim($oldValue) === '') {
+                // Find which field was changed by checking old_values and new_values
+                $fieldChanged = null;
+                foreach ($historyFields as $field) {
+                    if (isset($oldValues[$field]) || isset($newValues[$field])) {
+                        $fieldChanged = $field;
+                        break;
+                    }
+                }
+                
+                // If no field found in values, try to extract from description
+                if (!$fieldChanged) {
+                    $description = strtolower($log->description ?? '');
+                    foreach ($historyFields as $field) {
+                        $fieldName = str_replace('_', ' ', $field);
+                        if (str_contains($description, $fieldName) || str_contains($description, ucwords($fieldName))) {
+                            $fieldChanged = $field;
+                            break;
+                        }
+                    }
+                }
+                
+                // Skip if this log doesn't relate to employment history fields
+                if (!$fieldChanged) {
+                    return null;
+                }
+                
+                $oldValue = $oldValues[$fieldChanged] ?? null;
+                $newValue = $newValues[$fieldChanged] ?? null;
+                
+                // For position and department, try to get the actual names
+                if ($fieldChanged === 'position_id') {
+                    if ($oldValue === null || (is_string($oldValue) && trim($oldValue) === '')) {
                         $oldValue = 'Unknown Position';
                     } elseif (is_numeric($oldValue)) {
-                        // If it's numeric, it might be an old format ID - try to resolve it
                         $oldPos = Position::withTrashed()->find((int) $oldValue);
                         $oldValue = $oldPos ? (trim($oldPos->pos_name ?? $oldPos->name ?? '') ?: 'Unknown Position') : 'Unknown Position';
                     }
-
-                    if ($newValue === null || trim($newValue) === '') {
+                    
+                    if ($newValue === null || (is_string($newValue) && trim($newValue) === '')) {
                         $newValue = 'Unknown Position';
                     } elseif (is_numeric($newValue)) {
-                        // If it's numeric, it might be an old format ID - try to resolve it
                         $newPos = Position::withTrashed()->find((int) $newValue);
                         $newValue = $newPos ? (trim($newPos->pos_name ?? $newPos->name ?? '') ?: 'Unknown Position') : 'Unknown Position';
                     }
                 }
                 
-                if ($log->field_changed === 'department_id') {
+                if ($fieldChanged === 'department_id') {
                     if ($oldValue) {
                         $oldDept = Department::withTrashed()->find($oldValue);
                         $oldValue = $oldDept ? ($oldDept->faculty_name ?? $oldDept->name ?? 'Unknown') : 'Unknown';
@@ -1549,21 +1564,24 @@ class EmployeeController extends Controller
                     }
                 }
                 
-                if ($log->field_changed === 'salary') {
+                if ($fieldChanged === 'salary') {
                     $oldValue = $oldValue ? '₱' . number_format((float)$oldValue, 2) : null;
                     $newValue = $newValue ? '₱' . number_format((float)$newValue, 2) : null;
                 }
                 
                 return [
-                    'id' => $log->record_id,
-                    'field' => $fieldLabels[$log->field_changed] ?? $log->field_changed,
-                    'field_key' => $log->field_changed,
+                    'id' => $log->id,
+                    'field' => $fieldLabels[$fieldChanged] ?? $fieldChanged,
+                    'field_key' => $fieldChanged,
                     'old_value' => $oldValue,
                     'new_value' => $newValue,
-                    'action_date' => $log->action_date ? $log->action_date->format('Y-m-d H:i:s') : null,
-                    'performed_by' => $log->performed_by,
+                    'action_date' => $log->created_at ? $log->created_at->format('Y-m-d H:i:s') : null,
+                    'performed_by' => $log->user ? $log->user->name : 'System',
                 ];
-            })->toArray();
+            })
+            ->filter() // Remove null entries
+            ->values()
+            ->toArray();
 
         return Inertia::render('employees/Profile', [
             'employee' => $employeeData,
@@ -1595,8 +1613,22 @@ class EmployeeController extends Controller
             'otherInformation',
         ]);
 
+        // Get faculty_id from department if it exists
+        $facultyId = null;
+        if ($employee->department && $employee->department->faculty_id) {
+            $facultyId = $employee->department->faculty_id;
+        }
+        
+        // Determine organization_type based on department type
+        $organizationType = null;
+        if ($employee->department) {
+            $organizationType = $employee->department->type === 'administrative' ? 'administrative' : 'academic';
+        }
+
         $employeeData = [
             ...$employee->toArray(),
+            'faculty_id' => $facultyId,
+            'organization_type' => $organizationType,
             'family_background' => $employee->familyBackground->isEmpty() ? [
                 [ 'relation' => 'Father', 'surname' => '', 'first_name' => '', 'middle_name' => '', 'name_extension' => '', 'occupation' => '', 'employer' => '', 'business_address' => '', 'telephone_no' => '' ],
                 [ 'relation' => 'Mother', 'surname' => '', 'first_name' => '', 'middle_name' => '', 'name_extension' => '', 'occupation' => '', 'employer' => '', 'business_address' => '', 'telephone_no' => '' ]
@@ -1716,7 +1748,11 @@ class EmployeeController extends Controller
                 unset($changes['position_id']);
             }
             
-            // Log each field change (position_id is excluded since it's logged separately)
+            // Collect all changes for a single audit log entry
+            $oldValues = [];
+            $newValues = [];
+            $changeDescriptions = [];
+            
             foreach ($changes as $field => $change) {
                 try {
                     $oldValue = $change['old'];
@@ -1732,31 +1768,45 @@ class EmployeeController extends Controller
                             $newDept = Department::find($newValue);
                             $newValue = $newDept ? $newDept->faculty_name : $newValue;
                         }
-                    } elseif ($field === 'position_id') {
-                        if ($oldValue) {
-                            $oldPos = Position::find($oldValue);
-                            $oldValue = $oldPos ? (trim($oldPos->pos_name ?? $oldPos->name ?? '') ?: 'Unknown Position') : $oldValue;
-                        }
-                        if ($newValue) {
-                            $newPos = Position::find($newValue);
-                            $newValue = $newPos ? (trim($newPos->pos_name ?? $newPos->name ?? '') ?: 'Unknown Position') : $newValue;
-                        }
                     }
                     
-                    EmployeeAuditLog::create([
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    // Format old and new values for display
+                    $oldValueFormatted = is_array($oldValue) ? implode(', ', $oldValue) : (string)($oldValue ?? '');
+                    $newValueFormatted = is_array($newValue) ? implode(', ', $newValue) : (string)($newValue ?? '');
+                    
+                    $oldValues[$field] = $change['old'];
+                    $newValues[$field] = $change['new'];
+                    $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+                } catch (\Exception $e) {
+                    // Log error but don't fail the transaction
+                    Log::error('Failed to process field change: ' . $e->getMessage(), [
                         'employee_id' => $employee->id,
-                        'action_type' => 'UPDATE',
-                        'field_changed' => $field,
-                        'old_value' => $oldValue,
-                        'new_value' => $newValue,
-                        'action_date' => now(),
-                        'performed_by' => auth()->user()?->name ?? 'System',
+                        'field' => $field,
+                        'error' => $e->getTraceAsString()
                     ]);
+                }
+            }
+            
+            // Create a single audit log entry if there are any changes
+            if (!empty($oldValues) && !empty($newValues)) {
+                try {
+                    $description = implode('; ', $changeDescriptions);
+                    app(AuditLogService::class)->logUpdated(
+                        'employees',
+                        'Employee',
+                        $employee->id,
+                        $description,
+                        $oldValues,
+                        $newValues,
+                        $employee
+                    );
                 } catch (\Exception $e) {
                     // Log error but don't fail the transaction
                     Log::error('Failed to create audit log: ' . $e->getMessage(), [
                         'employee_id' => $employee->id,
-                        'field' => $field,
                         'error' => $e->getTraceAsString()
                     ]);
                 }
@@ -1810,16 +1860,15 @@ class EmployeeController extends Controller
         $employeeName = $this->getEmployeeFullName($employee);
         
         DB::transaction(function () use ($employee, $employeeId, $employeeName) {
-            // Log employee soft deletion - simple text message
-            EmployeeAuditLog::create([
-                'employee_id' => $employeeId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Soft Deleted: {$employeeName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            // Log employee soft deletion
+            app(AuditLogService::class)->logDeleted(
+                'employees',
+                'Employee',
+                $employeeId,
+                "Record was marked inactive and hidden from normal views.",
+                null,
+                $employee
+            );
             
             // Soft delete the employee (sets deleted_at timestamp)
             $employee->delete();
@@ -1846,15 +1895,13 @@ class EmployeeController extends Controller
         
         DB::transaction(function () use ($employee, $employeeId, $deletedAt) {
             // Log the restoration BEFORE restoring (to capture the deleted state)
-            EmployeeAuditLog::create([
-                'employee_id' => $employeeId,
-                'action_type' => 'UPDATE',
-                'field_changed' => 'restored',
-                'old_value' => ['deleted_at' => $deletedAt ? $deletedAt->toDateTimeString() : null],
-                'new_value' => ['deleted_at' => null],
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logRestored(
+                'employees',
+                'Employee',
+                $employeeId,
+                "Record was restored and returned to active use.",
+                $employee
+            );
             
             // Restore the employee
             $employee->restore();
@@ -1877,16 +1924,15 @@ class EmployeeController extends Controller
         $employeeName = $this->getEmployeeFullName($employee);
         
         DB::transaction(function () use ($employee, $employeeId, $employeeName) {
-            // Log permanent deletion - simple text message
-            EmployeeAuditLog::create([
-                'employee_id' => $employeeId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Permanently Deleted: {$employeeName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            // Log permanent deletion
+            app(AuditLogService::class)->logPermanentlyDeleted(
+                'employees',
+                'Employee',
+                $employeeId,
+                "Record was permanently removed and cannot be recovered.",
+                null,
+                $employee
+            );
             
             // Temporarily disable foreign key checks to allow permanent deletion
             // while preserving the audit log
@@ -2500,16 +2546,18 @@ class EmployeeController extends Controller
             $actionType = $oldPositionId ? 'UPDATE' : 'CREATE';
             $fieldChanged = 'position_id';
             
-            // Log in simple format: just position names (no redundant details)
-            EmployeeAuditLog::create([
-                'employee_id' => $employee->id,
-                'action_type' => $actionType,
-                'field_changed' => $fieldChanged,
-                'old_value' => $oldPosition ? (trim($oldPosition->pos_name ?? $oldPosition->name ?? '') ?: 'Unknown Position') : null,
-                'new_value' => $newPosition ? (trim($newPosition->pos_name ?? $newPosition->name ?? '') ?: 'Unknown Position') : null,
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            // Log position assignment change
+            $oldPosName = $oldPosition ? (trim($oldPosition->pos_name ?? $oldPosition->name ?? '') ?: 'Unknown Position') : null;
+            $newPosName = $newPosition ? (trim($newPosition->pos_name ?? $newPosition->name ?? '') ?: 'Unknown Position') : null;
+            app(AuditLogService::class)->logUpdated(
+                'employees',
+                'Employee',
+                $employee->id,
+                "Updated Position Assignment",
+                ['position_id' => $oldPosName],
+                ['position_id' => $newPosName],
+                $employee
+            );
         } catch (\Exception $e) {
             \Log::error('Failed to log position assignment', [
                 'employee_id' => $employee->id,

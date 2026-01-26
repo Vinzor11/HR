@@ -556,7 +556,7 @@ export default function Dashboard() {
                     </div>
                 )}
 
-                {/* Request Type Stats (for Dynamic Builder) */}
+                {/* Request Type Stats (for Request Builder) */}
                 {props.request_type_stats && props.request_type_stats.length > 0 && (
                     <Card className="border-border">
                         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 md:px-6 pt-3 md:pt-6 pb-2 md:pb-4">

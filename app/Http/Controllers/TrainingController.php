@@ -11,6 +11,7 @@ use App\Models\RequestSubmission;
 use App\Models\RequestType;
 use App\Models\Training;
 use App\Models\TrainingApplication;
+use App\Services\AuditLogService;
 use App\Services\TrainingRequestBuilderService;
 use App\Services\TrainingEligibilityService;
 use App\Services\EmployeeScopeService;
@@ -39,7 +40,10 @@ class TrainingController extends Controller
      */
     private function generateReferenceNumber(Training $training): string
     {
-        $dateStr = $training->date_from ? $training->date_from->format('Ymd') : date('Ymd');
+        // date_from is already a Carbon instance due to 'date' cast in model
+        /** @var \Carbon\Carbon|null $dateFrom */
+        $dateFrom = $training->date_from;
+        $dateStr = $dateFrom ? $dateFrom->format('Ymd') : date('Ymd');
         $baseRef = 'TRG-' . str_pad($training->training_id, 6, '0', STR_PAD_LEFT) . '-' . $dateStr;
         
         // Check if reference number already exists (shouldn't happen, but just in case)
@@ -202,6 +206,16 @@ class TrainingController extends Controller
         $training->allowedDepartments()->sync($departmentIds);
         $training->allowedPositions()->sync($positionIds);
 
+        // Log training creation
+        app(AuditLogService::class)->logCreated(
+            'trainings',
+            'Training',
+            (string)$training->training_id,
+            "Created a New Training: {$training->training_title}",
+            null,
+            $training
+        );
+
         if ($training->requires_approval && !$training->request_type_id && $request->user()) {
             $this->requestBuilderService->createRequestTypeForTraining($training, $request->user());
         }
@@ -228,11 +242,203 @@ class TrainingController extends Controller
             $trainingData['reference_number'] = $this->generateReferenceNumber($training);
         }
         
+        // Get original values before update - refresh to ensure we have latest data
+        $training->refresh();
+        $original = $training->getOriginal();
+        
+        // Get current relationships BEFORE sync
+        $oldFacultyIds = $training->allowedFaculties()->pluck('faculties.id')->toArray();
+        $oldDepartmentIds = $training->allowedDepartments()->pluck('departments.id')->toArray();
+        $oldPositionIds = $training->allowedPositions()->pluck('positions.id')->toArray();
+        
         $training->update($trainingData);
         $training->refresh(); // Refresh to get updated request_type_id value
         $training->allowedFaculties()->sync($facultyIds);
         $training->allowedDepartments()->sync($departmentIds);
         $training->allowedPositions()->sync($positionIds);
+        
+        // Refresh to get updated relationships
+        $training->refresh();
+        $training->load(['allowedFaculties', 'allowedDepartments', 'allowedPositions']);
+
+        // Collect all changes for a single audit log entry
+        $oldValues = [];
+        $newValues = [];
+        $changeDescriptions = [];
+        
+        // Track all fields that should be logged (from fillable + request data)
+        $fieldsToTrack = [
+            'training_title',
+            'training_category_id',
+            'date_from',
+            'date_to',
+            'hours',
+            'facilitator',
+            'venue',
+            'capacity',
+            'remarks',
+            'requires_approval',
+            'request_type_id',
+            'reference_number',
+        ];
+        
+        foreach ($fieldsToTrack as $field) {
+            // Skip if field is not being updated
+            if (!array_key_exists($field, $trainingData)) {
+                continue;
+            }
+            
+            $newValue = $trainingData[$field];
+            $oldValue = $original[$field] ?? null;
+            
+            // Normalize values for comparison
+            $normalizedOld = $this->normalizeValue($oldValue);
+            $normalizedNew = $this->normalizeValue($newValue);
+            
+            // Only log if values actually changed
+            if ($normalizedOld !== $normalizedNew) {
+                $fieldName = str_replace('_', ' ', $field);
+                $fieldName = ucwords($fieldName);
+                
+                // Format date fields to YYYY-MM-DD format for audit logs
+                $formattedOldValue = $this->formatDateForAudit($field, $oldValue);
+                $formattedNewValue = $this->formatDateForAudit($field, $newValue);
+                
+                // Format old and new values for display
+                $oldValueFormatted = is_array($formattedOldValue) ? implode(', ', $formattedOldValue) : (string)($formattedOldValue ?? '');
+                $newValueFormatted = is_array($formattedNewValue) ? implode(', ', $formattedNewValue) : (string)($formattedNewValue ?? '');
+                
+                $oldValues[$field] = $formattedOldValue;
+                $newValues[$field] = $formattedNewValue;
+                $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+            }
+        }
+        
+        // Also track changes to relationships (faculties, departments, positions)
+        $newFacultyIds = $training->allowedFaculties->pluck('id')->toArray();
+        $newDepartmentIds = $training->allowedDepartments->pluck('id')->toArray();
+        $newPositionIds = $training->allowedPositions->pluck('id')->toArray();
+        
+        // Log faculty changes - show added/removed
+        if ($oldFacultyIds !== $newFacultyIds) {
+            try {
+                // Get faculty names
+                $oldFacultyNames = !empty($oldFacultyIds) 
+                    ? Faculty::whereIn('id', $oldFacultyIds)->pluck('name')->toArray()
+                    : [];
+                $newFacultyNames = !empty($newFacultyIds)
+                    ? Faculty::whereIn('id', $newFacultyIds)->pluck('name')->toArray()
+                    : [];
+                
+                // Calculate added and removed
+                $added = array_diff($newFacultyNames, $oldFacultyNames);
+                $removed = array_diff($oldFacultyNames, $newFacultyNames);
+                
+                $changeParts = [];
+                if (!empty($added)) {
+                    $changeParts[] = "Added: " . implode(', ', $added);
+                }
+                if (!empty($removed)) {
+                    $changeParts[] = "Removed: " . implode(', ', $removed);
+                }
+                
+                if (!empty($changeParts)) {
+                    $oldValues['allowed_faculties'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $newValues['allowed_faculties'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $changeDescriptions[] = "Allowed Faculties: " . implode('; ', $changeParts);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Failed to process faculty changes: ' . $e->getMessage());
+            }
+        }
+        
+        // Log department changes - show added/removed
+        if ($oldDepartmentIds !== $newDepartmentIds) {
+            try {
+                // Get department names
+                $oldDepartmentNames = !empty($oldDepartmentIds)
+                    ? Department::whereIn('id', $oldDepartmentIds)->pluck('faculty_name')->toArray()
+                    : [];
+                $newDepartmentNames = !empty($newDepartmentIds)
+                    ? Department::whereIn('id', $newDepartmentIds)->pluck('faculty_name')->toArray()
+                    : [];
+                
+                // Calculate added and removed
+                $added = array_diff($newDepartmentNames, $oldDepartmentNames);
+                $removed = array_diff($oldDepartmentNames, $newDepartmentNames);
+                
+                $changeParts = [];
+                if (!empty($added)) {
+                    $changeParts[] = "Added: " . implode(', ', $added);
+                }
+                if (!empty($removed)) {
+                    $changeParts[] = "Removed: " . implode(', ', $removed);
+                }
+                
+                if (!empty($changeParts)) {
+                    $oldValues['allowed_departments'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $newValues['allowed_departments'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $changeDescriptions[] = "Allowed Departments: " . implode('; ', $changeParts);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Failed to process department changes: ' . $e->getMessage());
+            }
+        }
+        
+        // Log position changes - show added/removed
+        if ($oldPositionIds !== $newPositionIds) {
+            try {
+                // Get position names
+                $oldPositionNames = !empty($oldPositionIds)
+                    ? Position::whereIn('id', $oldPositionIds)->pluck('pos_name')->toArray()
+                    : [];
+                $newPositionNames = !empty($newPositionIds)
+                    ? Position::whereIn('id', $newPositionIds)->pluck('pos_name')->toArray()
+                    : [];
+                
+                // Calculate added and removed
+                $added = array_diff($newPositionNames, $oldPositionNames);
+                $removed = array_diff($oldPositionNames, $newPositionNames);
+                
+                $changeParts = [];
+                if (!empty($added)) {
+                    $changeParts[] = "Added: " . implode(', ', $added);
+                }
+                if (!empty($removed)) {
+                    $changeParts[] = "Removed: " . implode(', ', $removed);
+                }
+                
+                if (!empty($changeParts)) {
+                    $oldValues['allowed_positions'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $newValues['allowed_positions'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $changeDescriptions[] = "Allowed Positions: " . implode('; ', $changeParts);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Failed to process position changes: ' . $e->getMessage());
+            }
+        }
+        
+        // Create a single audit log entry if there are any changes
+        if (!empty($oldValues) && !empty($newValues)) {
+            try {
+                $description = implode('; ', $changeDescriptions);
+                app(AuditLogService::class)->logUpdated(
+                    'trainings',
+                    'Training',
+                    (string)$training->training_id,
+                    $description,
+                    $oldValues,
+                    $newValues,
+                    $training
+                );
+            } catch (\Exception $e) {
+                // Log error but don't fail the transaction
+                \Log::error('Failed to create audit log: ' . $e->getMessage(), [
+                    'training_id' => $training->training_id,
+                    'error' => $e->getTraceAsString()
+                ]);
+            }
+        }
 
         if ($training->requires_approval && !$training->request_type_id && $request->user()) {
             $this->requestBuilderService->createRequestTypeForTraining($training, $request->user());
@@ -245,6 +451,16 @@ class TrainingController extends Controller
     {
         abort_unless($request->user()->can('delete-training'), 403, 'Unauthorized action.');
         
+        // Log training soft deletion
+        app(AuditLogService::class)->logDeleted(
+            'trainings',
+            'Training',
+            (string)$training->training_id,
+            "Record was marked inactive and hidden from normal views.",
+            null,
+            $training
+        );
+
         $training->delete();
 
         return redirect()->route('trainings.index')->with('success', 'Training deleted successfully!');
@@ -256,12 +472,21 @@ class TrainingController extends Controller
     public function restore($id)
     {
         abort_unless(request()->user()->can('restore-training'), 403, 'Unauthorized action.');
-
+        
         $training = Training::withTrashed()->findOrFail($id);
         
         if (!$training->trashed()) {
             return redirect()->route('trainings.index')->with('error', 'Training is not deleted.');
         }
+        
+        // Log training restoration
+        app(AuditLogService::class)->logRestored(
+            'trainings',
+            'Training',
+            (string)$training->training_id,
+            "Record was restored and returned to active use.",
+            $training
+        );
 
         $training->restore();
 
@@ -276,6 +501,17 @@ class TrainingController extends Controller
         abort_unless(request()->user()->can('force-delete-training'), 403, 'Unauthorized action.');
 
         $training = Training::withTrashed()->findOrFail($id);
+        $trainingTitle = $training->training_title ?? 'Training';
+        
+        // Log permanent deletion before force delete
+        app(AuditLogService::class)->logPermanentlyDeleted(
+            'trainings',
+            'Training',
+            (string)$training->training_id,
+            "Record was permanently removed and cannot be recovered.",
+            null,
+            $training
+        );
         
         $training->forceDelete();
 
@@ -312,11 +548,14 @@ class TrainingController extends Controller
                 $availableSpots = $this->eligibilityService->getAvailableSpots($training);
                 $hasCapacity = $this->eligibilityService->hasCapacity($training);
 
+                $dateFromFormatted = $training->date_from ? ($training->date_from instanceof \Carbon\Carbon ? $training->date_from->toDateString() : \Carbon\Carbon::parse($training->date_from)->toDateString()) : null;
+                $dateToFormatted = $training->date_to ? ($training->date_to instanceof \Carbon\Carbon ? $training->date_to->toDateString() : \Carbon\Carbon::parse($training->date_to)->toDateString()) : null;
+
                 return [
                     'training_id' => $training->training_id,
                     'training_title' => $training->training_title,
-                    'date_from' => $training->date_from?->toDateString(),
-                    'date_to' => $training->date_to?->toDateString(),
+                    'date_from' => $dateFromFormatted,
+                    'date_to' => $dateToFormatted,
                     'hours' => $training->hours,
                     'facilitator' => $training->facilitator,
                     'venue' => $training->venue,
@@ -513,10 +752,16 @@ class TrainingController extends Controller
                     $value = trim("{$employee->first_name} {$employee->surname}");
                     break;
                 case 'date_from':
-                    $value = $training->date_from?->toDateString();
+                    // date_from is already a Carbon instance due to 'date' cast in model
+                    /** @var \Carbon\Carbon|null $dateFrom */
+                    $dateFrom = $training->date_from;
+                    $value = $dateFrom ? $dateFrom->toDateString() : null;
                     break;
                 case 'date_to':
-                    $value = $training->date_to?->toDateString();
+                    // date_to is already a Carbon instance due to 'date' cast in model
+                    /** @var \Carbon\Carbon|null $dateTo */
+                    $dateTo = $training->date_to;
+                    $value = $dateTo ? $dateTo->toDateString() : null;
                     break;
                 case 'hours':
                     $value = $training->hours;
@@ -773,7 +1018,8 @@ class TrainingController extends Controller
                 ->when($statusFilter === 'Ongoing' || $statusFilter === 'Completed', function ($collection) use ($statusFilter) {
                     // Filter by dynamic status after mapping
                     return $collection->filter(function ($entry) use ($statusFilter) {
-                        return $entry['status'] === $statusFilter;
+                        $status = is_array($entry) ? ($entry['status'] ?? null) : ($entry->status ?? null);
+                        return $status === $statusFilter;
                     });
                 })
             : collect();
@@ -787,6 +1033,72 @@ class TrainingController extends Controller
                 'date_to' => $dateTo,
             ],
         ]);
+    }
+
+    /**
+     * Format date values for audit logs (ensures YYYY-MM-DD format)
+     */
+    protected function formatDateForAudit(string $field, $value)
+    {
+        // Check if this is a date field
+        $dateFields = ['date_from', 'date_to'];
+        if (!in_array($field, $dateFields)) {
+            return $value;
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        try {
+            // If it's already a Carbon instance
+            if ($value instanceof \Carbon\Carbon) {
+                return $value->toDateString();
+            }
+
+            // If it's a DateTimeInterface
+            if ($value instanceof \DateTimeInterface) {
+                return \Carbon\Carbon::instance($value)->toDateString();
+            }
+
+            // If it's a string, try to parse it
+            if (is_string($value)) {
+                // If already in YYYY-MM-DD format, return as is
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                    return $value;
+                }
+
+                // Try to parse and format (handles ISO format strings)
+                $carbon = \Carbon\Carbon::parse($value);
+                return $carbon->toDateString();
+            }
+        } catch (\Exception $e) {
+            // If parsing fails, return original value
+            return $value;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Normalize value for comparison (handles dates, booleans, nulls, etc.)
+     */
+    protected function normalizeValue($value)
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        
+        if ($value instanceof \DateTime || $value instanceof \Carbon\Carbon) {
+            return $value->format('Y-m-d');
+        }
+        
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+        
+        // Convert to string for comparison to handle numeric differences
+        return (string) $value;
     }
 
     public function overview(Request $request)
@@ -840,6 +1152,9 @@ class TrainingController extends Controller
                 
                 $status = 'Upcoming';
                 if ($dateFrom && $dateTo) {
+                    // date_from and date_to are already Carbon instances due to 'date' cast in model
+                    /** @var \Carbon\Carbon $dateFrom */
+                    /** @var \Carbon\Carbon $dateTo */
                     if ($now->isBefore($dateFrom)) {
                         $status = 'Upcoming';
                     } elseif ($now->isAfter($dateTo)) {
@@ -856,6 +1171,8 @@ class TrainingController extends Controller
                 // Use saved reference number or generate if missing
                 $referenceNumber = $training->reference_number;
                 if (!$referenceNumber) {
+                    // date_from is already a Carbon instance due to 'date' cast in model
+                    /** @var \Carbon\Carbon|null $dateFrom */
                     $dateStr = $dateFrom ? $dateFrom->format('Ymd') : date('Ymd');
                     $referenceNumber = 'TRG-' . str_pad($training->training_id, 6, '0', STR_PAD_LEFT) . '-' . $dateStr;
                     // Save it for future use
@@ -863,11 +1180,18 @@ class TrainingController extends Controller
                     $training->save();
                 }
 
+                // date_from and date_to are already Carbon instances due to 'date' cast in model
+                // Use getRawOriginal to get the raw value, then parse it
+                $dateFromRaw = $training->getRawOriginal('date_from');
+                $dateToRaw = $training->getRawOriginal('date_to');
+                $dateFromFormatted = $dateFromRaw ? (\Carbon\Carbon::parse($dateFromRaw)->toDateString()) : null;
+                $dateToFormatted = $dateToRaw ? (\Carbon\Carbon::parse($dateToRaw)->toDateString()) : null;
+
                 return [
                     'training_id' => $training->training_id,
                     'training_title' => $training->training_title,
-                    'date_from' => $training->date_from?->toDateString(),
-                    'date_to' => $training->date_to?->toDateString(),
+                    'date_from' => $dateFromFormatted,
+                    'date_to' => $dateToFormatted,
                     'venue' => $training->venue,
                     'total_participants' => $participants->count(),
                     'participants' => $participants,

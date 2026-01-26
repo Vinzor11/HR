@@ -115,6 +115,27 @@ const formatDateHeading = (value?: string) => {
     return new Date(value).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+const formatDateToYYYYMMDD = (value?: string | null) => {
+    if (!value) return '';
+    try {
+        const date = new Date(value);
+        if (isNaN(date.getTime())) return value;
+        return date.toISOString().split('T')[0];
+    } catch {
+        return value;
+    }
+};
+
+const formatDateForInput = (value?: string | null) => {
+    if (!value) return '';
+    // If already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+    // Otherwise, try to parse and format
+    return formatDateToYYYYMMDD(value);
+};
+
 const getStatusBadgeClass = (status?: string) => {
     switch (status) {
         case 'Completed':
@@ -149,11 +170,11 @@ export default function TrainingsOverview() {
     const [overviewStatusFilter, setOverviewStatusFilter] = useState(filters?.status || 'all');
     const [activeTab, setActiveTab] = useState('logs');
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
-    const [dateFrom, setDateFrom] = useState<string>(filters?.date_from || '');
-    const [dateTo, setDateTo] = useState<string>(filters?.date_to || '');
+    const [dateFrom, setDateFrom] = useState<string>(formatDateForInput(filters?.date_from));
+    const [dateTo, setDateTo] = useState<string>(formatDateForInput(filters?.date_to));
     const [overviewSearchTerm, setOverviewSearchTerm] = useState(filters?.search || '');
-    const [overviewDateFrom, setOverviewDateFrom] = useState<string>(filters?.date_from || '');
-    const [overviewDateTo, setOverviewDateTo] = useState<string>(filters?.date_to || '');
+    const [overviewDateFrom, setOverviewDateFrom] = useState<string>(formatDateForInput(filters?.date_from));
+    const [overviewDateTo, setOverviewDateTo] = useState<string>(formatDateForInput(filters?.date_to));
 
     const handleStatusFilterChange = (value: string) => {
         setStatusFilter(value);
@@ -259,8 +280,8 @@ export default function TrainingsOverview() {
                     index === 0 ? referenceNumber : '', // Only show reference number in first row
                     index === 0 ? (training.training_title || '') : '', // Only show title in first row
                     index === 0 ? (training.status || '') : '', // Only show status in first row
-                    index === 0 ? (training.date_from || '') : '', // Only show dates in first row
-                    index === 0 ? (training.date_to || '') : '',
+                    index === 0 ? formatDateToYYYYMMDD(training.date_from) : '', // Only show dates in first row
+                    index === 0 ? formatDateToYYYYMMDD(training.date_to) : '',
                     index === 0 ? (training.venue || '') : '',
                     index === 0 ? String(training.total_participants || 0) : '',
                     participant.name || '',
@@ -274,8 +295,8 @@ export default function TrainingsOverview() {
                 referenceNumber,
                 training.training_title || '',
                 training.status || '',
-                training.date_from || '',
-                training.date_to || '',
+                formatDateToYYYYMMDD(training.date_from),
+                formatDateToYYYYMMDD(training.date_to),
                 training.venue || '',
                 String(training.total_participants || 0),
                 '',
@@ -391,8 +412,8 @@ export default function TrainingsOverview() {
             entry.employee_position || '',
             entry.status || '',
             entry.attendance || '',
-            entry.date_from || '',
-            entry.date_to || '',
+            formatDateToYYYYMMDD(entry.date_from),
+            formatDateToYYYYMMDD(entry.date_to),
             entry.hours || '',
             entry.venue || '',
             entry.facilitator || '',
@@ -760,7 +781,7 @@ export default function TrainingsOverview() {
                                                                     </span>
                                                                     <span className="flex items-center gap-1">
                                                                         <CalendarDays className="h-4 w-4" />
-                                                                        {training.date_from} - {training.date_to}
+                                                                        {formatDate(training.date_from)} - {formatDate(training.date_to)}
                                                                     </span>
                                                                 </div>
                                                                 {training.venue && (

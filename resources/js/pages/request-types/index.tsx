@@ -48,7 +48,7 @@ interface RequestTypeIndexProps {
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Dynamic Request Builder',
+        title: 'Request Builder',
         href: '/request-types',
     },
 ];
@@ -155,14 +155,14 @@ export default function RequestTypesIndex({ requestTypes, filters, metrics }: Re
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dynamic Request Builder" />
+            <Head title="Request Builder" />
             <CustomToast />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4 pb-20 sm:pb-4">
                 <div className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dynamic Request Builder</h1>
+                        <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Request Builder</h1>
                         <p className="text-xs sm:text-sm text-muted-foreground">
                             Create custom HR request types, approval workflows, and fulfillment phases without writing code.
                         </p>

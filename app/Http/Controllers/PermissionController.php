@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\PermissionRequest;
 use App\Models\Permission;
+use App\Services\AuditLogService;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
@@ -61,6 +62,16 @@ class PermissionController extends Controller
         ]);
 
         if ($permission) {
+            // Log permission creation
+            app(AuditLogService::class)->logCreated(
+                'permissions',
+                'Permission',
+                (string)$permission->id,
+                "Created a New Permission: {$permission->label}",
+                null,
+                $permission
+            );
+
             return redirect()->route('permissions.index')->with('success', 'Permission created successfully!');
         }
         return redirect()->back()->with('error', 'Unable to create Permission. Please try again!');
@@ -90,12 +101,52 @@ class PermissionController extends Controller
         abort_unless($request->user()->can('edit-permission'), 403, 'Unauthorized action.');
         
         if ($permission) {
+            // Get original values before update
+            $original = $permission->getOriginal();
+            
             $permission->module      = $request->module;
             $permission->label       = $request->label;
             $permission->name        = Str::slug($request->label);
             $permission->description = $request->description;
 
             $permission->save();
+
+            // Collect all changes for a single audit log entry
+            $oldValues = [];
+            $newValues = [];
+            $changeDescriptions = [];
+            
+            foreach (['module', 'label', 'name', 'description'] as $field) {
+                $oldValue = $original[$field] ?? null;
+                $newValue = $permission->$field;
+                
+                if ($oldValue !== $newValue) {
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    $oldValueFormatted = is_array($oldValue) ? implode(', ', $oldValue) : (string)($oldValue ?? '');
+                    $newValueFormatted = is_array($newValue) ? implode(', ', $newValue) : (string)($newValue ?? '');
+                    
+                    $oldValues[$field] = $oldValue;
+                    $newValues[$field] = $newValue;
+                    $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+                }
+            }
+
+            // Create a single audit log entry if there are any changes
+            if (!empty($oldValues) && !empty($newValues)) {
+                $description = implode('; ', $changeDescriptions);
+                app(AuditLogService::class)->logUpdated(
+                    'permissions',
+                    'Permission',
+                    (string)$permission->id,
+                    $description,
+                    $oldValues,
+                    $newValues,
+                    $permission
+                );
+            }
+
             return redirect()->route('permissions.index')->with('success', 'Permission updated successfully!');
         }
         return redirect()->back()->with('error', 'Unable to update Permission. Please try again!');
@@ -109,6 +160,16 @@ class PermissionController extends Controller
         abort_unless($request->user()->can('delete-permission'), 403, 'Unauthorized action.');
         
         if ($permission) {
+            // Log permission deletion
+            app(AuditLogService::class)->logDeleted(
+                'permissions',
+                'Permission',
+                (string)$permission->id,
+                "Record was marked inactive and hidden from normal views.",
+                null,
+                $permission
+            );
+
             $permission->delete();
             return redirect()->route('permissions.index')->with('success', 'Permission deleted successfully!');
         }

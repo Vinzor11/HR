@@ -108,17 +108,33 @@ interface CalendarPageProps {
     selectedDepartmentId?: number;
 }
 
+const formatDateForInput = (value?: string | null) => {
+    if (!value) return '';
+    // If already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+    // Otherwise, try to parse and format
+    try {
+        const date = new Date(value);
+        if (isNaN(date.getTime())) return value;
+        return date.toISOString().split('T')[0];
+    } catch {
+        return value;
+    }
+};
+
 export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes = [], selectedEmployeeId, selectedDepartmentId }: CalendarPageProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
     const [selectedLeaveType, setSelectedLeaveType] = useState<string>('all');
-    const [localDateFrom, setLocalDateFrom] = useState<string>(dateFrom);
-    const [localDateTo, setLocalDateTo] = useState<string>(dateTo);
+    const [localDateFrom, setLocalDateFrom] = useState<string>(formatDateForInput(dateFrom));
+    const [localDateTo, setLocalDateTo] = useState<string>(formatDateForInput(dateTo));
 
     // Sync local state with props when dates change from backend
     useEffect(() => {
-        setLocalDateFrom(dateFrom);
-        setLocalDateTo(dateTo);
+        setLocalDateFrom(formatDateForInput(dateFrom));
+        setLocalDateTo(formatDateForInput(dateTo));
     }, [dateFrom, dateTo]);
 
     const handleDateFromChange = (newDate: string) => {

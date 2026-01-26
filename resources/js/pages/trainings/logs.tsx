@@ -81,6 +81,22 @@ const formatDateHeading = (value?: string) => {
     return new Date(value).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+const formatDateForInput = (value?: string | null) => {
+    if (!value) return '';
+    // If already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+    // Otherwise, try to parse and format
+    try {
+        const date = new Date(value);
+        if (isNaN(date.getTime())) return value;
+        return date.toISOString().split('T')[0];
+    } catch {
+        return value;
+    }
+};
+
 const getStatusBadgeClass = (status?: string) => {
     switch (status) {
         case 'Completed':
@@ -118,8 +134,8 @@ const getAttendanceBadgeClass = (attendance?: string) => {
 export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
     const [statusFilter, setStatusFilter] = useState(filters?.status || 'all');
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
-    const [dateFrom, setDateFrom] = useState(filters?.date_from || '');
-    const [dateTo, setDateTo] = useState(filters?.date_to || '');
+    const [dateFrom, setDateFrom] = useState(formatDateForInput(filters?.date_from));
+    const [dateTo, setDateTo] = useState(formatDateForInput(filters?.date_to));
 
     const handleStatusFilterChange = (value: string) => {
         setStatusFilter(value);

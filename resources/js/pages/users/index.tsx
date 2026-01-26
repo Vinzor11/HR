@@ -9,12 +9,14 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus, Download } from 'lucide-react';
+import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus, Download, AlertCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { hasPermission } from '@/utils/authorization';
 import { DetailDrawer } from '@/components/DetailDrawer';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -520,7 +522,7 @@ export default function Index({ users, filters }: IndexProps) {
 
             <PageLayout
                 title="Users"
-                subtitle="Manage user accounts and assign roles."
+                subtitle={showDeleted ? "Viewing deleted user accounts. You can restore or permanently delete them." : "Manage user accounts and assign roles."}
                 primaryAction={
                     hasPermission(permissions, 'create-user') ? {
                         label: 'Add User',
@@ -662,6 +664,16 @@ export default function Index({ users, filters }: IndexProps) {
                     </div>
                 }
             >
+                {/* Status Banner - Only show when viewing deleted */}
+                {/* Subtle Status Indicator */}
+                {showDeleted && (
+                    <div className="mb-3 px-3 md:px-6">
+                        <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                            <Archive className="h-4 w-4" />
+                            <span>Viewing deleted users</span>
+                        </div>
+                    </div>
+                )}
                 <EnterpriseEmployeeTable
                     columns={UsersTableConfig.columns}
                     actions={UsersTableConfig.actions}

@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\DepartmentRequest;
 use App\Models\Department;
 use App\Models\Faculty;
-use App\Models\OrganizationalAuditLog;
+use App\Services\AuditLogService;
 use App\Services\PositionAutoCreationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -101,16 +101,15 @@ class DepartmentController extends Controller
             $unitLabel = $department->type === 'administrative' ? 'Office' : 'Department';
             
             // Log creation
-            OrganizationalAuditLog::create([
-                'unit_type' => $unitType,
-                'unit_id' => $department->id,
-                'action_type' => 'CREATE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Created a New {$unitLabel} Record: {$department->name}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            $entityType = $unitType === 'office' ? 'Office' : 'Department';
+            app(AuditLogService::class)->logCreated(
+                'departments',
+                $entityType,
+                (string)$department->id,
+                "Created a New {$unitLabel}: {$department->name}",
+                null,
+                $department
+            );
 
             // Automatically create positions for academic departments under a faculty
             if ($department->type === 'academic' && $department->faculty_id) {
@@ -154,8 +153,16 @@ class DepartmentController extends Controller
             $changes = [];
 
             DB::transaction(function () use ($department, $payload, $original, &$changes) {
+                // Fields to exclude from audit logging (derived/computed fields)
+                $excludedFields = ['faculty_code', 'faculty_name'];
+                
                 // Track changes BEFORE updating
                 foreach ($payload as $key => $newValue) {
+                    // Skip excluded fields - these are automatically derived from code/name
+                    if (in_array($key, $excludedFields)) {
+                        continue;
+                    }
+                    
                     $oldValue = $original[$key] ?? null;
                     
                     // Normalize values for comparison
@@ -177,23 +184,45 @@ class DepartmentController extends Controller
                 // Determine unit type based on department type
                 $unitType = $department->type === 'administrative' ? 'office' : 'department';
                 
-                // Log each field change
+                // Collect all changes for a single audit log entry
+                $oldValues = [];
+                $newValues = [];
+                $changeDescriptions = [];
+                $entityType = $unitType === 'office' ? 'Office' : 'Department';
+                
                 foreach ($changes as $field => $change) {
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    // Format old and new values for display
+                    $oldValueFormatted = is_array($change['old']) ? implode(', ', $change['old']) : (string)($change['old'] ?? '');
+                    $newValueFormatted = is_array($change['new']) ? implode(', ', $change['new']) : (string)($change['new'] ?? '');
+                    
+                    $oldValues[$field] = $change['old'];
+                    $newValues[$field] = $change['new'];
+                    $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+                }
+                
+                // Create a single audit log entry if there are any changes
+                if (!empty($oldValues) && !empty($newValues)) {
                     try {
-                        OrganizationalAuditLog::create([
-                            'unit_type' => $unitType,
-                            'unit_id' => $department->id,
-                            'action_type' => 'UPDATE',
-                            'field_changed' => $field,
-                            'old_value' => $change['old'],
-                            'new_value' => $change['new'],
-                            'action_date' => now(),
-                            'performed_by' => auth()->user()?->name ?? 'System',
-                        ]);
+                        $description = implode('; ', $changeDescriptions);
+                        $departmentCode = $department->code ?? '';
+                        $departmentId = (string)$department->id;
+                        $descriptionWithCode = $description . ($departmentCode ? " (ID: {$departmentId}, {$departmentCode})" : " (ID: {$departmentId})");
+                        app(AuditLogService::class)->logUpdated(
+                            'departments',
+                            $entityType,
+                            $departmentId,
+                            $descriptionWithCode,
+                            $oldValues,
+                            $newValues,
+                            $department
+                        );
                     } catch (\Exception $e) {
                         \Log::error('Failed to create audit log: ' . $e->getMessage(), [
                             'department_id' => $department->id,
-                            'field' => $field,
+                            'error' => $e->getTraceAsString()
                         ]);
                     }
                 }
@@ -227,20 +256,20 @@ class DepartmentController extends Controller
 
             $departmentId = $department->id;
             $departmentName = $department->name ?? 'Unknown';
+            $departmentCode = $department->code ?? '';
             $unitType = $department->type === 'administrative' ? 'office' : 'department';
             $unitLabel = $department->type === 'administrative' ? 'Office' : 'Department';
             
             // Log deletion before deleting
-            OrganizationalAuditLog::create([
-                'unit_type' => $unitType,
-                'unit_id' => $departmentId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Soft Deleted: {$departmentName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            $entityType = $unitType === 'office' ? 'Office' : 'Department';
+            app(AuditLogService::class)->logDeleted(
+                'departments',
+                $entityType,
+                (string)$departmentId,
+                "Record was marked inactive and hidden from normal views." . ($departmentCode ? " (ID: {$departmentId}, {$departmentCode})" : " (ID: {$departmentId})"),
+                null,
+                $department
+            );
 
             $department->delete();
             return redirect()
@@ -290,22 +319,21 @@ class DepartmentController extends Controller
         }
 
         $departmentId = $department->id;
+        $departmentCode = $department->code ?? '';
         $deletedAt = $department->deleted_at;
         
         $unitType = $department->type === 'administrative' ? 'office' : 'department';
         
-        DB::transaction(function () use ($department, $departmentId, $deletedAt, $unitType) {
+        DB::transaction(function () use ($department, $departmentId, $unitType, $departmentCode) {
             // Log the restoration BEFORE restoring
-            OrganizationalAuditLog::create([
-                'unit_type' => $unitType,
-                'unit_id' => $departmentId,
-                'action_type' => 'UPDATE',
-                'field_changed' => 'restored',
-                'old_value' => ['deleted_at' => $deletedAt ? $deletedAt->toDateTimeString() : null],
-                'new_value' => ['deleted_at' => null],
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            $entityType = $unitType === 'office' ? 'Office' : 'Department';
+            app(AuditLogService::class)->logRestored(
+                'departments',
+                $entityType,
+                (string)$departmentId,
+                "Record was restored and returned to active use." . ($departmentCode ? " (ID: {$departmentId}, {$departmentCode})" : " (ID: {$departmentId})"),
+                $department
+            );
             
             // Restore the department
             $department->restore();
@@ -326,21 +354,21 @@ class DepartmentController extends Controller
         
         $departmentId = $department->id;
         $departmentName = $department->name ?? 'Unknown';
+        $departmentCode = $department->code ?? '';
         $unitType = $department->type === 'administrative' ? 'office' : 'department';
         $unitLabel = $department->type === 'administrative' ? 'Office' : 'Department';
         
-        DB::transaction(function () use ($department, $departmentId, $departmentName, $unitType, $unitLabel) {
+        DB::transaction(function () use ($department, $departmentId, $departmentName, $unitType, $departmentCode) {
             // Log permanent deletion
-            OrganizationalAuditLog::create([
-                'unit_type' => $unitType,
-                'unit_id' => $departmentId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Permanently Deleted: {$departmentName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            $entityType = $unitType === 'office' ? 'Office' : 'Department';
+            app(AuditLogService::class)->logPermanentlyDeleted(
+                'departments',
+                $entityType,
+                (string)$departmentId,
+                "Record was permanently removed and cannot be recovered." . ($departmentCode ? " (ID: {$departmentId}, {$departmentCode})" : " (ID: {$departmentId})"),
+                null,
+                $department
+            );
             
             // Permanently delete the department
             $department->forceDelete();

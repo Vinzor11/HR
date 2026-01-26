@@ -1032,7 +1032,9 @@ export default function Index() {
             <div className="flex-shrink-0 px-3 md:px-6 pt-4 pb-2 flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-xl md:text-2xl font-semibold text-foreground mb-1">Employee Records</h1>
-                <p className="text-xs md:text-sm text-muted-foreground">Manage employee information and track organizational assignments.</p>
+                <p className="text-xs md:text-sm text-muted-foreground">
+                  {showDeleted ? "Viewing deleted employee records. You can restore or permanently delete them." : "Manage employee information and track organizational assignments."}
+                </p>
               </div>
               {hasPermission(permissions, 'create-employee') && (
                 <Button 
@@ -1423,6 +1425,15 @@ export default function Index() {
 
         {/* Table Container - Auto expand/contract based on data */}
         <div className="flex-1 min-h-0 bg-background p-2 sm:p-4 overflow-y-auto">
+          {/* Subtle Status Indicator */}
+          {showDeleted && (
+            <div className="mb-3 px-3 md:px-6">
+              <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                <Archive className="h-4 w-4" />
+                <span>Viewing deleted employees</span>
+              </div>
+            </div>
+          )}
           <EnterpriseEmployeeTable
             key={`employee-table-${dataVersion}`}
             columns={filteredColumns}

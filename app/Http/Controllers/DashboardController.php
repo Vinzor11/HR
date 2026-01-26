@@ -9,7 +9,6 @@ use App\Models\RequestSubmission;
 use App\Models\RequestType;
 use App\Models\Training;
 use App\Models\User;
-use App\Models\EmployeeAuditLog;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -54,7 +53,7 @@ class DashboardController extends Controller
         // 7. Notifications/Alerts
         $data['notifications'] = $this->getNotifications($user);
 
-        // 8. Request Type Statistics (for Dynamic Builder)
+        // 8. Request Type Statistics (for Request Builder)
         if ($user->can('access-request-types-module')) {
             $data['request_type_stats'] = $this->getRequestTypeStats();
         }
@@ -326,7 +325,7 @@ class DashboardController extends Controller
 
         if ($user->can('access-request-types-module')) {
             $actions[] = [
-                'label' => 'Dynamic Builder',
+                'label' => 'Request Builder',
                 'icon' => 'Wand2',
                 'link' => route('request-types.index'),
                 'color' => 'purple',

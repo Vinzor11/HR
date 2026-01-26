@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\TrainingApplication;
+use App\Models\Concerns\FormatsDates;
 
 class Training extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, FormatsDates;
 
     protected $primaryKey = 'training_id';
 
@@ -29,8 +30,8 @@ class Training extends Model
     ];
 
     protected $casts = [
-        'date_from' => 'date',
-        'date_to' => 'date',
+        'date_from' => 'date:Y-m-d',
+        'date_to' => 'date:Y-m-d',
         'hours' => 'decimal:2',
         'requires_approval' => 'boolean',
     ];
@@ -45,6 +46,7 @@ class Training extends Model
     {
         return $this->attributes[$this->primaryKey] ?? null;
     }
+
 
     public function getRouteKeyName(): string
     {

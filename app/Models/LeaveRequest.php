@@ -16,7 +16,7 @@ use App\Models\User;
  */
 class LeaveRequest extends Model
 {
-    use HasFactory;
+    use HasFactory, \App\Models\Concerns\FormatsDates;
 
     // Location options (6.A)
     public const LOCATION_WITHIN_PH = 'within_philippines';

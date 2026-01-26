@@ -1,0 +1,258 @@
+
+GOVERNMENT‑GRADE UI/UX DESIGN STANDARDS (2026)
+============================================
+
+PURPOSE
+-------
+This document defines a COMPLETE, NON‑NEGOTIABLE UI/UX STANDARD for a production‑ready,
+government‑grade HRMS / ERP system. Following this strictly should result in a 10/10
+UI/UX score by modern (2026) public‑sector software standards.
+
+This applies to:
+- HRMS
+- ERP
+- Request / Workflow systems
+- Admin + Employee portals
+- Government or regulated institutions
+
+------------------------------------------------------------
+1. CORE DESIGN PRINCIPLES (MANDATORY)
+------------------------------------------------------------
+
+1.1 CLARITY OVER BEAUTY
+- Every screen must answer:
+  - What is this page?
+  - What can I do here?
+  - What should I do next?
+- Remove decorative UI that does not serve function.
+
+1.2 ZERO GUESSWORK
+- Users must NEVER guess:
+  - What a button does
+  - What a status means
+  - Why something is disabled
+- Use labels, helper text, tooltips.
+
+1.3 CONSISTENCY IS LAW
+- Same action = same button style everywhere
+- Same status = same color everywhere
+- Same layout logic across modules
+
+1.4 ACCESSIBILITY FIRST (WCAG 2.2 AA+)
+- Keyboard‑navigable UI
+- Screen reader compatible
+- Color‑blind safe palettes
+- Minimum contrast ratio: 4.5:1
+- Font size never below 14px
+
+------------------------------------------------------------
+2. GLOBAL LAYOUT STANDARDS
+------------------------------------------------------------
+
+2.1 PAGE STRUCTURE (ALL PAGES)
+- Header:
+  - Page title (H1)
+  - Short description (1 line max)
+- Primary actions (right‑aligned)
+- Content section
+- Secondary actions hidden or grouped
+
+STANDARD FLOW:
+Page Title → Context → Action → Content → Details
+
+2.2 SIDEBAR RULES
+- Sidebar must NEVER overpower content
+- Use muted colors for inactive items
+- Active item must be obvious via:
+  - Left border OR
+  - Background pill OR
+  - Icon + text emphasis
+- Collapsible for advanced users
+
+2.3 RESPONSIVENESS
+- Works on:
+  - Desktop (primary)
+  - Tablet
+  - Mobile (read‑only minimum)
+- No horizontal scrolling EVER
+
+------------------------------------------------------------
+3. COLOR SYSTEM (STRICT)
+------------------------------------------------------------
+
+3.1 COLOR ROLES (NOT FREE‑FORM)
+- Primary: Main actions only
+- Secondary: Non‑destructive actions
+- Success: Approved / Completed
+- Warning: Pending / Needs attention
+- Danger: Destructive actions ONLY
+- Info: Neutral system info
+
+3.2 NEVER:
+- Use red for non‑destructive actions
+- Use green for informational text
+- Use color alone to convey meaning
+
+------------------------------------------------------------
+4. TYPOGRAPHY SYSTEM
+------------------------------------------------------------
+
+4.1 FONT USAGE
+- Sans‑serif, system‑safe
+- Max 2 font families
+- Clear hierarchy:
+  - H1: Page title
+  - H2: Sections
+  - Body
+  - Caption / Helper
+
+4.2 TEXT RULES
+- Avoid paragraphs > 3 lines
+- Use bullets for instructions
+- Use plain language (no jargon)
+
+------------------------------------------------------------
+5. NAVIGATION & INFORMATION ARCHITECTURE
+------------------------------------------------------------
+
+5.1 MODULE STRUCTURE
+- Logical grouping by TASK, not department
+- Example:
+  - Requests
+  - Employees
+  - Approvals
+  - Reports
+  - Settings
+
+5.2 BREADCRUMBS
+- Required for deep pages
+- Must reflect real navigation hierarchy
+
+------------------------------------------------------------
+6. FORMS & DATA ENTRY (CRITICAL)
+------------------------------------------------------------
+
+6.1 FORM DESIGN
+- One primary action per form
+- Group related fields
+- Progressive disclosure for complex forms
+
+6.2 VALIDATION
+- Inline validation
+- Human‑readable errors
+- Never clear user input on error
+
+6.3 GOVERNMENT FORM UX
+- Reference legal forms where applicable
+- Show form version / basis (e.g., CSC, COA)
+
+------------------------------------------------------------
+7. TABLES, LISTS & DATA DENSITY
+------------------------------------------------------------
+
+7.1 LIST RULES
+- Scannable, not readable
+- Show essentials only
+- Details via expand / view page
+
+7.2 TABLE RULES
+- Sticky headers
+- Sortable columns
+- Search + filters grouped
+- Pagination mandatory
+
+------------------------------------------------------------
+8. ACTIONS & SAFETY
+------------------------------------------------------------
+
+8.1 ACTION PRIORITY
+- ONE primary action per view
+- Secondary actions grouped
+- Destructive actions hidden behind menus
+
+8.2 CONFIRMATIONS
+- Required for:
+  - Delete
+  - Unpublish
+  - Irreversible actions
+
+------------------------------------------------------------
+9. EMPTY STATES & SYSTEM FEEDBACK
+------------------------------------------------------------
+
+9.1 EMPTY STATES
+Must include:
+- Explanation
+- Why it’s empty
+- What to do next
+- CTA
+
+9.2 FEEDBACK
+- Loading indicators
+- Success messages
+- Clear error recovery
+
+------------------------------------------------------------
+10. STATUS & WORKFLOW UX
+------------------------------------------------------------
+
+10.1 STATUS VISIBILITY
+- Status always visible
+- Color + text label
+- Consistent naming
+
+10.2 WORKFLOW TRANSPARENCY
+- Show:
+  - Current step
+  - Next step
+  - Who is responsible
+
+------------------------------------------------------------
+11. ROLE‑BASED UX
+------------------------------------------------------------
+
+- UI adapts based on role
+- Hide irrelevant actions
+- Do not show disabled buttons without explanation
+
+------------------------------------------------------------
+12. AUDITABILITY & TRUST (GOV STANDARD)
+------------------------------------------------------------
+
+- Visible timestamps
+- Actor identification
+- Change history accessible
+- Logs readable by humans
+
+------------------------------------------------------------
+13. PERFORMANCE & PERCEPTION
+------------------------------------------------------------
+
+- First load < 3 seconds
+- Skeleton loaders instead of spinners
+- Optimistic UI where safe
+
+------------------------------------------------------------
+14. DOCUMENTATION & HELP
+------------------------------------------------------------
+
+- Inline tooltips
+- Contextual help
+- No external manuals required for basics
+
+------------------------------------------------------------
+15. FINAL 10/10 CHECKLIST
+------------------------------------------------------------
+
+[ ] Clear page purpose
+[ ] One primary action
+[ ] Accessible by default
+[ ] No visual overload
+[ ] Safe destructive actions
+[ ] Guided workflows
+[ ] Human‑readable errors
+[ ] Audit‑ready
+[ ] Consistent everywhere
+[ ] Designed for non‑technical users
+
+END OF STANDARD

@@ -105,6 +105,22 @@ const formatEmployeeName = (user: RequestSummary['user']) => {
 const formatEmployeeId = (user: RequestSummary['user']) =>
     user?.employee?.id ?? user?.employee_id ?? '—';
 
+const formatDateForInput = (value?: string | null) => {
+    if (!value) return '';
+    // If already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+    // Otherwise, try to parse and format
+    try {
+        const date = new Date(value);
+        if (isNaN(date.getTime())) return value;
+        return date.toISOString().split('T')[0];
+    } catch {
+        return value;
+    }
+};
+
 export default function RequestsIndex({
     submissions,
     filters,
@@ -118,8 +134,8 @@ export default function RequestsIndex({
     const [requestTypeId, setRequestTypeId] = useState(filters?.request_type_id ? String(filters.request_type_id) : '');
     const [scope, setScope] = useState(filters?.scope ?? 'mine');
     const [perPage, setPerPage] = useState(String(filters?.perPage ?? 10));
-    const [dateFrom, setDateFrom] = useState(filters?.date_from ?? '');
-    const [dateTo, setDateTo] = useState(filters?.date_to ?? '');
+    const [dateFrom, setDateFrom] = useState(formatDateForInput(filters?.date_from));
+    const [dateTo, setDateTo] = useState(formatDateForInput(filters?.date_to));
     const [isSearching, setIsSearching] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);

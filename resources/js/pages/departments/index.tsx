@@ -583,7 +583,7 @@ const handleFacultyFilterChange = (value: string) => {
 
       <PageLayout
         title="Departments & Offices"
-        subtitle="Manage academic departments and administrative offices."
+        subtitle={showDeleted ? "Viewing deleted departments and offices. You can restore or permanently delete them." : "Manage academic departments and administrative offices."}
         primaryAction={
           hasPermission(permissions, 'create-department') ? {
             label: 'Add Department',
@@ -766,6 +766,15 @@ const handleFacultyFilterChange = (value: string) => {
           </div>
         }
       >
+        {/* Subtle Status Indicator */}
+        {showDeleted && (
+          <div className="mb-3 px-3 md:px-6">
+            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+              <Archive className="h-4 w-4" />
+              <span>Viewing deleted departments</span>
+            </div>
+          </div>
+        )}
         <EnterpriseEmployeeTable
           columns={DepartmentTableConfig.columns}
           actions={DepartmentTableConfig.actions}

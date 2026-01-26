@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\FacultyRequest;
 use App\Models\Faculty;
-use App\Models\OrganizationalAuditLog;
+use App\Services\AuditLogService;
 use App\Services\PositionAutoCreationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,16 +74,14 @@ class FacultyController extends Controller
 
         if ($faculty) {
             // Log faculty creation
-            OrganizationalAuditLog::create([
-                'unit_type' => 'faculty',
-                'unit_id' => $faculty->id,
-                'action_type' => 'CREATE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Created a New Faculty Record: {$faculty->name}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logCreated(
+                'faculties',
+                'Faculty',
+                (string)$faculty->id,
+                "Created a New Faculty: {$faculty->name}",
+                null,
+                $faculty
+            );
 
             // Automatically create faculty-level positions (Dean, Associate Dean)
             try {
@@ -144,23 +142,44 @@ class FacultyController extends Controller
                 // Update the faculty
                 $faculty->update($validated);
                 
-                // Log each field change
+                // Collect all changes for a single audit log entry
+                $oldValues = [];
+                $newValues = [];
+                $changeDescriptions = [];
+                
                 foreach ($changes as $field => $change) {
+                    $fieldName = str_replace('_', ' ', $field);
+                    $fieldName = ucwords($fieldName);
+                    
+                    // Format old and new values for display
+                    $oldValueFormatted = is_array($change['old']) ? implode(', ', $change['old']) : (string)($change['old'] ?? '');
+                    $newValueFormatted = is_array($change['new']) ? implode(', ', $change['new']) : (string)($change['new'] ?? '');
+                    
+                    $oldValues[$field] = $change['old'];
+                    $newValues[$field] = $change['new'];
+                    $changeDescriptions[] = "{$fieldName}: {$oldValueFormatted} > {$newValueFormatted}";
+                }
+                
+                // Create a single audit log entry if there are any changes
+                if (!empty($oldValues) && !empty($newValues)) {
                     try {
-                        OrganizationalAuditLog::create([
-                            'unit_type' => 'faculty',
-                            'unit_id' => $faculty->id,
-                            'action_type' => 'UPDATE',
-                            'field_changed' => $field,
-                            'old_value' => $change['old'],
-                            'new_value' => $change['new'],
-                            'action_date' => now(),
-                            'performed_by' => auth()->user()?->name ?? 'System',
-                        ]);
+                        $description = implode('; ', $changeDescriptions);
+                        $facultyCode = $faculty->code ?? '';
+                        $facultyId = (string)$faculty->id;
+                        $descriptionWithCode = $description . ($facultyCode ? " (ID: {$facultyId}, {$facultyCode})" : " (ID: {$facultyId})");
+                        app(AuditLogService::class)->logUpdated(
+                            'faculties',
+                            'Faculty',
+                            $facultyId,
+                            $descriptionWithCode,
+                            $oldValues,
+                            $newValues,
+                            $faculty
+                        );
                     } catch (\Exception $e) {
                         \Log::error('Failed to create audit log: ' . $e->getMessage(), [
                             'faculty_id' => $faculty->id,
-                            'field' => $field,
+                            'error' => $e->getTraceAsString()
                         ]);
                     }
                 }
@@ -194,18 +213,17 @@ class FacultyController extends Controller
 
             $facultyId = $faculty->id;
             $facultyName = $faculty->name ?? 'Unknown';
+            $facultyCode = $faculty->code ?? '';
             
             // Log faculty deletion before deleting
-            OrganizationalAuditLog::create([
-                'unit_type' => 'faculty',
-                'unit_id' => $facultyId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Soft Deleted: {$facultyName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logDeleted(
+                'faculties',
+                'Faculty',
+                (string)$facultyId,
+                "Record was marked inactive and hidden from normal views." . ($facultyCode ? " (ID: {$facultyId}, {$facultyCode})" : " (ID: {$facultyId})"),
+                null,
+                $faculty
+            );
 
             $faculty->delete();
             return redirect()
@@ -232,20 +250,18 @@ class FacultyController extends Controller
         }
 
         $facultyId = $faculty->id;
+        $facultyCode = $faculty->code ?? '';
         $deletedAt = $faculty->deleted_at;
         
-        DB::transaction(function () use ($faculty, $facultyId, $deletedAt) {
+        DB::transaction(function () use ($faculty, $facultyId, $facultyCode) {
             // Log the restoration BEFORE restoring
-            OrganizationalAuditLog::create([
-                'unit_type' => 'faculty',
-                'unit_id' => $facultyId,
-                'action_type' => 'UPDATE',
-                'field_changed' => 'restored',
-                'old_value' => ['deleted_at' => $deletedAt ? $deletedAt->toDateTimeString() : null],
-                'new_value' => ['deleted_at' => null],
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logRestored(
+                'faculties',
+                'Faculty',
+                (string)$facultyId,
+                "Record was restored and returned to active use." . ($facultyCode ? " (ID: {$facultyId}, {$facultyCode})" : " (ID: {$facultyId})"),
+                $faculty
+            );
             
             // Restore the faculty
             $faculty->restore();
@@ -266,19 +282,18 @@ class FacultyController extends Controller
         
         $facultyId = $faculty->id;
         $facultyName = $faculty->name ?? 'Unknown';
+        $facultyCode = $faculty->code ?? '';
         
-        DB::transaction(function () use ($faculty, $facultyId, $facultyName) {
+        DB::transaction(function () use ($faculty, $facultyId, $facultyName, $facultyCode) {
             // Log permanent deletion
-            OrganizationalAuditLog::create([
-                'unit_type' => 'faculty',
-                'unit_id' => $facultyId,
-                'action_type' => 'DELETE',
-                'field_changed' => null,
-                'old_value' => null,
-                'new_value' => "Permanently Deleted: {$facultyName}",
-                'action_date' => now(),
-                'performed_by' => auth()->user()?->name ?? 'System',
-            ]);
+            app(AuditLogService::class)->logPermanentlyDeleted(
+                'faculties',
+                'Faculty',
+                (string)$facultyId,
+                "Record was permanently removed and cannot be recovered." . ($facultyCode ? " (ID: {$facultyId}, {$facultyCode})" : " (ID: {$facultyId})"),
+                null,
+                $faculty
+            );
             
             // Permanently delete the faculty
             $faculty->forceDelete();

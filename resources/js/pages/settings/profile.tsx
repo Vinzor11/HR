@@ -60,14 +60,14 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                                 Profile Information
                             </CardTitle>
                             <CardDescription>
-                                Update your name and email address
+                                Update your username and email address
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={submit} className="space-y-6">
                                 <div className="space-y-2">
                                     <Label htmlFor="name" className="text-sm font-medium">
-                                        Full Name
+                                        Username
                                     </Label>
                                     <Input
                                         id="name"
@@ -76,7 +76,7 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                                         onChange={(e) => setData('name', e.target.value)}
                                         required
                                         autoComplete="name"
-                                        placeholder="Enter your full name"
+                                        placeholder="Enter your username"
                                     />
                                     <InputError message={errors.name} />
                                 </div>

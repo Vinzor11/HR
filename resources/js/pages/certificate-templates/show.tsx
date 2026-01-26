@@ -259,7 +259,7 @@ export default function CertificateTemplateShow({ template }: CertificateTemplat
                             <h2 className="text-lg font-semibold mb-4">How to Use</h2>
                             <div className="space-y-3 text-sm text-muted-foreground">
                                 <p>
-                                    1. Go to <strong>Requests → Dynamic Builder</strong>
+                                    1. Go to <strong>Requests → Request Builder</strong>
                                 </p>
                                 <p>
                                     2. Create or edit a Request Type

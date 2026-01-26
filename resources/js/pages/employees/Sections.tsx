@@ -1252,6 +1252,29 @@ export const CivilServiceEligibility = React.memo(({ data, setData, errors }: Se
   );
 });
 
+// Utility function to format numbers with commas
+const formatNumberWithCommas = (value: string | number): string => {
+  if (!value && value !== 0) return '';
+  const strValue = String(value);
+  // Remove existing commas
+  const numStr = strValue.replace(/,/g, '');
+  // Check if it's a valid number
+  if (numStr === '' || numStr === '.') return '';
+  const num = parseFloat(numStr);
+  if (isNaN(num)) return strValue;
+  
+  // Split into integer and decimal parts
+  const parts = numStr.split('.');
+  const integerPart = parts[0] || '0';
+  const decimalPart = parts[1];
+  
+  // Format integer part with commas
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  
+  // Combine with decimal if exists
+  return decimalPart !== undefined ? `${formattedInteger}.${decimalPart}` : formattedInteger;
+};
+
 export const WorkExperience = React.memo(({ data, setData, errors }: SectionProps) => {
   return (
     <div className="border border-black p-4 mb-6">
@@ -1313,9 +1336,20 @@ export const WorkExperience = React.memo(({ data, setData, errors }: SectionProp
                 <td className="border border-black p-1">
                   <input
                     id={`exp_monthly_salary_${idx}`}
-                    type="number"
-                    value={exp.monthly_salary}
-                    onChange={(e) => updateSection('work_experience', idx, 'monthly_salary', e.target.value, data, setData)}
+                    type="text"
+                    value={exp.monthly_salary ? formatNumberWithCommas(exp.monthly_salary) : ''}
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/,/g, '');
+                      if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+                        updateSection('work_experience', idx, 'monthly_salary', rawValue, data, setData);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const rawValue = e.target.value.replace(/,/g, '');
+                      if (rawValue && parseFloat(rawValue) >= 0) {
+                        updateSection('work_experience', idx, 'monthly_salary', rawValue, data, setData);
+                      }
+                    }}
                     className={`w-full border-none ${errors[`work_experience[${idx}].monthly_salary`] ? 'border-red-500' : ''}`}
                     aria-label={`Monthly Salary ${idx + 1}`}
                   />

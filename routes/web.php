@@ -62,9 +62,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/employees/import/cs-form-212', [EmployeeController::class, 'importCsForm212'])
         ->name('employees.import.cs_form_212')
         ->middleware('permission:access-employees-module');
-    Route::get('/employees/logs', [EmployeeController::class, 'logs'])->name('employees.logs')->middleware('permission:view-employee-log');
-    Route::get('/organizational/logs', [OrganizationalLogController::class, 'logs'])->name('organizational.logs')->middleware('permission:view-organizational-log');
-    Route::get('/users/logs', [UserController::class, 'logs'])->name('users.logs')->middleware('permission:view-user-log');
+    // Unified Audit Logs (replaces all module-specific logs)
+    Route::get('/audit-logs', [App\Http\Controllers\AuditLogController::class, 'index'])->name('audit-logs.index')->middleware('permission:view-audit-logs');
+    Route::get('/audit-logs/export', [App\Http\Controllers\AuditLogController::class, 'export'])->name('audit-logs.export')->middleware('permission:view-audit-logs');
+    
+    // Legacy log routes (deprecated - redirect to unified audit logs)
+    Route::get('/employees/logs', function () {
+        return redirect()->route('audit-logs.index', ['module' => 'employees']);
+    })->name('employees.logs')->middleware('permission:view-audit-logs');
+    Route::get('/organizational/logs', function () {
+        return redirect()->route('audit-logs.index', ['module' => 'organizational']);
+    })->name('organizational.logs')->middleware('permission:view-audit-logs');
+    Route::get('/users/logs', function () {
+        return redirect()->route('audit-logs.index', ['module' => 'users']);
+    })->name('users.logs')->middleware('permission:view-audit-logs');
     Route::get('/users/activities', [App\Http\Controllers\UserActivitiesController::class, 'activities'])->name('users.activities')->middleware('permission:view-user-activities');
     Route::post('/employees/{id}/restore', [EmployeeController::class, 'restore'])->name('employees.restore')->middleware('permission:restore-employee');
     Route::delete('/employees/{id}/force-delete', [EmployeeController::class, 'forceDelete'])->name('employees.force-delete')->middleware('permission:force-delete-employee');
@@ -87,6 +98,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/offices/{office}/edit', function ($office) {
         return redirect()->route('departments.edit', $office);
     })->name('offices.edit')->middleware('permission:edit-office');
+    Route::post('/offices/{id}/restore', [OfficeController::class, 'restore'])->name('offices.restore')->middleware('permission:restore-office');
+    Route::delete('/offices/{id}/force-delete', [OfficeController::class, 'forceDelete'])->name('offices.force-delete')->middleware('permission:force-delete-office');
     Route::resource('departments', DepartmentController::class)->middleware('permission:access-department');
     Route::post('/departments/{id}/restore', [DepartmentController::class, 'restore'])->name('departments.restore')->middleware('permission:restore-department');
     Route::delete('/departments/{id}/force-delete', [DepartmentController::class, 'forceDelete'])->name('departments.force-delete')->middleware('permission:force-delete-department');

@@ -399,7 +399,7 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
 
       <PageLayout
         title="Faculties"
-        subtitle="Manage academic faculties and organizational structure."
+        subtitle={showDeleted ? "Viewing deleted faculties. You can restore or permanently delete them." : "Manage academic faculties and organizational structure."}
         primaryAction={{
           label: 'Add Faculty',
           icon: <Plus className="h-4 w-4" />,
@@ -547,6 +547,15 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
           </div>
         }
       >
+        {/* Subtle Status Indicator */}
+        {showDeleted && (
+          <div className="mb-3 px-3 md:px-6">
+            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+              <Archive className="h-4 w-4" />
+              <span>Viewing deleted faculties</span>
+            </div>
+          </div>
+        )}
         <EnterpriseEmployeeTable
           columns={FacultyTableConfig.columns}
           actions={FacultyTableConfig.actions}

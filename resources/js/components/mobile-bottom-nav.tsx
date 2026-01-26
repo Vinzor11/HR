@@ -23,7 +23,8 @@ import {
   School,
   UserCheck,
   Calendar,
-  Wallet
+  Wallet,
+  FileSearch
 } from 'lucide-react';
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -73,7 +74,6 @@ const fullNavItems: { title: string; icon: any; items: NavItem[] }[] = [
       { title: 'Permissions', href: '/permissions', icon: Lock, permission: 'access-permissions-module' },
       { title: 'Roles', href: '/roles', icon: Shield, permission: 'access-roles-module' },
       { title: 'Manage Users', href: '/users', icon: Users, permission: 'access-users-module' },
-      { title: 'User Logs', href: '/users/logs', icon: Clock, permission: 'view-user-log' },
       { title: 'User Activities', href: '/users/activities', icon: Clock, permission: 'view-user-activities' },
     ],
   },
@@ -92,7 +92,6 @@ const fullNavItems: { title: string; icon: any; items: NavItem[] }[] = [
       { title: 'Faculties', href: '/faculties', icon: School, permission: 'access-faculty' },
       { title: 'Departments & Offices', href: '/departments', icon: Landmark, permission: 'access-department' },
       { title: 'Positions', href: '/positions', icon: Briefcase, permission: 'access-position' },
-      { title: 'Organizational Logs', href: '/organizational/logs', icon: Clock, permission: 'view-organizational-log' },
     ],
   },
   {
@@ -110,7 +109,7 @@ const fullNavItems: { title: string; icon: any; items: NavItem[] }[] = [
     icon: List,
     items: [
       { title: 'Request Center', href: '/requests', icon: List },
-      { title: 'Dynamic Builder', href: '/request-types', icon: FileText, permission: 'access-request-types-module' },
+      { title: 'Request Builder', href: '/request-types', icon: FileText, permission: 'access-request-types-module' },
       { title: 'Certificate Templates', href: '/certificate-templates', icon: FileText, permission: 'access-request-types-module' },
     ],
   },
@@ -122,6 +121,13 @@ const fullNavItems: { title: string; icon: any; items: NavItem[] }[] = [
       { title: 'Leave Calendar', href: '/leaves/calendar', icon: CalendarDays, permission: 'access-leave-calendar' },
       { title: 'Leave History', href: '/leaves/history', icon: FileText },
       { title: 'Manage Balances', href: '/admin/leave-balances', icon: Wallet, permission: 'manage-leave-balances' },
+    ],
+  },
+  {
+    title: 'Audit',
+    icon: FileSearch,
+    items: [
+      { title: 'Audit Logs', href: '/audit-logs', icon: FileSearch, permission: 'view-audit-logs' },
     ],
   },
 ];

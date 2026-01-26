@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Concerns\FormatsDates;
 
 class LeaveAccrual extends Model
 {
-    use HasFactory;
+    use HasFactory, FormatsDates;
 
     // Accrual type constants for better code organization
     public const TYPE_ANNUAL = 'annual';

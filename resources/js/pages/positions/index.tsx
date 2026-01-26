@@ -677,7 +677,7 @@ const handleCategoryFilterChange = (value: string) => {
 
       <PageLayout
         title="Positions"
-        subtitle="Manage job positions and organizational hierarchy."
+        subtitle={showDeleted ? "Viewing deleted positions. You can restore or permanently delete them." : "Manage job positions and organizational hierarchy."}
         primaryAction={{
           label: 'Add Position',
           icon: <Plus className="h-4 w-4" />,
@@ -847,6 +847,15 @@ const handleCategoryFilterChange = (value: string) => {
           </div>
         }
       >
+        {/* Subtle Status Indicator */}
+        {showDeleted && (
+          <div className="mb-3 px-3 md:px-6">
+            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+              <Archive className="h-4 w-4" />
+              <span>Viewing deleted positions</span>
+            </div>
+          </div>
+        )}
         <EnterpriseEmployeeTable
           columns={PositionTableConfig.columns}
           actions={PositionTableConfig.actions}

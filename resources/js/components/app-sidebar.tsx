@@ -5,7 +5,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { useLayout } from '@/contexts/LayoutContext';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FileText, Folder, LayoutGrid, Lock, Shield, Users, IdCard, Landmark , Briefcase, GraduationCap, UserCheck, Clock, List, Calendar, CalendarDays, School, Settings, Wallet } from 'lucide-react';
+import { BookOpen, FileText, Folder, LayoutGrid, Lock, Shield, Users, IdCard, Landmark , Briefcase, GraduationCap, UserCheck, Clock, List, Calendar, CalendarDays, School, Settings, Wallet, FileSearch } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -38,12 +38,6 @@ const mainNavItems: NavItem[] = [
                 permission: 'access-users-module',
             },
             {
-                title: 'User Logs',
-                href: '/users/logs',
-                icon: Clock,
-                permission: 'view-user-log',
-            },
-            {
                 title: 'User Activities',
                 href: '/users/activities',
                 icon: Clock,
@@ -61,12 +55,6 @@ const mainNavItems: NavItem[] = [
                 href: '/employees',
                 icon: IdCard,
                 permission: 'access-employees-module',
-            },
-            {
-                title: 'Employee Logs',
-                href: '/employees/logs',
-                icon: Clock,
-                permission: 'view-employee-log',
             },
         ],
     },
@@ -91,12 +79,6 @@ const mainNavItems: NavItem[] = [
                 href: '/positions',
                 icon: Briefcase,
                 permission: 'access-position',
-            },
-            {
-                title: 'Organizational Logs',
-                href: '/organizational/logs',
-                icon: Clock,
-                permission: 'view-organizational-log',
             },
         ],
     },
@@ -138,7 +120,7 @@ const mainNavItems: NavItem[] = [
                 icon: List,
             },
             {
-                title: 'Dynamic Builder',
+                title: 'Request Builder',
                 href: '/request-types',
                 icon: FileText,
                 permission: 'access-request-types-module',
@@ -178,6 +160,12 @@ const mainNavItems: NavItem[] = [
                 permission: 'manage-leave-balances',
             },
         ],
+    },
+    {
+        title: 'Audit Logs',
+        href: '/audit-logs',
+        icon: FileSearch,
+        permission: 'view-audit-logs',
     },
 ];
 
