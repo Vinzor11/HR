@@ -136,6 +136,9 @@ class SuperAdminSeeder extends Seeder
             // Organizational Logs Permissions (under Organizational Structure)
             ['name' => 'view-organizational-log', 'module' => 'Organizational Structure', 'label' => 'View Organizational Log', 'description' => 'Can view organizational logs'],
             
+            // Audit Logs Permissions (Unified Audit Logging System)
+            ['name' => 'view-audit-logs', 'module' => 'Audit Logs', 'label' => 'View Audit Logs', 'description' => 'Can view unified audit logs across all modules'],
+            
             // Trainings Permissions
             ['name' => 'access-trainings-module', 'module' => 'Trainings', 'label' => 'Access Trainings Module', 'description' => 'Can access trainings module'],
             ['name' => 'create-training', 'module' => 'Trainings', 'label' => 'Create Training', 'description' => 'Can create new trainings'],
