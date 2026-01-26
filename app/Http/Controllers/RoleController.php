@@ -8,6 +8,8 @@ use App\Services\AuditLogService;
 use Illuminate\Support\Str;
 use App\Http\Requests\RoleRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Spatie\Permission\PermissionRegistrar;
 
 class RoleController extends Controller
 {
@@ -141,6 +143,12 @@ class RoleController extends Controller
         if ($role) {
             $permissions = $request->permissions ?? [];
             $role->syncPermissions($permissions);
+            
+            // Clear Spatie Permission cache
+            app()[PermissionRegistrar::class]->forgetCachedPermissions();
+            
+            // Clear custom user permission cache for all users with this role
+            $this->clearPermissionCacheForRoleUsers($role);
 
             // Log role creation
             app(AuditLogService::class)->logCreated(
@@ -208,6 +216,13 @@ class RoleController extends Controller
             # Update the permissions
             $permissions = $request->permissions ?? [];
             $role->syncPermissions($permissions);
+            
+            // Clear Spatie Permission cache
+            app()[PermissionRegistrar::class]->forgetCachedPermissions();
+            
+            // Clear custom user permission cache for all users with this role
+            $this->clearPermissionCacheForRoleUsers($role);
+            
             $role->refresh(); // Refresh to get updated permissions
             $newPermissions = $role->permissions->pluck('id')->toArray();
 
@@ -484,5 +499,29 @@ class RoleController extends Controller
         }
         
         return 99;
+    }
+    
+    /**
+     * Clear permission cache for all users with a given role
+     * This ensures that when role permissions are updated, users see the changes immediately
+     */
+    private function clearPermissionCacheForRoleUsers(Role $role): void
+    {
+        $usersWithRole = $role->users()->get();
+        
+        foreach ($usersWithRole as $user) {
+            // Get current cache key before touching
+            $roleIds = $user->roles()->pluck('id')->sort()->implode(',');
+            $currentTimestamp = $user->updated_at->timestamp;
+            $cacheKey = "user_permissions_{$user->id}_{$currentTimestamp}_roles_{$roleIds}";
+            
+            // Clear the cache with current timestamp
+            Cache::forget($cacheKey);
+            
+            // Touch user to change updated_at, which will change the cache key on next request
+            // This ensures that even if we missed clearing the cache, the next request will use a new key
+            // and fetch fresh permissions from the database
+            $user->touch();
+        }
     }
 }
