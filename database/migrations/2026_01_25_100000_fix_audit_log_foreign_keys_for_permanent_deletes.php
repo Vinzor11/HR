@@ -24,33 +24,49 @@ return new class extends Migration
 
         // Fix training_audit_log table if it exists (old table structure)
         if (Schema::hasTable('training_audit_log')) {
-            // Drop existing FK constraint if it exists
-            DB::unprepared("
-                SET @fk := (
-                    SELECT CONSTRAINT_NAME
-                    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            try {
+                // Check if training_id column exists before attempting to modify it
+                $hasTrainingIdColumn = DB::selectOne("
+                    SELECT COUNT(*) as count
+                    FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_SCHEMA = DATABASE()
                       AND TABLE_NAME = 'training_audit_log'
                       AND COLUMN_NAME = 'training_id'
-                      AND REFERENCED_TABLE_NAME IS NOT NULL
-                    LIMIT 1
-                );
-                SET @sql := IF(@fk IS NULL, 'SELECT 1', CONCAT('ALTER TABLE training_audit_log DROP FOREIGN KEY ', @fk));
-                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-            ");
+                ");
 
-            // Make training_id nullable and null out orphaned references
-            DB::statement('UPDATE training_audit_log tal LEFT JOIN trainings t ON t.training_id = tal.training_id SET tal.training_id = NULL WHERE t.training_id IS NULL');
-            DB::statement('ALTER TABLE training_audit_log MODIFY training_id BIGINT UNSIGNED NULL');
+                if ($hasTrainingIdColumn && $hasTrainingIdColumn->count > 0) {
+                    // Drop existing FK constraint if it exists
+                    DB::unprepared("
+                        SET @fk := (
+                            SELECT CONSTRAINT_NAME
+                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                            WHERE TABLE_SCHEMA = DATABASE()
+                              AND TABLE_NAME = 'training_audit_log'
+                              AND COLUMN_NAME = 'training_id'
+                              AND REFERENCED_TABLE_NAME IS NOT NULL
+                            LIMIT 1
+                        );
+                        SET @sql := IF(@fk IS NULL, 'SELECT 1', CONCAT('ALTER TABLE training_audit_log DROP FOREIGN KEY ', @fk));
+                        PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+                    ");
 
-            // Re-add FK with SET NULL on delete to preserve audit logs
-            Schema::table('training_audit_log', function (Blueprint $table) {
-                $table->foreign('training_id')
-                    ->references('training_id')
-                    ->on('trainings')
-                    ->nullOnDelete()
-                    ->cascadeOnUpdate();
-            });
+                    // Make training_id nullable and null out orphaned references
+                    DB::statement('UPDATE training_audit_log tal LEFT JOIN trainings t ON t.training_id = tal.training_id SET tal.training_id = NULL WHERE t.training_id IS NULL');
+                    DB::statement('ALTER TABLE training_audit_log MODIFY training_id BIGINT UNSIGNED NULL');
+
+                    // Re-add FK with SET NULL on delete to preserve audit logs
+                    Schema::table('training_audit_log', function (Blueprint $table) {
+                        $table->foreign('training_id')
+                            ->references('training_id')
+                            ->on('trainings')
+                            ->nullOnDelete()
+                            ->cascadeOnUpdate();
+                    });
+                }
+            } catch (\Exception $e) {
+                // Silently skip if table/column doesn't exist or query fails
+                // This can happen during build if database isn't available
+            }
         }
 
         // Note: The following audit log tables are already configured correctly:
@@ -73,36 +89,52 @@ return new class extends Migration
         }
 
         if (Schema::hasTable('training_audit_log')) {
-            // Drop nullable FK
-            DB::unprepared("
-                SET @fk := (
-                    SELECT CONSTRAINT_NAME
-                    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            try {
+                // Check if training_id column exists before attempting to modify it
+                $hasTrainingIdColumn = DB::selectOne("
+                    SELECT COUNT(*) as count
+                    FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_SCHEMA = DATABASE()
                       AND TABLE_NAME = 'training_audit_log'
                       AND COLUMN_NAME = 'training_id'
-                      AND REFERENCED_TABLE_NAME IS NOT NULL
-                    LIMIT 1
-                );
-                SET @sql := IF(@fk IS NULL, 'SELECT 1', CONCAT('ALTER TABLE training_audit_log DROP FOREIGN KEY ', @fk));
-                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-            ");
+                ");
 
-            // Revert to NOT NULL (this may fail if there are NULL values, but that's expected in down())
-            try {
-                DB::statement('ALTER TABLE training_audit_log MODIFY training_id BIGINT UNSIGNED NOT NULL');
+                if ($hasTrainingIdColumn && $hasTrainingIdColumn->count > 0) {
+                    // Drop nullable FK
+                    DB::unprepared("
+                        SET @fk := (
+                            SELECT CONSTRAINT_NAME
+                            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                            WHERE TABLE_SCHEMA = DATABASE()
+                              AND TABLE_NAME = 'training_audit_log'
+                              AND COLUMN_NAME = 'training_id'
+                              AND REFERENCED_TABLE_NAME IS NOT NULL
+                            LIMIT 1
+                        );
+                        SET @sql := IF(@fk IS NULL, 'SELECT 1', CONCAT('ALTER TABLE training_audit_log DROP FOREIGN KEY ', @fk));
+                        PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+                    ");
+
+                    // Revert to NOT NULL (this may fail if there are NULL values, but that's expected in down())
+                    try {
+                        DB::statement('ALTER TABLE training_audit_log MODIFY training_id BIGINT UNSIGNED NOT NULL');
+                    } catch (\Exception $e) {
+                        // Ignore if there are NULL values
+                    }
+
+                    // Restore restrict delete behavior
+                    Schema::table('training_audit_log', function (Blueprint $table) {
+                        $table->foreign('training_id')
+                            ->references('training_id')
+                            ->on('trainings')
+                            ->restrictOnDelete()
+                            ->cascadeOnUpdate();
+                    });
+                }
             } catch (\Exception $e) {
-                // Ignore if there are NULL values
+                // Silently skip if table/column doesn't exist or query fails
+                // This can happen during rollback if table structure changed
             }
-
-            // Restore restrict delete behavior
-            Schema::table('training_audit_log', function (Blueprint $table) {
-                $table->foreign('training_id')
-                    ->references('training_id')
-                    ->on('trainings')
-                    ->restrictOnDelete()
-                    ->cascadeOnUpdate();
-            });
         }
     }
 };
