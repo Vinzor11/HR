@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Search, Settings, Users, Calendar, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Settings, Users, Calendar, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useState } from 'react'
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -324,11 +324,27 @@ export default function LeaveBalanceAdminIndex({
 
             {/* Pagination */}
             <div className="mt-4 pt-4 border-t flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">
-                of {employees.total}
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Showing <span className="font-medium text-foreground">{employees.from || 0}</span> to <span className="font-medium text-foreground">{employees.to || 0}</span> of <span className="font-medium text-foreground">{employees.total}</span>
+              </span>
+              <span className="text-xs text-muted-foreground sm:hidden">
+                {employees.from || 0}-{employees.to || 0} of {employees.total}
               </span>
               {employees.last_page > 1 && (
                 <div className="flex items-center gap-1">
+                  {/* First Page Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-1.5 hidden sm:flex"
+                    disabled={employees.current_page === 1}
+                    onClick={() => {
+                      const firstLink = employees.links.find((l) => l.label !== '&laquo; Previous' && l.label !== 'Next &raquo;');
+                      if (firstLink?.url) router.get(firstLink.url);
+                    }}
+                  >
+                    <ChevronsLeft className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -342,20 +358,71 @@ export default function LeaveBalanceAdminIndex({
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </Button>
                   <div className="hidden sm:flex items-center gap-1">
-                    {employees.links
-                      .filter((l) => l.label !== '&laquo; Previous' && l.label !== 'Next &raquo;')
-                      .slice(0, 7)
-                      .map((link, index) => (
-                        <Button
-                          key={index}
-                          variant={link.active ? 'default' : 'outline'}
-                          size="sm"
-                          className="min-w-[32px] h-7 text-xs"
-                          disabled={!link.url}
-                          onClick={() => link.url && router.get(link.url)}
-                          dangerouslySetInnerHTML={{ __html: link.label }}
-                        />
-                      ))}
+                    {(() => {
+                      const pageLinks = employees.links.filter((l) => l.label !== '&laquo; Previous' && l.label !== 'Next &raquo;');
+                      const lastPage = pageLinks.length;
+                      const currentPage = employees.current_page;
+                      
+                      return (
+                        <>
+                          {/* First page if not in range */}
+                          {lastPage > 7 && currentPage > 4 && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="min-w-[32px] h-7 text-xs"
+                                onClick={() => pageLinks[0]?.url && router.get(pageLinks[0].url)}
+                              >
+                                1
+                              </Button>
+                              {currentPage > 5 && (
+                                <span className="px-1 text-xs text-muted-foreground">...</span>
+                              )}
+                            </>
+                          )}
+                          {/* Middle pages */}
+                          {pageLinks.map((link, index) => {
+                            const pageNum = index + 1;
+                            if (lastPage > 7 && (pageNum === 1 || pageNum === lastPage)) return null;
+                            if (lastPage > 7) {
+                              if (currentPage <= 3 && pageNum > 5) return null;
+                              if (currentPage >= lastPage - 2 && pageNum < lastPage - 4) return null;
+                              if (currentPage > 3 && currentPage < lastPage - 2) {
+                                if (pageNum < currentPage - 2 || pageNum > currentPage + 2) return null;
+                              }
+                            }
+                            return (
+                              <Button
+                                key={index}
+                                variant={link.active ? 'default' : 'outline'}
+                                size="sm"
+                                className="min-w-[32px] h-7 text-xs"
+                                disabled={!link.url}
+                                onClick={() => link.url && router.get(link.url)}
+                                dangerouslySetInnerHTML={{ __html: link.label }}
+                              />
+                            );
+                          })}
+                          {/* Last page if not in range */}
+                          {lastPage > 7 && currentPage < lastPage - 3 && (
+                            <>
+                              {currentPage < lastPage - 4 && (
+                                <span className="px-1 text-xs text-muted-foreground">...</span>
+                              )}
+                              <Button
+                                variant={currentPage === lastPage ? 'default' : 'outline'}
+                                size="sm"
+                                className="min-w-[32px] h-7 text-xs"
+                                onClick={() => pageLinks[lastPage - 1]?.url && router.get(pageLinks[lastPage - 1].url)}
+                              >
+                                {lastPage}
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="flex sm:hidden items-center gap-1 px-2 text-xs">
                     <span className="font-semibold text-foreground">{employees.current_page}</span>
@@ -373,6 +440,20 @@ export default function LeaveBalanceAdminIndex({
                     }}
                   >
                     <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                  {/* Last Page Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-1.5 hidden sm:flex"
+                    disabled={employees.current_page === employees.last_page}
+                    onClick={() => {
+                      const pageLinks = employees.links.filter((l) => l.label !== '&laquo; Previous' && l.label !== 'Next &raquo;');
+                      const lastLink = pageLinks[pageLinks.length - 1];
+                      if (lastLink?.url) router.get(lastLink.url);
+                    }}
+                  >
+                    <ChevronsRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               )}

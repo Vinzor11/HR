@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { FileText, Search, Download, ChevronLeft, ChevronRight, Filter, X, Loader2, SlidersHorizontal } from 'lucide-react';
+import { FileText, Search, Download, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, X, Loader2, SlidersHorizontal } from 'lucide-react';
 import { useState, useCallback, useMemo } from 'react';
 import {
     Select,
@@ -1304,7 +1304,7 @@ export default function AuditLogs() {
                     {/* Pagination - Fixed at bottom */}
                     <div className="flex-shrink-0 bg-card border-t border-border z-30">
                             <div className="px-3 sm:px-4 py-1.5 flex items-center justify-between gap-2">
-                                {/* Per Page Selector - Left */}
+                                {/* Per Page Selector & Showing Info - Left */}
                                 <div className="flex items-center gap-2">
                                     <Select value={perPage} onValueChange={handlePerPageChange}>
                                         <SelectTrigger className="h-7 w-[70px] text-xs">
@@ -1319,13 +1319,27 @@ export default function AuditLogs() {
                                         </SelectContent>
                                     </Select>
                                     <span className="text-xs text-muted-foreground hidden sm:inline">
-                                        of {logs.total}
+                                        Showing <span className="font-medium text-foreground">{logs.from || 0}</span> to <span className="font-medium text-foreground">{logs.to || 0}</span> of <span className="font-medium text-foreground">{logs.total}</span>
+                                    </span>
+                                    <span className="text-xs text-muted-foreground sm:hidden">
+                                        {logs.from || 0}-{logs.to || 0} of {logs.total}
                                     </span>
                                 </div>
 
                                 {/* Pagination Controls - Right (only show when more than 1 page) */}
                                 {logs.last_page > 1 && (
                                     <div className="flex items-center gap-1">
+                                        {/* First Page Button */}
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => applyFilters({ page: 1 })}
+                                            disabled={logs.current_page === 1 || isLoading}
+                                            className="h-7 px-1.5 hidden sm:flex"
+                                            aria-label="First page"
+                                        >
+                                            <ChevronsLeft className="h-3.5 w-3.5" />
+                                        </Button>
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -1338,16 +1352,38 @@ export default function AuditLogs() {
                                         </Button>
                                         {/* Page Numbers - Desktop */}
                                         <div className="hidden sm:flex items-center gap-1">
-                                            {Array.from({ length: Math.min(logs.last_page, 7) }, (_, i) => {
+                                            {/* First page if not in range */}
+                                            {logs.last_page > 7 && logs.current_page > 4 && (
+                                                <>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => applyFilters({ page: 1 })}
+                                                        disabled={isLoading}
+                                                        className="min-w-[32px] h-7 text-xs"
+                                                    >
+                                                        1
+                                                    </Button>
+                                                    {logs.current_page > 5 && (
+                                                        <span className="px-1 text-xs text-muted-foreground">...</span>
+                                                    )}
+                                                </>
+                                            )}
+                                            {/* Middle page numbers */}
+                                            {Array.from({ length: Math.min(logs.last_page, 5) }, (_, i) => {
                                                 let page: number;
-                                                if (logs.last_page <= 7) {
+                                                if (logs.last_page <= 5) {
                                                     page = i + 1;
-                                                } else if (logs.current_page <= 4) {
+                                                } else if (logs.current_page <= 3) {
                                                     page = i + 1;
-                                                } else if (logs.current_page >= logs.last_page - 3) {
-                                                    page = logs.last_page - 6 + i;
+                                                } else if (logs.current_page >= logs.last_page - 2) {
+                                                    page = logs.last_page - 4 + i;
                                                 } else {
-                                                    page = logs.current_page - 3 + i;
+                                                    page = logs.current_page - 2 + i;
+                                                }
+                                                // Skip if page is 1 or lastPage (shown separately)
+                                                if (logs.last_page > 7 && (page === 1 || page === logs.last_page)) {
+                                                    return null;
                                                 }
                                                 return (
                                                     <Button
@@ -1362,6 +1398,23 @@ export default function AuditLogs() {
                                                     </Button>
                                                 );
                                             })}
+                                            {/* Last page if not in range */}
+                                            {logs.last_page > 7 && logs.current_page < logs.last_page - 3 && (
+                                                <>
+                                                    {logs.current_page < logs.last_page - 4 && (
+                                                        <span className="px-1 text-xs text-muted-foreground">...</span>
+                                                    )}
+                                                    <Button
+                                                        variant={logs.current_page === logs.last_page ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => applyFilters({ page: logs.last_page })}
+                                                        disabled={isLoading}
+                                                        className="min-w-[32px] h-7 text-xs"
+                                                    >
+                                                        {logs.last_page}
+                                                    </Button>
+                                                </>
+                                            )}
                                         </div>
                                         {/* Page Indicator - Mobile */}
                                         <div className="flex sm:hidden items-center gap-1 px-2 text-xs">
@@ -1378,6 +1431,17 @@ export default function AuditLogs() {
                                             aria-label="Next page"
                                         >
                                             <ChevronRight className="h-3.5 w-3.5" />
+                                        </Button>
+                                        {/* Last Page Button */}
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => applyFilters({ page: logs.last_page })}
+                                            disabled={logs.current_page === logs.last_page || isLoading}
+                                            className="h-7 px-1.5 hidden sm:flex"
+                                            aria-label="Last page"
+                                        >
+                                            <ChevronsRight className="h-3.5 w-3.5" />
                                         </Button>
                                     </div>
                                 )}

@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { Clock, User, FileText, Search, Download, LogIn, LogOut, XCircle, CheckCircle, Monitor, Smartphone, Tablet, SlidersHorizontal, Filter, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Clock, User, FileText, Search, Download, LogIn, LogOut, XCircle, CheckCircle, Monitor, Smartphone, Tablet, SlidersHorizontal, Filter, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useState, useCallback, useMemo } from 'react';
 import {
@@ -782,7 +782,7 @@ export default function UserActivities() {
                 {/* Pagination - Fixed at bottom */}
                 <div className="flex-shrink-0 bg-card border-t border-border z-30">
                     <div className="px-3 sm:px-4 py-1.5 flex items-center justify-between gap-2">
-                        {/* Per Page Selector - Left */}
+                        {/* Per Page Selector & Showing Info - Left */}
                         <div className="flex items-center gap-2">
                             <Select value={perPage} onValueChange={handlePerPageChange}>
                                 <SelectTrigger className="h-7 w-[70px] text-xs">
@@ -797,13 +797,27 @@ export default function UserActivities() {
                                 </SelectContent>
                             </Select>
                             <span className="text-xs text-muted-foreground hidden sm:inline">
-                                of {filteredActivities.length}
+                                Showing <span className="font-medium text-foreground">{paginatedActivities.length > 0 ? (currentPage - 1) * parseInt(perPage, 10) + 1 : 0}</span> to <span className="font-medium text-foreground">{Math.min(currentPage * parseInt(perPage, 10), filteredActivities.length)}</span> of <span className="font-medium text-foreground">{filteredActivities.length}</span>
+                            </span>
+                            <span className="text-xs text-muted-foreground sm:hidden">
+                                {paginatedActivities.length > 0 ? (currentPage - 1) * parseInt(perPage, 10) + 1 : 0}-{Math.min(currentPage * parseInt(perPage, 10), filteredActivities.length)} of {filteredActivities.length}
                             </span>
                         </div>
 
                         {/* Pagination Controls - Right (only show when more than 1 page) */}
                         {totalPages > 1 && (
                             <div className="flex items-center gap-1">
+                                {/* First Page Button */}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(1)}
+                                    disabled={currentPage === 1}
+                                    className="h-7 px-1.5 hidden sm:flex"
+                                    aria-label="First page"
+                                >
+                                    <ChevronsLeft className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -816,16 +830,37 @@ export default function UserActivities() {
                                 </Button>
                                 {/* Page Numbers - Desktop */}
                                 <div className="hidden sm:flex items-center gap-1">
-                                    {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                                    {/* First page if not in range */}
+                                    {totalPages > 7 && currentPage > 4 && (
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handlePageChange(1)}
+                                                className="min-w-[32px] h-7 text-xs"
+                                            >
+                                                1
+                                            </Button>
+                                            {currentPage > 5 && (
+                                                <span className="px-1 text-xs text-muted-foreground">...</span>
+                                            )}
+                                        </>
+                                    )}
+                                    {/* Middle page numbers */}
+                                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                                         let page: number;
-                                        if (totalPages <= 7) {
+                                        if (totalPages <= 5) {
                                             page = i + 1;
-                                        } else if (currentPage <= 4) {
+                                        } else if (currentPage <= 3) {
                                             page = i + 1;
-                                        } else if (currentPage >= totalPages - 3) {
-                                            page = totalPages - 6 + i;
+                                        } else if (currentPage >= totalPages - 2) {
+                                            page = totalPages - 4 + i;
                                         } else {
-                                            page = currentPage - 3 + i;
+                                            page = currentPage - 2 + i;
+                                        }
+                                        // Skip if page is 1 or lastPage (shown separately)
+                                        if (totalPages > 7 && (page === 1 || page === totalPages)) {
+                                            return null;
                                         }
                                         return (
                                             <Button
@@ -839,6 +874,22 @@ export default function UserActivities() {
                                             </Button>
                                         );
                                     })}
+                                    {/* Last page if not in range */}
+                                    {totalPages > 7 && currentPage < totalPages - 3 && (
+                                        <>
+                                            {currentPage < totalPages - 4 && (
+                                                <span className="px-1 text-xs text-muted-foreground">...</span>
+                                            )}
+                                            <Button
+                                                variant={currentPage === totalPages ? 'default' : 'outline'}
+                                                size="sm"
+                                                onClick={() => handlePageChange(totalPages)}
+                                                className="min-w-[32px] h-7 text-xs"
+                                            >
+                                                {totalPages}
+                                            </Button>
+                                        </>
+                                    )}
                                 </div>
                                 {/* Page Indicator - Mobile */}
                                 <div className="flex sm:hidden items-center gap-1 px-2 text-xs">
@@ -855,6 +906,17 @@ export default function UserActivities() {
                                     aria-label="Next page"
                                 >
                                     <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                                {/* Last Page Button */}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(totalPages)}
+                                    disabled={currentPage === totalPages}
+                                    className="h-7 px-1.5 hidden sm:flex"
+                                    aria-label="Last page"
+                                >
+                                    <ChevronsRight className="h-3.5 w-3.5" />
                                 </Button>
                             </div>
                         )}
