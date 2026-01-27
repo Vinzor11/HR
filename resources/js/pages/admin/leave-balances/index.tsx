@@ -77,6 +77,7 @@ interface Props {
   availableYears: number[]
   filters: {
     search: string | null
+    search_mode?: string
     department_id: number | null
   }
 }
@@ -90,12 +91,15 @@ export default function LeaveBalanceAdminIndex({
   filters,
 }: Props) {
   const [search, setSearch] = useState(filters.search || '')
+  const [searchMode, setSearchMode] = useState<'any' | 'name' | 'employee_id'>(() =>
+    (filters.search_mode as 'any' | 'name' | 'employee_id') || 'any'
+  )
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     router.get(
       '/admin/leave-balances',
-      { search, year, department_id: filters.department_id },
+      { search, search_mode: searchMode, year, department_id: filters.department_id },
       { preserveState: true }
     )
   }
@@ -103,7 +107,7 @@ export default function LeaveBalanceAdminIndex({
   const handleYearChange = (newYear: string) => {
     router.get(
       '/admin/leave-balances',
-      { year: parseInt(newYear), search: filters.search, department_id: filters.department_id },
+      { year: parseInt(newYear), search: filters.search, search_mode: filters.search_mode || 'any', department_id: filters.department_id },
       { preserveState: true }
     )
   }
@@ -114,6 +118,7 @@ export default function LeaveBalanceAdminIndex({
       {
         year,
         search: filters.search,
+        search_mode: filters.search_mode || 'any',
         department_id: deptId === 'all' ? null : parseInt(deptId),
       },
       { preserveState: true }
@@ -186,14 +191,26 @@ export default function LeaveBalanceAdminIndex({
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row gap-4">
               <form onSubmit={handleSearch} className="flex-1 flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by name or employee ID..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
-                  />
+                <div className="flex flex-1 min-w-[280px] max-w-[420px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                  <Select value={searchMode} onValueChange={(v) => setSearchMode(v as 'any' | 'name' | 'employee_id')}>
+                    <SelectTrigger className="h-10 w-[110px] sm:w-[120px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="name">Name</SelectItem>
+                      <SelectItem value="employee_id">Employee ID</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder={searchMode === 'any' ? 'Search by name or employee ID...' : `Search by ${searchMode === 'name' ? 'name' : 'employee ID'}...`}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="h-10 w-full min-w-0 pl-9 pr-3 border-0 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                    />
+                  </div>
                 </div>
                 <Button type="submit" variant="secondary">
                   Search

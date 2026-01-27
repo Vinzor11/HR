@@ -29,6 +29,7 @@ interface CertificateTemplate {
     name: string;
     description?: string | null;
     background_image_path?: string | null;
+    background_image_url?: string | null;
     width: number;
     height: number;
     is_active: boolean;
@@ -68,9 +69,8 @@ export default function CertificateTemplateShow({ template }: CertificateTemplat
         }
     }, [flash]);
 
-    const backgroundImageUrl = template.background_image_path
-        ? `/storage/${template.background_image_path}`
-        : null;
+    // Use the background_image_url from the backend which handles the correct URL generation
+    const backgroundImageUrl = template.background_image_url || null;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs(template)}>

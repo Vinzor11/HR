@@ -19,6 +19,7 @@ class UserController extends Controller
     {
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
+        $searchMode = $request->input('search_mode', 'any');
         $showDeleted = $request->boolean('show_deleted', false);
 
         $userQuery = User::with('roles');
@@ -27,11 +28,23 @@ class UserController extends Controller
             $query->onlyTrashed();
         });
 
-        $userQuery->when($search, function ($query) use ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('employee_id', 'like', "%{$search}%");
+        $userQuery->when($search, function ($query) use ($search, $searchMode) {
+            $query->where(function ($q) use ($search, $searchMode) {
+                switch ($searchMode) {
+                    case 'name':
+                        $q->where('name', 'like', "%{$search}%");
+                        break;
+                    case 'email':
+                        $q->where('email', 'like', "%{$search}%");
+                        break;
+                    case 'employee_id':
+                        $q->where('employee_id', 'like', "%{$search}%");
+                        break;
+                    default:
+                        $q->where('name', 'like', "%{$search}%")
+                          ->orWhere('email', 'like', "%{$search}%")
+                          ->orWhere('employee_id', 'like', "%{$search}%");
+                }
             });
         });
 
@@ -43,6 +56,7 @@ class UserController extends Controller
             'roles' => $roles,
             'filters' => [
                 'search' => $search,
+                'search_mode' => $searchMode,
                 'perPage' => $perPage,
                 'show_deleted' => $showDeleted,
             ],

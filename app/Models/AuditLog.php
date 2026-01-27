@@ -185,16 +185,43 @@ class AuditLog extends Model
     }
 
     /**
-     * Scope to search in description, entity_id, module
+     * Scope to search audit logs.
+     * Modes: any (default), target_id (record targeted by action), reference, performed_by (user who did it), field (field changed on update).
      */
-    public function scopeSearch($query, string $search)
+    public function scopeSearch($query, string $search, string $mode = 'any')
     {
-        return $query->where(function ($q) use ($search) {
-            $q->where('description', 'like', "%{$search}%")
-              ->orWhere('entity_id', 'like', "%{$search}%")
-              ->orWhere('module', 'like', "%{$search}%")
-              ->orWhere('entity_type', 'like', "%{$search}%")
-              ->orWhere('reference_number', 'like', "%{$search}%");
+        return $query->where(function ($q) use ($search, $mode) {
+            switch ($mode) {
+                case 'target_id':
+                    $q->where('entity_id', 'like', "%{$search}%");
+                    break;
+                case 'reference':
+                    $q->where('reference_number', 'like', "%{$search}%");
+                    break;
+                case 'performed_by':
+                    $q->whereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+                    break;
+                case 'field':
+                    $q->where(function ($fq) use ($search) {
+                        $fq->where('description', 'like', "%{$search}%")
+                            ->orWhere('old_values', 'like', "%{$search}%")
+                            ->orWhere('new_values', 'like', "%{$search}%");
+                    });
+                    break;
+                default:
+                    $q->where('entity_id', 'like', "%{$search}%")
+                        ->orWhere('reference_number', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhere('old_values', 'like', "%{$search}%")
+                        ->orWhere('new_values', 'like', "%{$search}%")
+                        ->orWhereHas('user', function ($uq) use ($search) {
+                            $uq->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                        });
+            }
         });
     }
 }

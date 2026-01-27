@@ -65,6 +65,7 @@ class TrainingController extends Controller
         
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
+        $searchMode = $request->input('search_mode', 'any');
         $showDeleted = $request->boolean('show_deleted', false);
         $sortBy = $request->input('sort_by', 'training_title');
         $sortOrder = $request->input('sort_order', 'asc');
@@ -87,11 +88,20 @@ class TrainingController extends Controller
                 // Show only soft-deleted trainings
                 $query->onlyTrashed();
             })
-            ->when($search, function ($query) use ($search) {
-                $query->where(function ($subQuery) use ($search) {
-                    $subQuery
-                        ->where('training_title', 'like', "%{$search}%")
-                        ->orWhere('remarks', 'like', "%{$search}%");
+            ->when($search, function ($query) use ($search, $searchMode) {
+                $query->where(function ($subQuery) use ($search, $searchMode) {
+                    switch ($searchMode) {
+                        case 'title':
+                            $subQuery->where('training_title', 'like', "%{$search}%");
+                            break;
+                        case 'remarks':
+                            $subQuery->where('remarks', 'like', "%{$search}%");
+                            break;
+                        default:
+                            $subQuery
+                                ->where('training_title', 'like', "%{$search}%")
+                                ->orWhere('remarks', 'like', "%{$search}%");
+                    }
                 });
             })
             ->orderBy($sortBy, $sortOrder)
@@ -175,6 +185,7 @@ class TrainingController extends Controller
             ],
             'filters' => [
                 'search' => $search,
+                'search_mode' => $searchMode,
                 'perPage' => $perPage,
                 'show_deleted' => $showDeleted,
             ],

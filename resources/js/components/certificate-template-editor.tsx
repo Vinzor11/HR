@@ -37,6 +37,7 @@ interface CertificateTemplateEditorProps {
     description: string;
     backgroundImage: File | null;
     existingBackgroundImagePath?: string | null;
+    existingBackgroundImageUrl?: string | null;
     width: number;
     height: number;
     isActive: boolean;
@@ -161,6 +162,7 @@ export function CertificateTemplateEditor({
     description,
     backgroundImage,
     existingBackgroundImagePath,
+    existingBackgroundImageUrl,
     width,
     height,
     isActive,
@@ -576,8 +578,11 @@ export function CertificateTemplateEditor({
             } else {
                 setPreviewUrl(null);
             }
+        } else if (existingBackgroundImageUrl) {
+            // Use the pre-generated URL from the backend (handles production/local differences)
+            setPreviewUrl(existingBackgroundImageUrl);
         } else if (existingBackgroundImagePath) {
-            // Use existing background image if no new file is uploaded
+            // Fallback: construct URL from path (for backwards compatibility)
             const imageUrl = existingBackgroundImagePath.startsWith('/')
                 ? existingBackgroundImagePath
                 : `/storage/${existingBackgroundImagePath}`;
@@ -586,7 +591,7 @@ export function CertificateTemplateEditor({
             setPreviewUrl(null);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [backgroundImage, existingBackgroundImagePath]);
+    }, [backgroundImage, existingBackgroundImagePath, existingBackgroundImageUrl]);
 
     // Calculate canvas scale to fit container
     useEffect(() => {

@@ -17,13 +17,29 @@ class PermissionController extends Controller
     {
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
+        $searchMode = $request->input('search_mode', 'any');
 
-        $permissions = Permission::when($search, function ($query) use ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('label', 'like', "%{$search}%")
-                  ->orWhere('name', 'like', "%{$search}%")
-                  ->orWhere('module', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+        $permissions = Permission::when($search, function ($query) use ($search, $searchMode) {
+            $query->where(function ($q) use ($search, $searchMode) {
+                switch ($searchMode) {
+                    case 'label':
+                        $q->where('label', 'like', "%{$search}%");
+                        break;
+                    case 'name':
+                        $q->where('name', 'like', "%{$search}%");
+                        break;
+                    case 'module':
+                        $q->where('module', 'like', "%{$search}%");
+                        break;
+                    case 'description':
+                        $q->where('description', 'like', "%{$search}%");
+                        break;
+                    default:
+                        $q->where('label', 'like', "%{$search}%")
+                          ->orWhere('name', 'like', "%{$search}%")
+                          ->orWhere('module', 'like', "%{$search}%")
+                          ->orWhere('description', 'like', "%{$search}%");
+                }
             });
         })
         ->latest()
@@ -34,6 +50,7 @@ class PermissionController extends Controller
             'permissions' => $permissions,
             'filters' => [
                 'search' => $search,
+                'search_mode' => $searchMode,
                 'perPage' => $perPage,
             ],
         ]);

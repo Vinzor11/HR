@@ -56,6 +56,7 @@ interface FlashProps {
 
 interface FilterProps {
   search: string
+  search_mode?: string
   perPage: string
   status?: FacultyStatus | ''
   show_deleted?: boolean
@@ -85,6 +86,9 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
     return 'name-asc'
   })
   const [searchTerm, setSearchTerm] = useState(filters?.search ?? '')
+  const [searchMode, setSearchMode] = useState<'any' | 'name' | 'code' | 'description'>(() =>
+    (filters?.search_mode as 'any' | 'name' | 'code' | 'description') || 'any'
+  )
   const [perPage, setPerPage] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('faculties_perPage')
@@ -258,7 +262,8 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
   const triggerFetch = (params: Record<string, any> = {}) => {
     const sortParams = getSortParams(sortKey)
     router.get(route('faculties.index'), {
-      search: searchTerm,
+      search: params.search !== undefined ? params.search : searchTerm,
+      search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
       perPage,
       status: statusFilter,
       show_deleted: params.show_deleted !== undefined ? params.show_deleted : showDeleted,
@@ -281,7 +286,7 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
     }
 
     searchTimeout.current = setTimeout(() => {
-      triggerFetch({ search: value })
+      triggerFetch({ search: value, search_mode: searchMode })
     }, 300)
   }
 
@@ -316,7 +321,7 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
 
   const handlePageChange = (page: number) => {
     const validPage = Math.max(1, Math.min(page, lastPage || 1))
-    triggerFetch({ page: validPage })
+    triggerFetch({ page: validPage, search: searchTerm, search_mode: searchMode })
   }
 
   // Export to CSV function
@@ -373,7 +378,7 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
     const currentPerPage = String(filters?.perPage ?? 10)
 
     if (savedPerPage && savedPerPage !== currentPerPage && ['5', '10', '25', '50', '100'].includes(savedPerPage)) {
-      triggerFetch({ search: searchTerm, perPage: savedPerPage })
+      triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: savedPerPage })
     }
   }, [])
 
@@ -411,6 +416,19 @@ export default function FacultyIndex({ faculties, filters }: IndexProps) {
         onSearchChange={handleSearchChange}
         isSearching={isSearching}
         searchPlaceholder="Search faculties..."
+        searchMode={{
+          value: searchMode,
+          options: [
+            { value: 'any', label: 'Any' },
+            { value: 'name', label: 'Name' },
+            { value: 'code', label: 'Code' },
+            { value: 'description', label: 'Description' },
+          ],
+          onChange: (value: string) => {
+            setSearchMode(value as 'any' | 'name' | 'code' | 'description')
+            if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1 })
+          },
+        }}
         perPage={{
           value: perPage,
           onChange: handlePerPageChange,

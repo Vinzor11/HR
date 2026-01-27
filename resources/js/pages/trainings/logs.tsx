@@ -134,6 +134,7 @@ const getAttendanceBadgeClass = (attendance?: string) => {
 export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
     const [statusFilter, setStatusFilter] = useState(filters?.status || 'all');
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
+    const [searchMode, setSearchMode] = useState<'any' | 'title' | 'facilitator' | 'venue' | 'remarks'>('any');
     const [dateFrom, setDateFrom] = useState(formatDateForInput(filters?.date_from));
     const [dateTo, setDateTo] = useState(formatDateForInput(filters?.date_to));
 
@@ -201,16 +202,25 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
             filtered = filtered.filter((entry) => entry.status === statusFilter);
         }
 
-        // Search filter
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(
-                (entry) =>
-                    entry.training_title?.toLowerCase().includes(query) ||
-                    entry.facilitator?.toLowerCase().includes(query) ||
-                    entry.venue?.toLowerCase().includes(query) ||
-                    entry.remarks?.toLowerCase().includes(query)
-            );
+            if (searchMode === 'title') {
+                filtered = filtered.filter((entry) => entry.training_title?.toLowerCase().includes(query));
+            } else if (searchMode === 'facilitator') {
+                filtered = filtered.filter((entry) => entry.facilitator?.toLowerCase().includes(query));
+            } else if (searchMode === 'venue') {
+                filtered = filtered.filter((entry) => entry.venue?.toLowerCase().includes(query));
+            } else if (searchMode === 'remarks') {
+                filtered = filtered.filter((entry) => entry.remarks?.toLowerCase().includes(query));
+            } else {
+                filtered = filtered.filter(
+                    (entry) =>
+                        entry.training_title?.toLowerCase().includes(query) ||
+                        entry.facilitator?.toLowerCase().includes(query) ||
+                        entry.venue?.toLowerCase().includes(query) ||
+                        entry.remarks?.toLowerCase().includes(query)
+                );
+            }
         }
 
         // Date filters
@@ -246,7 +256,7 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
         }
 
         return filtered;
-    }, [entries, statusFilter, searchQuery, dateFrom, dateTo]);
+    }, [entries, statusFilter, searchQuery, searchMode, dateFrom, dateTo]);
 
     const groupedEntries = useMemo(() => {
         return filteredEntries.reduce((acc, entry) => {
@@ -309,16 +319,30 @@ export default function TrainingLogs({ entries, filters }: TrainingLogsProps) {
 
                         {/* Search and Date Filters */}
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
-                            {/* Search Bar */}
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    type="text"
-                                    placeholder="Search by title, facilitator, venue, or remarks..."
-                                    value={searchQuery}
-                                    onChange={(e) => handleSearchChange(e.target.value)}
-                                    className="pl-9"
-                                />
+                            {/* Search Bar - integrated with search-by */}
+                            <div className="flex flex-1 min-w-[280px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                                <Select value={searchMode} onValueChange={(v) => setSearchMode(v as typeof searchMode)}>
+                                    <SelectTrigger className="h-10 w-[100px] sm:w-[110px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="any">Any</SelectItem>
+                                        <SelectItem value="title">Title</SelectItem>
+                                        <SelectItem value="facilitator">Facilitator</SelectItem>
+                                        <SelectItem value="venue">Venue</SelectItem>
+                                        <SelectItem value="remarks">Remarks</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <div className="relative flex-1 min-w-0">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                    <Input
+                                        type="text"
+                                        placeholder={searchMode === 'any' ? 'Search by title, facilitator, venue, or remarks...' : `Search by ${searchMode}...`}
+                                        value={searchQuery}
+                                        onChange={(e) => handleSearchChange(e.target.value)}
+                                        className="h-10 w-full min-w-0 pl-9 pr-3 border-0 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                                    />
+                                </div>
                             </div>
 
                             {/* Date From */}

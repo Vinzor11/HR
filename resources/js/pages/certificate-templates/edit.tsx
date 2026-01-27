@@ -28,6 +28,7 @@ interface CertificateTemplate {
     name: string;
     description?: string | null;
     background_image_path?: string | null;
+    background_image_url?: string | null;
     width: number;
     height: number;
     is_active: boolean;
@@ -153,6 +154,7 @@ export default function CertificateTemplateEdit({ template }: CertificateTemplat
                             description={data.description}
                             backgroundImage={data.background_image}
                             existingBackgroundImagePath={template.background_image_path}
+                            existingBackgroundImageUrl={template.background_image_url}
                             width={data.width}
                             height={data.height}
                             isActive={data.is_active}

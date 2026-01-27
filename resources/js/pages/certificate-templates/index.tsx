@@ -26,6 +26,7 @@ interface CertificateTemplate {
     name: string;
     description?: string | null;
     background_image_path?: string | null;
+    background_image_url?: string | null;
     width: number;
     height: number;
     is_active: boolean;
@@ -46,6 +47,7 @@ interface CertificateTemplateIndexProps {
     templates: Paginated<CertificateTemplate>;
     filters: {
         search?: string;
+        search_mode?: string;
         perPage?: number;
     };
 }
@@ -64,6 +66,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function CertificateTemplateIndex({ templates, filters }: CertificateTemplateIndexProps) {
     const { flash } = usePage().props as any;
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
+    const [searchMode, setSearchMode] = useState<'any' | 'name' | 'description'>(() =>
+        (filters?.search_mode as 'any' | 'name' | 'description') || 'any'
+    );
     const [perPage, setPerPage] = useState(String(filters?.perPage || 10));
     const [isSearching, setIsSearching] = useState(false);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -104,8 +109,9 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
 
     const triggerFetch = (params: Record<string, any> = {}) => {
         router.get('/certificate-templates', {
-            search: searchTerm,
-            perPage,
+            search: params.search !== undefined ? params.search : searchTerm,
+            search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
+            perPage: params.perPage !== undefined ? params.perPage : perPage,
             ...params,
         }, {
             preserveState: true,
@@ -123,13 +129,13 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
         }
 
         searchTimeout.current = setTimeout(() => {
-            triggerFetch({ search: value });
+            triggerFetch({ search: value, search_mode: searchMode });
         }, 300);
     };
 
     const handlePerPageChange = (value: string) => {
         setPerPage(value);
-        triggerFetch({ perPage: value });
+        triggerFetch({ perPage: value, search: searchTerm, search_mode: searchMode });
     };
 
     const handleDelete = (template: CertificateTemplate) => {
@@ -184,6 +190,18 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
                 onSearchChange={handleSearchChange}
                 isSearching={isSearching}
                 searchPlaceholder="Search templates..."
+                searchMode={{
+                    value: searchMode,
+                    options: [
+                        { value: 'any', label: 'Any' },
+                        { value: 'name', label: 'Name' },
+                        { value: 'description', label: 'Description' },
+                    ],
+                    onChange: (value: string) => {
+                        setSearchMode(value as 'any' | 'name' | 'description');
+                        if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1 });
+                    },
+                }}
                 perPage={{
                     value: perPage,
                     onChange: handlePerPageChange,
@@ -220,11 +238,8 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {templates.data.map((template) => {
-                                const imageUrl = template.background_image_path
-                                    ? (template.background_image_path.startsWith('/')
-                                        ? template.background_image_path
-                                        : `/storage/${template.background_image_path}`)
-                                    : null;
+                                // Use the background_image_url from the backend which handles the correct URL generation
+                                const imageUrl = template.background_image_url || null;
                                 
                                 return (
                                     <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-200">

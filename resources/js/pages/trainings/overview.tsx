@@ -170,9 +170,11 @@ export default function TrainingsOverview() {
     const [overviewStatusFilter, setOverviewStatusFilter] = useState(filters?.status || 'all');
     const [activeTab, setActiveTab] = useState('logs');
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
+    const [searchMode, setSearchMode] = useState<'any' | 'title' | 'employee' | 'department' | 'position' | 'facilitator' | 'venue'>('any');
     const [dateFrom, setDateFrom] = useState<string>(formatDateForInput(filters?.date_from));
     const [dateTo, setDateTo] = useState<string>(formatDateForInput(filters?.date_to));
     const [overviewSearchTerm, setOverviewSearchTerm] = useState(filters?.search || '');
+    const [overviewSearchMode, setOverviewSearchMode] = useState<'any' | 'title' | 'reference' | 'venue' | 'participant'>('any');
     const [overviewDateFrom, setOverviewDateFrom] = useState<string>(formatDateForInput(filters?.date_from));
     const [overviewDateTo, setOverviewDateTo] = useState<string>(formatDateForInput(filters?.date_to));
 
@@ -211,21 +213,37 @@ export default function TrainingsOverview() {
             filtered = filtered.filter(training => training.status === overviewStatusFilter);
         }
 
-        // Search filter
         if (overviewSearchTerm) {
             const query = overviewSearchTerm.toLowerCase();
-            filtered = filtered.filter(
-                (training) =>
-                    training.training_title?.toLowerCase().includes(query) ||
-                    training.reference_number?.toLowerCase().includes(query) ||
-                    training.venue?.toLowerCase().includes(query) ||
-                    training.participants.some(
+            if (overviewSearchMode === 'title') {
+                filtered = filtered.filter((t) => t.training_title?.toLowerCase().includes(query));
+            } else if (overviewSearchMode === 'reference') {
+                filtered = filtered.filter((t) => t.reference_number?.toLowerCase().includes(query));
+            } else if (overviewSearchMode === 'venue') {
+                filtered = filtered.filter((t) => t.venue?.toLowerCase().includes(query));
+            } else if (overviewSearchMode === 'participant') {
+                filtered = filtered.filter((t) =>
+                    t.participants.some(
                         (p) =>
                             p.name?.toLowerCase().includes(query) ||
                             p.department?.toLowerCase().includes(query) ||
                             p.position?.toLowerCase().includes(query)
                     )
-            );
+                );
+            } else {
+                filtered = filtered.filter(
+                    (t) =>
+                        t.training_title?.toLowerCase().includes(query) ||
+                        t.reference_number?.toLowerCase().includes(query) ||
+                        t.venue?.toLowerCase().includes(query) ||
+                        t.participants.some(
+                            (p) =>
+                                p.name?.toLowerCase().includes(query) ||
+                                p.department?.toLowerCase().includes(query) ||
+                                p.position?.toLowerCase().includes(query)
+                        )
+                );
+            }
         }
 
         // Date filters
@@ -251,7 +269,7 @@ export default function TrainingsOverview() {
         }
 
         return filtered;
-    }, [trainings, overviewStatusFilter, overviewSearchTerm, overviewDateFrom, overviewDateTo]);
+    }, [trainings, overviewStatusFilter, overviewSearchTerm, overviewSearchMode, overviewDateFrom, overviewDateTo]);
 
     // Export individual training to CSV
     const exportTrainingToCSV = useCallback((training: TrainingOverview) => {
@@ -325,13 +343,26 @@ export default function TrainingsOverview() {
 
     const filteredLogs = useMemo(() => {
         return logs.filter((entry) => {
-            const matchesSearch = !searchTerm || 
-                entry.training_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                entry.employee_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                entry.employee_department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                entry.employee_position?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                entry.facilitator?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                entry.venue?.toLowerCase().includes(searchTerm.toLowerCase());
+            const term = searchTerm.trim().toLowerCase();
+            let matchesSearch = !searchTerm;
+            if (searchTerm) {
+                if (searchMode === 'title') matchesSearch = !!(entry.training_title?.toLowerCase().includes(term));
+                else if (searchMode === 'employee') matchesSearch = !!(entry.employee_name?.toLowerCase().includes(term));
+                else if (searchMode === 'department') matchesSearch = !!(entry.employee_department?.toLowerCase().includes(term));
+                else if (searchMode === 'position') matchesSearch = !!(entry.employee_position?.toLowerCase().includes(term));
+                else if (searchMode === 'facilitator') matchesSearch = !!(entry.facilitator?.toLowerCase().includes(term));
+                else if (searchMode === 'venue') matchesSearch = !!(entry.venue?.toLowerCase().includes(term));
+                else {
+                    matchesSearch = !!(
+                        entry.training_title?.toLowerCase().includes(term) ||
+                        entry.employee_name?.toLowerCase().includes(term) ||
+                        entry.employee_department?.toLowerCase().includes(term) ||
+                        entry.employee_position?.toLowerCase().includes(term) ||
+                        entry.facilitator?.toLowerCase().includes(term) ||
+                        entry.venue?.toLowerCase().includes(term)
+                    );
+                }
+            }
 
             const matchesStatus = !statusFilter || statusFilter === 'all' || entry.status === statusFilter;
             
@@ -346,7 +377,7 @@ export default function TrainingsOverview() {
             
             return matchesSearch && matchesStatus;
         });
-    }, [logs, searchTerm, statusFilter, dateFrom, dateTo]);
+    }, [logs, searchTerm, searchMode, statusFilter, dateFrom, dateTo]);
 
     const groupedLogs = useMemo(() => {
         return filteredLogs.reduce((acc, entry) => {
@@ -474,15 +505,31 @@ export default function TrainingsOverview() {
                             <div className="space-y-6">
                                 {/* Filters */}
                                 <div className="flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-lg">
-                                    <div className="relative max-w-md">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            type="text"
-                                            placeholder="Search by training, employee, department, venue..."
-                                            className="pl-10"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                        />
+                                    <div className="flex flex-1 min-w-[280px] max-w-[420px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                                        <Select value={searchMode} onValueChange={(v) => setSearchMode(v as typeof searchMode)}>
+                                            <SelectTrigger className="h-10 w-[100px] sm:w-[110px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="any">Any</SelectItem>
+                                                <SelectItem value="title">Title</SelectItem>
+                                                <SelectItem value="employee">Employee</SelectItem>
+                                                <SelectItem value="department">Department</SelectItem>
+                                                <SelectItem value="position">Position</SelectItem>
+                                                <SelectItem value="facilitator">Facilitator</SelectItem>
+                                                <SelectItem value="venue">Venue</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <div className="relative flex-1 min-w-0">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                            <Input
+                                                type="text"
+                                                placeholder={searchMode === 'any' ? 'Search by training, employee, department, venue...' : `Search by ${searchMode}...`}
+                                                className="h-10 w-full min-w-0 pl-10 pr-3 border-0 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                        </div>
                                     </div>
                                     <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
                                         <SelectTrigger className="w-full sm:w-[180px]">
@@ -701,15 +748,29 @@ export default function TrainingsOverview() {
                             <div className="space-y-6">
                                 {/* Filters for Overview */}
                                 <div className="flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-lg">
-                                    <div className="relative max-w-md">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            type="text"
-                                            placeholder="Search by training title, reference, venue, participant..."
-                                            className="pl-10"
-                                            value={overviewSearchTerm}
-                                            onChange={(e) => setOverviewSearchTerm(e.target.value)}
-                                        />
+                                    <div className="flex flex-1 min-w-[280px] max-w-[420px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                                        <Select value={overviewSearchMode} onValueChange={(v) => setOverviewSearchMode(v as typeof overviewSearchMode)}>
+                                            <SelectTrigger className="h-10 w-[100px] sm:w-[110px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="any">Any</SelectItem>
+                                                <SelectItem value="title">Title</SelectItem>
+                                                <SelectItem value="reference">Reference</SelectItem>
+                                                <SelectItem value="venue">Venue</SelectItem>
+                                                <SelectItem value="participant">Participant</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <div className="relative flex-1 min-w-0">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                            <Input
+                                                type="text"
+                                                placeholder={overviewSearchMode === 'any' ? 'Search by training title, reference, venue, participant...' : `Search by ${overviewSearchMode}...`}
+                                                className="h-10 w-full min-w-0 pl-10 pr-3 border-0 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                                                value={overviewSearchTerm}
+                                                onChange={(e) => setOverviewSearchTerm(e.target.value)}
+                                            />
+                                        </div>
                                     </div>
                                     <Select value={overviewStatusFilter} onValueChange={handleOverviewStatusFilterChange}>
                                         <SelectTrigger className="w-full sm:w-[180px]">

@@ -101,6 +101,7 @@ interface IndexProps {
     };
     filters?: {
         search?: string;
+        search_mode?: string;
         perPage?: number;
         show_deleted?: boolean;
     };
@@ -176,6 +177,9 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         };
     };
     const [searchTerm, setSearchTerm] = useState(filters?.search ?? '');
+    const [searchMode, setSearchMode] = useState<'any' | 'title' | 'remarks'>(() =>
+        (filters?.search_mode as 'any' | 'title' | 'remarks') || 'any'
+    );
     const [showDeleted, setShowDeleted] = useState(filters?.show_deleted ?? false);
     const [perPage, setPerPage] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -405,7 +409,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
     const handlePageChange = (page: number) => {
         // Ensure page is a valid positive number
         const validPage = Math.max(1, Math.min(page, lastPage || 1));
-        triggerFetch({ page: validPage, search: searchTerm, perPage });
+        triggerFetch({ page: validPage, search: searchTerm, search_mode: searchMode, perPage });
     };
 
     // Export to CSV function
@@ -515,7 +519,8 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
     const triggerFetch = (params: Record<string, any> = {}) => {
         const sortParams = getSortParams(sortKey);
         const fetchParams = {
-            search: searchTerm,
+            search: params.search !== undefined ? params.search : searchTerm,
+            search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
             perPage,
             show_deleted: params.show_deleted !== undefined ? params.show_deleted : showDeleted,
             sort_by: params.sort_by !== undefined ? params.sort_by : sortParams.sort_by,
@@ -538,7 +543,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         }
 
         searchTimeout.current = setTimeout(() => {
-            triggerFetch({ search: value, perPage });
+            triggerFetch({ search: value, search_mode: searchMode, perPage });
         }, 300);
     };
 
@@ -547,7 +552,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         if (typeof window !== 'undefined') {
             localStorage.setItem('trainings_perPage', value);
         }
-        triggerFetch({ search: searchTerm, perPage: value });
+        triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: value });
     };
 
     useEffect(() => {
@@ -568,7 +573,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         
         // If localStorage has a different perPage than what backend sent, sync it
         if (savedPerPage && savedPerPage !== currentPerPage && ['5', '10', '25', '50', '100'].includes(savedPerPage)) {
-            triggerFetch({ search: searchTerm, perPage: savedPerPage });
+            triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: savedPerPage });
         }
     }, []); // Only run on mount
 
@@ -611,7 +616,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
             preserveScroll: true,
             onSuccess: () => {
                 // Refresh with current filters, but switch to active view after restore
-                triggerFetch({ search: searchTerm, perPage, show_deleted: false });
+                triggerFetch({ search: searchTerm, search_mode: searchMode, perPage, show_deleted: false });
             },
             onError: (errors) => {
                 console.error('Restore error:', errors);
@@ -627,7 +632,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                 const successMessage = response.props.flash?.success;
                 if (successMessage) toast.success(successMessage);
                 // Keep current view (deleted) after force delete
-                triggerFetch({ search: searchTerm, perPage, show_deleted: showDeleted });
+                triggerFetch({ search: searchTerm, search_mode: searchMode, perPage, show_deleted: showDeleted });
             },
             onError: (errors) => {
                 console.error('Force delete error:', errors);
@@ -684,6 +689,18 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                 onSearchChange={handleSearchChange}
                 isSearching={isSearching}
                 searchPlaceholder="Search trainings..."
+                searchMode={{
+                    value: searchMode,
+                    options: [
+                        { value: 'any', label: 'Any' },
+                        { value: 'title', label: 'Title' },
+                        { value: 'remarks', label: 'Remarks' },
+                    ],
+                    onChange: (value: string) => {
+                        setSearchMode(value as 'any' | 'title' | 'remarks');
+                        if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1 });
+                    },
+                }}
                 perPage={{
                     value: perPage,
                     onChange: handlePerPageChange,

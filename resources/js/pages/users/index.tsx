@@ -59,6 +59,7 @@ interface UserPagination {
 
 interface FilterProps {
     search: string;
+    search_mode?: string;
     perPage: string;
     show_deleted?: boolean;
 }
@@ -102,6 +103,9 @@ export default function Index({ users, filters }: IndexProps) {
         return 'name-asc';
     });
     const [searchTerm, setSearchTerm] = useState(filters?.search ?? '');
+    const [searchMode, setSearchMode] = useState<'any' | 'name' | 'email' | 'employee_id'>(() =>
+        (filters?.search_mode as 'any' | 'name' | 'email' | 'employee_id') || 'any'
+    );
     const [perPage, setPerPage] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('users_perPage');
@@ -351,8 +355,9 @@ export default function Index({ users, filters }: IndexProps) {
 
     const triggerFetch = (params: Record<string, any> = {}) => {
         const allParams = {
-            search: searchTerm,
-            perPage,
+            search: params.search !== undefined ? params.search : searchTerm,
+            search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
+            perPage: params.perPage !== undefined ? params.perPage : perPage,
             show_deleted: showDeleted,
             ...params,
         };
@@ -372,7 +377,7 @@ export default function Index({ users, filters }: IndexProps) {
         }
 
         searchTimeout.current = setTimeout(() => {
-            triggerFetch({ search: value });
+            triggerFetch({ search: value, search_mode: searchMode });
         }, 300);
     };
 
@@ -431,9 +436,8 @@ export default function Index({ users, filters }: IndexProps) {
     const lastPage = users?.meta?.last_page || (total > 0 ? Math.ceil(total / (parseInt(perPage) || 10)) : 1);
 
     const handlePageChange = (page: number) => {
-        // Ensure page is a valid positive number
         const validPage = Math.max(1, Math.min(page, lastPage || 1));
-        triggerFetch({ page: validPage, search: searchTerm, perPage });
+        triggerFetch({ page: validPage, search: searchTerm, search_mode: searchMode, perPage });
     };
 
     // Export to CSV function
@@ -492,7 +496,7 @@ export default function Index({ users, filters }: IndexProps) {
         
         // If localStorage has a different perPage than what backend sent, sync it
         if (savedPerPage && savedPerPage !== currentPerPage && ['5', '10', '25', '50', '100'].includes(savedPerPage)) {
-            triggerFetch({ search: searchTerm, perPage: savedPerPage });
+            triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: savedPerPage });
         }
     }, []); // Only run on mount
 
@@ -536,6 +540,19 @@ export default function Index({ users, filters }: IndexProps) {
                 onSearchChange={handleSearchChange}
                 isSearching={isSearching}
                 searchPlaceholder="Search users..."
+                searchMode={{
+                    value: searchMode,
+                    options: [
+                        { value: 'any', label: 'Any' },
+                        { value: 'name', label: 'Name' },
+                        { value: 'email', label: 'Email' },
+                        { value: 'employee_id', label: 'Employee ID' },
+                    ],
+                    onChange: (value: string) => {
+                        setSearchMode(value as 'any' | 'name' | 'email' | 'employee_id');
+                        if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1 });
+                    },
+                }}
                 perPage={{
                     value: perPage,
                     onChange: handlePerPageChange,

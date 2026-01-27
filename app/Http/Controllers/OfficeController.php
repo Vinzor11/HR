@@ -19,6 +19,7 @@ class OfficeController extends Controller
 
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
+        $searchMode = $request->input('search_mode', 'any');
         $showDeleted = $request->boolean('show_deleted', false);
         $sortBy = $request->input('sort_by', 'name');
         $sortOrder = $request->input('sort_order', 'asc');
@@ -37,13 +38,28 @@ class OfficeController extends Controller
             ->when($showDeleted, function ($query) {
                 $query->onlyTrashed();
             })
-            ->when($search, function ($query) use ($search) {
-                $query->where(function ($innerQuery) use ($search) {
-                    $innerQuery
-                        ->where('name', 'like', "%{$search}%")
-                        ->orWhere('code', 'like', "%{$search}%")
-                        ->orWhere('faculty_name', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%");
+            ->when($search, function ($query) use ($search, $searchMode) {
+                $query->where(function ($innerQuery) use ($search, $searchMode) {
+                    switch ($searchMode) {
+                        case 'name':
+                            $innerQuery->where('name', 'like', "%{$search}%");
+                            break;
+                        case 'code':
+                            $innerQuery->where('code', 'like', "%{$search}%");
+                            break;
+                        case 'faculty':
+                            $innerQuery->where('faculty_name', 'like', "%{$search}%");
+                            break;
+                        case 'description':
+                            $innerQuery->where('description', 'like', "%{$search}%");
+                            break;
+                        default:
+                            $innerQuery
+                                ->where('name', 'like', "%{$search}%")
+                                ->orWhere('code', 'like', "%{$search}%")
+                                ->orWhere('faculty_name', 'like', "%{$search}%")
+                                ->orWhere('description', 'like', "%{$search}%");
+                    }
                 });
             })
             ->orderBy($sortBy, $sortOrder)
@@ -54,6 +70,7 @@ class OfficeController extends Controller
             'offices' => $offices,
             'filters' => [
                 'search' => $search,
+                'search_mode' => $searchMode,
                 'perPage' => $perPage,
                 'show_deleted' => $showDeleted,
             ],

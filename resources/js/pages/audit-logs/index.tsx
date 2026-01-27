@@ -28,6 +28,19 @@ import {
 // Constants
 const PER_PAGE_OPTIONS = ['10', '25', '50', '100'] as const;
 
+/** Curated action filter options (matches actionConfig). Reduces dropdown clutter and ensures filter works. */
+const ACTION_FILTER_OPTIONS = [
+    'created',
+    'updated',
+    'viewed',
+    'approved',
+    'rejected',
+    'soft-deleted',
+    'permanently-deleted',
+    'restored',
+    'exported',
+] as const;
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Audit Logs',
@@ -52,6 +65,7 @@ interface AuditLogsProps {
         entity_type?: string;
         entity_id?: string;
         search?: string;
+        search_mode?: string;
         date_from?: string;
         date_to?: string;
         per_page?: number;
@@ -64,13 +78,23 @@ interface AuditLogsProps {
 }
 
 export default function AuditLogs() {
-    const { logs, filters: initialFilters, modules, actions, entityTypes, users } = usePage<AuditLogsProps>().props;
+    const { logs, filters: initialFilters, modules } = usePage<AuditLogsProps>().props;
     
     const [searchTerm, setSearchTerm] = useState(initialFilters.search || '');
+    type SearchMode = 'any' | 'target_id' | 'reference' | 'performed_by' | 'field';
+    const SEARCH_MODE_LABELS: Record<SearchMode, string> = {
+        any: 'Any',
+        target_id: 'Target ID',
+        reference: 'Reference',
+        performed_by: 'Performed By',
+        field: 'Field',
+    };
+    const [searchMode, setSearchMode] = useState<SearchMode>(() => {
+        const v = initialFilters.search_mode as SearchMode | undefined;
+        return (v && ['any', 'target_id', 'reference', 'performed_by', 'field'].includes(v)) ? v : 'any';
+    });
     const [filterModule, setFilterModule] = useState(initialFilters.module || 'all');
     const [filterAction, setFilterAction] = useState(initialFilters.action || 'all');
-    const [filterUser, setFilterUser] = useState(initialFilters.user_id || 'all');
-    const [filterEntityType, setFilterEntityType] = useState(initialFilters.entity_type || 'all');
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
     const [perPage, setPerPage] = useState(() => {
@@ -112,12 +136,10 @@ export default function AuditLogs() {
             searchTerm !== '' ||
             filterModule !== 'all' ||
             filterAction !== 'all' ||
-            filterUser !== 'all' ||
-            filterEntityType !== 'all' ||
             dateFrom !== '' ||
             dateTo !== ''
         );
-    }, [searchTerm, filterModule, filterAction, filterUser, filterEntityType, dateFrom, dateTo]);
+    }, [searchTerm, filterModule, filterAction, dateFrom, dateTo]);
 
     // Count active filters
     const activeFilterCount = useMemo(() => {
@@ -125,26 +147,37 @@ export default function AuditLogs() {
         if (searchTerm) count++;
         if (filterModule !== 'all') count++;
         if (filterAction !== 'all') count++;
-        if (filterUser !== 'all') count++;
-        if (filterEntityType !== 'all') count++;
         if (dateFrom || dateTo) count++;
         return count;
-    }, [searchTerm, filterModule, filterAction, filterUser, filterEntityType, dateFrom, dateTo]);
+    }, [searchTerm, filterModule, filterAction, dateFrom, dateTo]);
 
-    const applyFilters = useCallback((options: { page?: number; newPerPage?: string; newModule?: string } = {}) => {
+    const applyFilters = useCallback((options: {
+        page?: number;
+        newPerPage?: string;
+        newModule?: string;
+        newAction?: string;
+        newSearch?: string;
+        newSearchMode?: string;
+        newDateFrom?: string;
+        newDateTo?: string;
+    } = {}) => {
         setIsLoading(true);
         const params: any = {};
-        if (searchTerm) params.search = searchTerm;
+        const effectiveSearch = options.newSearch !== undefined ? options.newSearch : searchTerm;
+        if (effectiveSearch) params.search = effectiveSearch;
+        const effectiveSearchMode = options.newSearchMode !== undefined ? options.newSearchMode : searchMode;
+        if (effectiveSearch) params.search_mode = effectiveSearchMode;
         
-        // Use newModule if provided (for immediate chip clicks), otherwise use state
         const effectiveModule = options.newModule !== undefined ? options.newModule : filterModule;
         if (effectiveModule !== 'all') params.module = effectiveModule;
         
-        if (filterAction !== 'all') params.action = filterAction;
-        if (filterUser !== 'all') params.user_id = filterUser;
-        if (filterEntityType !== 'all') params.entity_type = filterEntityType;
-        if (dateFrom) params.date_from = dateFrom;
-        if (dateTo) params.date_to = dateTo;
+        const effectiveAction = options.newAction !== undefined ? options.newAction : filterAction;
+        if (effectiveAction !== 'all') params.action = effectiveAction;
+        
+        const effectiveDateFrom = options.newDateFrom !== undefined ? options.newDateFrom : dateFrom;
+        const effectiveDateTo = options.newDateTo !== undefined ? options.newDateTo : dateTo;
+        if (effectiveDateFrom) params.date_from = effectiveDateFrom;
+        if (effectiveDateTo) params.date_to = effectiveDateTo;
         
         const effectivePerPage = options.newPerPage || perPage;
         params.per_page = parseInt(effectivePerPage, 10);
@@ -158,15 +191,14 @@ export default function AuditLogs() {
             preserveScroll: true,
             onFinish: () => setIsLoading(false),
         });
-    }, [searchTerm, filterModule, filterAction, filterUser, filterEntityType, dateFrom, dateTo, perPage]);
+    }, [searchTerm, searchMode, filterModule, filterAction, dateFrom, dateTo, perPage]);
 
     // Clear all filters
     const clearAllFilters = useCallback(() => {
         setSearchTerm('');
+        setSearchMode('any');
         setFilterModule('all');
         setFilterAction('all');
-        setFilterUser('all');
-        setFilterEntityType('all');
         setDateFrom('');
         setDateTo('');
         setIsLoading(true);
@@ -189,27 +221,22 @@ export default function AuditLogs() {
 
     const handleSearch = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
-            applyFilters({ page: 1 });
+            applyFilters({ page: 1, newSearch: searchTerm, newSearchMode: searchMode });
         }
-    }, [applyFilters]);
+    }, [applyFilters, searchTerm, searchMode]);
 
     // Remove individual filter
     const removeFilter = useCallback((filterType: string) => {
         switch (filterType) {
             case 'search':
                 setSearchTerm('');
+                setSearchMode('any');
                 break;
             case 'module':
                 setFilterModule('all');
                 break;
             case 'action':
                 setFilterAction('all');
-                break;
-            case 'user':
-                setFilterUser('all');
-                break;
-            case 'entity_type':
-                setFilterEntityType('all');
                 break;
             case 'date':
                 setDateFrom('');
@@ -964,17 +991,37 @@ export default function AuditLogs() {
                                 </div>
                             </div>
 
-                            {/* Search Bar */}
-                            <div className="relative flex-shrink-0">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    type="text"
-                                    placeholder="Search..."
-                                    className="pl-8 h-9 w-[180px] text-sm"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    onKeyDown={handleSearch}
-                                />
+                            {/* Search Bar - integrated with search-by dropdown */}
+                            <div className="flex flex-shrink-0 min-w-[280px] w-[300px] sm:w-[360px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                                <Select
+                                    value={searchMode}
+                                    onValueChange={(v) => {
+                                        setSearchMode(v as SearchMode);
+                                        if (searchTerm) applyFilters({ page: 1, newSearchMode: v });
+                                    }}
+                                >
+                                    <SelectTrigger className="h-9 w-[100px] sm:w-[110px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="any">Any</SelectItem>
+                                        <SelectItem value="target_id">Target ID</SelectItem>
+                                        <SelectItem value="reference">Reference</SelectItem>
+                                        <SelectItem value="performed_by">Performed By</SelectItem>
+                                        <SelectItem value="field">Field</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <div className="relative flex-1 min-w-0">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                    <Input
+                                        type="text"
+                                        placeholder={searchMode === 'any' ? 'Search...' : `Search by ${SEARCH_MODE_LABELS[searchMode]}...`}
+                                        className="h-9 w-full min-w-0 pl-8 pr-3 border-0 rounded-none bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        onKeyDown={handleSearch}
+                                    />
+                                </div>
                             </div>
 
                             {/* Export Button - Icon Only */}
@@ -996,7 +1043,7 @@ export default function AuditLogs() {
                                         variant="outline"
                                         size="sm"
                                         className="relative h-9 w-9 p-0 flex-shrink-0"
-                                        title="Advanced Filters"
+                                        title="Filters"
                                     >
                                         <SlidersHorizontal className="h-4 w-4" />
                                         {(() => {
@@ -1012,10 +1059,10 @@ export default function AuditLogs() {
                                         })()}
                                     </Button>
                                 </SheetTrigger>
-                                <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+                                <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" aria-describedby={undefined}>
                                     <SheetHeader>
                                         <SheetTitle className="flex flex-wrap items-center gap-2">
-                                            <span>Advanced Filters</span>
+                                            <span>Filters</span>
                                             {hasActiveFilters && (
                                                 <Button
                                                     variant="ghost"
@@ -1033,13 +1080,19 @@ export default function AuditLogs() {
                                         {/* Action Filter */}
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-foreground">Action</label>
-                                            <Select value={filterAction} onValueChange={setFilterAction}>
+                                            <Select
+                                                value={filterAction}
+                                                onValueChange={(value) => {
+                                                    setFilterAction(value);
+                                                    applyFilters({ page: 1, newAction: value });
+                                                }}
+                                            >
                                                 <SelectTrigger className="h-10">
                                                     <SelectValue placeholder="All Actions" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="all">All Actions</SelectItem>
-                                                    {actions.map((action) => {
+                                                    {ACTION_FILTER_OPTIONS.map((action) => {
                                                         const config = getActionConfig(action);
                                                         return (
                                                             <SelectItem key={action} value={action}>
@@ -1047,42 +1100,6 @@ export default function AuditLogs() {
                                                             </SelectItem>
                                                         );
                                                     })}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        {/* Entity Type Filter */}
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-foreground">Record Type</label>
-                                            <Select value={filterEntityType} onValueChange={setFilterEntityType}>
-                                                <SelectTrigger className="h-10">
-                                                    <SelectValue placeholder="All Types" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="all">All Types</SelectItem>
-                                                    {entityTypes.map((entityType) => (
-                                                        <SelectItem key={entityType} value={entityType}>
-                                                            {entityType}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        {/* User Filter */}
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-foreground">User</label>
-                                            <Select value={filterUser} onValueChange={setFilterUser}>
-                                                <SelectTrigger className="h-10">
-                                                    <SelectValue placeholder="All Users" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="all">All Users</SelectItem>
-                                                    {users.map((user) => (
-                                                        <SelectItem key={user.id} value={String(user.id)}>
-                                                            {user.name}
-                                                        </SelectItem>
-                                                    ))}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -1097,7 +1114,11 @@ export default function AuditLogs() {
                                                         type="date"
                                                         className="h-10"
                                                         value={dateFrom}
-                                                        onChange={(e) => setDateFrom(e.target.value)}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            setDateFrom(v);
+                                                            applyFilters({ page: 1, newDateFrom: v, newDateTo: dateTo });
+                                                        }}
                                                     />
                                                 </div>
                                                 <div className="space-y-1">
@@ -1106,25 +1127,15 @@ export default function AuditLogs() {
                                                         type="date"
                                                         className="h-10"
                                                         value={dateTo}
-                                                        onChange={(e) => setDateTo(e.target.value)}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            setDateTo(v);
+                                                            applyFilters({ page: 1, newDateFrom: dateFrom, newDateTo: v });
+                                                        }}
                                                     />
                                                 </div>
                                             </div>
                                         </div>
-
-                                        {/* Apply Button */}
-                                        <Button
-                                            className="w-full h-10 mt-4"
-                                            onClick={() => applyFilters({ page: 1 })}
-                                            disabled={isLoading}
-                                        >
-                                            {isLoading ? (
-                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                            ) : (
-                                                <Filter className="h-4 w-4 mr-2" />
-                                            )}
-                                            Apply Filters
-                                        </Button>
                                     </div>
                                 </SheetContent>
                             </Sheet>
@@ -1145,7 +1156,7 @@ export default function AuditLogs() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 removeFilter('search');
-                                                applyFilters({ page: 1 });
+                                                applyFilters({ page: 1, newSearch: '', newSearchMode: 'any' });
                                             }}
                                             className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
                                             aria-label="Remove search filter"
@@ -1162,7 +1173,7 @@ export default function AuditLogs() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 removeFilter('module');
-                                                applyFilters({ page: 1 });
+                                                applyFilters({ page: 1, newModule: 'all' });
                                             }}
                                             className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
                                             aria-label="Remove module filter"
@@ -1179,44 +1190,10 @@ export default function AuditLogs() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 removeFilter('action');
-                                                applyFilters({ page: 1 });
+                                                applyFilters({ page: 1, newAction: 'all' });
                                             }}
                                             className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
                                             aria-label="Remove action filter"
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    </Badge>
-                                )}
-                                {filterEntityType !== 'all' && (
-                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
-                                        {filterEntityType}
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                removeFilter('entity_type');
-                                                applyFilters({ page: 1 });
-                                            }}
-                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
-                                            aria-label="Remove entity type filter"
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    </Badge>
-                                )}
-                                {filterUser !== 'all' && (
-                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
-                                        {users.find(u => String(u.id) === filterUser)?.name || 'User'}
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                removeFilter('user');
-                                                applyFilters({ page: 1 });
-                                            }}
-                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
-                                            aria-label="Remove user filter"
                                         >
                                             <X className="h-3 w-3" />
                                         </button>
@@ -1230,7 +1207,7 @@ export default function AuditLogs() {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 removeFilter('date');
-                                                applyFilters({ page: 1 });
+                                                applyFilters({ page: 1, newDateFrom: '', newDateTo: '' });
                                             }}
                                             className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
                                             aria-label="Remove date filter"

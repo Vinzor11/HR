@@ -1063,50 +1063,50 @@ export default function Index() {
             <div className="flex-shrink-0 p-2 sm:p-4">
               <div className="bg-white rounded-xl border border-[hsl(0,0%,92%)] p-4 shadow-sm">
                 <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-                  {/* Left: Search + Filters */}
-                  <div className="flex-1 flex items-center gap-3 flex-wrap w-full lg:w-auto">
-                    {/* Search - Primary */}
-                    <div className="relative w-full sm:w-[300px] lg:w-[350px]">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(0,0%,55%)] pointer-events-none" />
-                      <Input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => {
-                          setSearchTerm(e.target.value);
-                          handleSearch(e.target.value);
+                  {/* Left: Search with embedded filter dropdown */}
+                  <div className="flex-1 flex items-center flex-wrap w-full lg:w-auto">
+                    <div className="flex w-full sm:min-w-[320px] sm:max-w-[420px] rounded-lg border border-[hsl(0,0%,88%)] bg-white overflow-hidden focus-within:ring-2 focus-within:ring-[hsl(146,100%,27%)]/20 focus-within:border-[hsl(146,100%,27%)]">
+                      {/* Search mode dropdown - inside left of bar */}
+                      <Select
+                        value={searchMode}
+                        onValueChange={(value: any) => {
+                          setSearchMode(value);
+                          if (searchTerm) {
+                            triggerFetch({ search: searchTerm, search_mode: value, page: 1 });
+                          }
                         }}
-                        placeholder={`Search ${searchMode === 'any' ? 'employees...' : `by ${searchMode}...`}`}
-                        className="w-full pl-10 pr-4 h-10 rounded-lg border border-[hsl(0,0%,88%)] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(146,100%,27%)]/20 focus:border-[hsl(146,100%,27%)]"
-                      />
-                      {isLoading && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(0,0%,55%)] border-t-transparent" />
-                        </div>
-                      )}
+                      >
+                        <SelectTrigger className="h-10 w-[100px] sm:w-[120px] shrink-0 border-0 rounded-none bg-[hsl(0,0%,97%)] border-r border-[hsl(0,0%,88%)] text-xs sm:text-sm focus:ring-0 focus:ring-offset-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Any</SelectItem>
+                          <SelectItem value="id">Employee ID</SelectItem>
+                          <SelectItem value="name">Name</SelectItem>
+                          <SelectItem value="position">Position</SelectItem>
+                          <SelectItem value="department">Department</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {/* Search input - right part of bar */}
+                      <div className="relative flex-1 min-w-0">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(0,0%,55%)] pointer-events-none" />
+                        <Input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            handleSearch(e.target.value);
+                          }}
+                          placeholder={searchMode === 'any' ? 'Search employees...' : `Search by ${searchMode}...`}
+                          className="h-10 w-full min-w-0 pl-10 pr-10 border-0 rounded-none bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                        />
+                        {isLoading && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(0,0%,55%)] border-t-transparent" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-
-                    {/* Search Mode Selector */}
-                    <Select 
-                      value={searchMode} 
-                      onValueChange={(value: any) => {
-                        setSearchMode(value);
-                        if (searchTerm) {
-                          triggerFetch({ search: searchTerm, search_mode: value, page: 1 });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-10 w-[100px] sm:w-[140px] text-xs sm:text-sm border border-[hsl(0,0%,88%)]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Any</SelectItem>
-                        <SelectItem value="id">Employee ID</SelectItem>
-                        <SelectItem value="name">Name</SelectItem>
-                        <SelectItem value="position">Position</SelectItem>
-                        <SelectItem value="department">Department</SelectItem>
-                      </SelectContent>
-                    </Select>
-
                   </div>
 
                   {/* Right: Action Buttons - Grouped by Hierarchy */}

@@ -126,6 +126,7 @@ const formatDateForInput = (value?: string | null) => {
 
 export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes = [], selectedEmployeeId, selectedDepartmentId }: CalendarPageProps) {
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchMode, setSearchMode] = useState<'any' | 'name' | 'reference'>('any');
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
     const [selectedLeaveType, setSelectedLeaveType] = useState<string>('all');
     const [localDateFrom, setLocalDateFrom] = useState<string>(formatDateForInput(dateFrom));
@@ -177,14 +178,17 @@ export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes
     // Filter leaves based on search, status, and leave type
     const filteredLeaves = useMemo(() => {
         return leaves.filter((leave) => {
-            // Search filter (name or reference code)
             if (searchQuery.trim()) {
                 const query = searchQuery.toLowerCase();
-                const matchesName = leave.employee_name.toLowerCase().includes(query);
-                const matchesRef = leave.reference_code?.toLowerCase().includes(query) ?? false;
-                if (!matchesName && !matchesRef) {
-                    return false;
+                let matchesSearch = false;
+                if (searchMode === 'name') {
+                    matchesSearch = leave.employee_name.toLowerCase().includes(query);
+                } else if (searchMode === 'reference') {
+                    matchesSearch = (leave.reference_code?.toLowerCase().includes(query) ?? false);
+                } else {
+                    matchesSearch = leave.employee_name.toLowerCase().includes(query) || (leave.reference_code?.toLowerCase().includes(query) ?? false);
                 }
+                if (!matchesSearch) return false;
             }
 
             // Status filter
@@ -204,7 +208,7 @@ export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes
 
             return true;
         });
-    }, [leaves, searchQuery, selectedStatus, selectedLeaveType]);
+    }, [leaves, searchQuery, searchMode, selectedStatus, selectedLeaveType]);
 
     const groupedLeaves = useMemo(() => {
         return filteredLeaves.reduce((acc, leave) => {
@@ -248,16 +252,28 @@ export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes
                         {/* Filters */}
                         <div className="mb-6 space-y-4">
                             <div className="flex flex-col sm:flex-row gap-4">
-                                {/* Search Bar */}
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        type="text"
-                                        placeholder="Search by name or reference number..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-9"
-                                    />
+                                {/* Search Bar - integrated with search-by */}
+                                <div className="flex flex-1 min-w-[280px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                                    <Select value={searchMode} onValueChange={(v) => setSearchMode(v as 'any' | 'name' | 'reference')}>
+                                        <SelectTrigger className="h-10 w-[110px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="any">Any</SelectItem>
+                                            <SelectItem value="name">Name</SelectItem>
+                                            <SelectItem value="reference">Reference</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <div className="relative flex-1 min-w-0">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                        <Input
+                                            type="text"
+                                            placeholder={searchMode === 'any' ? 'Search by name or reference...' : `Search by ${searchMode}...`}
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="h-10 w-full min-w-0 pl-9 pr-3 border-0 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                                        />
+                                    </div>
                                 </div>
                                 
                                 {/* Date Range Picker */}

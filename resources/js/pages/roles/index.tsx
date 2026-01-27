@@ -54,6 +54,7 @@ interface RolePagination {
 
 interface FilterProps {
     search: string;
+    search_mode?: string;
     perPage: string;
 }
 
@@ -90,6 +91,9 @@ export default function Index({ roles, filters }: IndexProps) {
         return 'name-asc';
     });
     const [searchTerm, setSearchTerm] = useState(filters?.search ?? '');
+    const [searchMode, setSearchMode] = useState<'any' | 'label' | 'name' | 'description'>(() =>
+        (filters?.search_mode as 'any' | 'label' | 'name' | 'description') || 'any'
+    );
     const [perPage, setPerPage] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('roles_perPage');
@@ -254,7 +258,13 @@ export default function Index({ roles, filters }: IndexProps) {
     const tableData = sortedData;
 
     const triggerFetch = (params: Record<string, any>) => {
-        router.get(route('roles.index'), params, {
+        const fullParams = {
+            search: params.search !== undefined ? params.search : searchTerm,
+            search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
+            perPage: params.perPage !== undefined ? params.perPage : perPage,
+            ...params,
+        };
+        router.get(route('roles.index'), fullParams, {
             preserveState: true,
             replace: true,
             preserveScroll: false,
@@ -270,7 +280,7 @@ export default function Index({ roles, filters }: IndexProps) {
         }
 
         searchTimeout.current = setTimeout(() => {
-            triggerFetch({ search: value, perPage });
+            triggerFetch({ search: value, search_mode: searchMode, perPage });
         }, 300);
     };
 
@@ -279,7 +289,7 @@ export default function Index({ roles, filters }: IndexProps) {
         if (typeof window !== 'undefined') {
             localStorage.setItem('roles_perPage', value);
         }
-        triggerFetch({ search: searchTerm, perPage: value });
+        triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: value });
     };
 
     const handleSortKeyChange = (value: 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc') => {
@@ -299,7 +309,7 @@ export default function Index({ roles, filters }: IndexProps) {
     const handlePageChange = (page: number) => {
         // Ensure page is a valid positive number
         const validPage = Math.max(1, Math.min(page, lastPage || 1));
-        triggerFetch({ page: validPage, search: searchTerm, perPage });
+        triggerFetch({ page: validPage, search: searchTerm, search_mode: searchMode, perPage });
     };
 
     // Export to CSV function
@@ -358,7 +368,7 @@ export default function Index({ roles, filters }: IndexProps) {
         
         // If localStorage has a different perPage than what backend sent, sync it
         if (savedPerPage && savedPerPage !== currentPerPage && ['5', '10', '25', '50', '100'].includes(savedPerPage)) {
-            triggerFetch({ search: searchTerm, perPage: savedPerPage });
+            triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: savedPerPage });
         }
     }, []); // Only run on mount
 
@@ -398,6 +408,19 @@ export default function Index({ roles, filters }: IndexProps) {
                 onSearchChange={handleSearchChange}
                 isSearching={isSearching}
                 searchPlaceholder="Search roles..."
+                searchMode={{
+                    value: searchMode,
+                    options: [
+                        { value: 'any', label: 'Any' },
+                        { value: 'label', label: 'Label' },
+                        { value: 'name', label: 'Name' },
+                        { value: 'description', label: 'Description' },
+                    ],
+                    onChange: (value: string) => {
+                        setSearchMode(value as 'any' | 'label' | 'name' | 'description');
+                        if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1, perPage });
+                    },
+                }}
                 perPage={{
                     value: perPage,
                     onChange: handlePerPageChange,

@@ -50,7 +50,8 @@ class AuditLogController extends Controller
         }
 
         if ($request->filled('search')) {
-            $query->search($request->search);
+            $searchMode = $request->input('search_mode', 'any');
+            $query->search($request->search, $searchMode);
         }
 
         if ($request->filled('date_from') || $request->filled('date_to')) {
@@ -145,7 +146,7 @@ class AuditLogController extends Controller
 
         return Inertia::render('audit-logs/index', [
             'logs' => $logs,
-            'filters' => $request->only(['module', 'action', 'user_id', 'entity_type', 'entity_id', 'search', 'date_from', 'date_to', 'per_page']),
+            'filters' => $request->only(['module', 'action', 'user_id', 'entity_type', 'entity_id', 'search', 'search_mode', 'date_from', 'date_to', 'per_page']),
             'modules' => $modules,
             'actions' => $actions,
             'entityTypes' => $entityTypes,
@@ -185,7 +186,8 @@ class AuditLogController extends Controller
             $query->where('entity_id', $request->entity_id);
         }
         if ($request->filled('search')) {
-            $query->search($request->search);
+            $searchMode = $request->input('search_mode', 'any');
+            $query->search($request->search, $searchMode);
         }
         if ($request->filled('date_from') || $request->filled('date_to')) {
             $query->dateRange($request->date_from, $request->date_to);

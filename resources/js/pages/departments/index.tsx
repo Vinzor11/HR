@@ -74,6 +74,7 @@ interface FlashProps extends Record<string, any> {
 
 interface FilterProps {
   search: string;
+  search_mode?: string;
   perPage: string;
   type?: DepartmentType | '';
   faculty_id?: string;
@@ -106,6 +107,9 @@ export default function DepartmentIndex({ departments, faculties, filters }: Ind
     return 'name-asc';
   });
   const [searchTerm, setSearchTerm] = useState(filters?.search ?? '');
+  const [searchMode, setSearchMode] = useState<'any' | 'name' | 'code' | 'faculty' | 'description'>(() =>
+    (filters?.search_mode as 'any' | 'name' | 'code' | 'faculty' | 'description') || 'any'
+  );
   const [perPage, setPerPage] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('departments_perPage');
@@ -434,7 +438,8 @@ const handleFacultyFilterChange = (value: string) => {
   const triggerFetch = (params: Record<string, any> = {}) => {
     const sortParams = getSortParams(sortKey);
     const requestParams = {
-      search: searchTerm,
+      search: params.search !== undefined ? params.search : searchTerm,
+      search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
       perPage,
       type: typeFilter,
       faculty_id: facultyFilter,
@@ -460,7 +465,7 @@ const handleFacultyFilterChange = (value: string) => {
     }
 
     searchTimeout.current = setTimeout(() => {
-      triggerFetch({ search: value });
+      triggerFetch({ search: value, search_mode: searchMode });
     }, 300);
   };
 
@@ -489,9 +494,8 @@ const handleFacultyFilterChange = (value: string) => {
   const lastPage = departments?.meta?.last_page || (total > 0 ? Math.ceil(total / (parseInt(perPage) || 10)) : 1);
 
   const handlePageChange = (page: number) => {
-    // Ensure page is a valid positive number
     const validPage = Math.max(1, Math.min(page, lastPage || 1));
-    triggerFetch({ page: validPage });
+    triggerFetch({ page: validPage, search: searchTerm, search_mode: searchMode });
   };
 
   // Export to CSV function
@@ -556,7 +560,7 @@ const handleFacultyFilterChange = (value: string) => {
     
     // If localStorage has a different perPage than what backend sent, sync it
     if (savedPerPage && savedPerPage !== currentPerPage && ['5', '10', '25', '50', '100'].includes(savedPerPage)) {
-      triggerFetch({ search: searchTerm, perPage: savedPerPage });
+      triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: savedPerPage });
     }
   }, []); // Only run on mount
 
@@ -597,6 +601,20 @@ const handleFacultyFilterChange = (value: string) => {
         onSearchChange={handleSearchChange}
         isSearching={isSearching}
         searchPlaceholder="Search departments..."
+        searchMode={{
+          value: searchMode,
+          options: [
+            { value: 'any', label: 'Any' },
+            { value: 'name', label: 'Name' },
+            { value: 'code', label: 'Code' },
+            { value: 'faculty', label: 'Faculty' },
+            { value: 'description', label: 'Description' },
+          ],
+          onChange: (value: string) => {
+            setSearchMode(value as 'any' | 'name' | 'code' | 'faculty' | 'description');
+            if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1 });
+          },
+        }}
         perPage={{
           value: perPage,
           onChange: handlePerPageChange,

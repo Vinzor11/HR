@@ -38,6 +38,7 @@ class LeaveBalanceAdminController extends Controller
     {
         $year = $request->integer('year', now()->year);
         $search = $request->input('search');
+        $searchMode = $request->input('search_mode', 'any');
         $departmentId = $request->integer('department_id');
         $perPage = $request->integer('per_page', 15);
 
@@ -48,10 +49,20 @@ class LeaveBalanceAdminController extends Controller
             ->orderBy('first_name');
 
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('surname', 'like', "%{$search}%")
-                    ->orWhere('first_name', 'like', "%{$search}%")
-                    ->orWhere('id', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search, $searchMode) {
+                switch ($searchMode) {
+                    case 'name':
+                        $q->where('surname', 'like', "%{$search}%")
+                            ->orWhere('first_name', 'like', "%{$search}%");
+                        break;
+                    case 'employee_id':
+                        $q->where('id', 'like', "%{$search}%");
+                        break;
+                    default:
+                        $q->where('surname', 'like', "%{$search}%")
+                            ->orWhere('first_name', 'like', "%{$search}%")
+                            ->orWhere('id', 'like', "%{$search}%");
+                }
             });
         }
 
@@ -95,6 +106,7 @@ class LeaveBalanceAdminController extends Controller
             'availableYears' => $this->getAvailableYears(),
             'filters' => [
                 'search' => $search,
+                'search_mode' => $searchMode,
                 'department_id' => $departmentId,
             ],
         ]);

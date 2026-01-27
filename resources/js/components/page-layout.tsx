@@ -108,46 +108,50 @@ export function PageLayout({
         <div className="flex-shrink-0 p-2 sm:p-4">
           <div className="bg-white rounded-xl border border-[hsl(0,0%,92%)] p-4 shadow-sm">
             <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-              {/* Left: Search + Filters */}
+              {/* Left: Search (integrated bar) + Filters */}
               <div className="flex-1 flex items-center gap-3 flex-wrap w-full lg:w-auto">
-                {/* Search - Primary */}
+                {/* Search - Integrated bar with search-by dropdown (always shown) */}
                 {onSearchChange && (
-                  <div className="relative w-full sm:w-[300px] lg:w-[350px]">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(0,0%,55%)] pointer-events-none" />
-                    <Input
-                      type="text"
-                      value={searchValue || ''}
-                      onChange={(e) => onSearchChange(e.target.value)}
-                      placeholder={searchPlaceholder}
-                      className="w-full pl-10 pr-4 h-10 rounded-lg border border-[hsl(0,0%,88%)] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(146,100%,27%)]/20 focus:border-[hsl(146,100%,27%)]"
-                    />
-                    {isSearching && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(0,0%,55%)] border-t-transparent" />
-                      </div>
-                    )}
+                  <div className={cn(
+                    "flex w-full sm:min-w-[320px] sm:max-w-[420px] rounded-lg border border-[hsl(0,0%,88%)] bg-white overflow-hidden",
+                    "focus-within:ring-2 focus-within:ring-[hsl(146,100%,27%)]/20 focus-within:border-[hsl(146,100%,27%)]"
+                  )}>
+                    <Select
+                      value={searchMode?.value ?? 'any'}
+                      onValueChange={searchMode?.onChange ?? (() => {})}
+                    >
+                      <SelectTrigger className="h-10 w-[100px] sm:w-[120px] shrink-0 border-0 rounded-none bg-[hsl(0,0%,97%)] border-r border-[hsl(0,0%,88%)] text-xs sm:text-sm focus:ring-0 focus:ring-offset-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(searchMode?.options ?? [{ value: 'any', label: 'Any' }]).map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="relative flex-1 min-w-0">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(0,0%,55%)] pointer-events-none" />
+                      <Input
+                        type="text"
+                        value={searchValue || ''}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                        placeholder={
+                          searchMode?.value && searchMode.value !== 'any'
+                            ? `Search by ${searchMode.options?.find((o) => o.value === searchMode.value)?.label ?? searchMode.value}...`
+                            : searchPlaceholder
+                        }
+                        className="h-10 w-full min-w-0 pl-10 pr-10 border-0 rounded-none bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                      />
+                      {isSearching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(0,0%,55%)] border-t-transparent" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-
-                {/* Search Mode Selector */}
-                {searchMode && (
-                  <Select 
-                    value={searchMode.value} 
-                    onValueChange={searchMode.onChange}
-                  >
-                    <SelectTrigger className="h-10 w-[100px] sm:w-[140px] text-xs sm:text-sm border border-[hsl(0,0%,88%)]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {searchMode.options.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
 
                 {/* Additional Filters Slot */}
                 {filtersSlot && (

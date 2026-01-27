@@ -26,6 +26,13 @@ class CertificateTemplate extends Model
         'is_active' => 'boolean',
     ];
 
+    /**
+     * The accessors to append to the model's array form.
+     */
+    protected $appends = [
+        'background_image_url',
+    ];
+
     public function textLayers(): HasMany
     {
         return $this->hasMany(CertificateTextLayer::class)->orderBy('sort_order');
@@ -33,7 +40,12 @@ class CertificateTemplate extends Model
 
     public function getBackgroundImageUrlAttribute(): ?string
     {
-        return $this->background_image_path ? Storage::url($this->background_image_path) : null;
+        if (!$this->background_image_path) {
+            return null;
+        }
+
+        // Use the public disk to generate the correct URL
+        return Storage::disk('public')->url($this->background_image_path);
     }
 
     public function scopeActive($query)

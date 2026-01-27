@@ -80,6 +80,7 @@ interface FlashProps {
 
 interface FilterProps {
   search: string
+  search_mode?: string
   perPage: string
   department_id?: string
   position_category?: string
@@ -120,6 +121,9 @@ export default function PositionIndex({ positions, departments, faculties, filte
     return 'hierarchy-desc' // Default to highest hierarchy first
   })
   const [searchTerm, setSearchTerm] = useState(filters?.search ?? '')
+  const [searchMode, setSearchMode] = useState<'any' | 'pos_name' | 'code' | 'description' | 'department' | 'faculty'>(() =>
+    (filters?.search_mode as 'any' | 'pos_name' | 'code' | 'description' | 'department' | 'faculty') || 'any'
+  )
   const [perPage, setPerPage] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('positions_perPage')
@@ -536,7 +540,8 @@ const handleCategoryFilterChange = (value: string) => {
   const triggerFetch = (params: Record<string, any> = {}) => {
     const sortParams = getSortParams(sortKey)
     router.get(route('positions.index'), {
-      search: searchTerm,
+      search: params.search !== undefined ? params.search : searchTerm,
+      search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
       perPage,
       department_id: departmentFilter,
       position_category: categoryFilter,
@@ -560,7 +565,7 @@ const handleCategoryFilterChange = (value: string) => {
     }
 
     searchTimeout.current = setTimeout(() => {
-      triggerFetch({ search: value })
+      triggerFetch({ search: value, search_mode: searchMode })
     }, 300)
   }
 
@@ -589,9 +594,8 @@ const handleCategoryFilterChange = (value: string) => {
   const lastPage = positions?.meta?.last_page || (total > 0 ? Math.ceil(total / (parseInt(perPage) || 10)) : 1)
 
   const handlePageChange = (page: number) => {
-    // Ensure page is a valid positive number
     const validPage = Math.max(1, Math.min(page, lastPage || 1))
-    triggerFetch({ page: validPage })
+    triggerFetch({ page: validPage, search: searchTerm, search_mode: searchMode })
   }
 
   // Export to CSV function
@@ -650,7 +654,7 @@ const handleCategoryFilterChange = (value: string) => {
     
     // If localStorage has a different perPage than what backend sent, sync it
     if (savedPerPage && savedPerPage !== currentPerPage && ['5', '10', '25', '50', '100'].includes(savedPerPage)) {
-      triggerFetch({ search: searchTerm, perPage: savedPerPage });
+      triggerFetch({ search: searchTerm, search_mode: searchMode, perPage: savedPerPage });
     }
   }, []); // Only run on mount
 
@@ -689,6 +693,21 @@ const handleCategoryFilterChange = (value: string) => {
         onSearchChange={handleSearchChange}
         isSearching={isSearching}
         searchPlaceholder="Search positions..."
+        searchMode={{
+          value: searchMode,
+          options: [
+            { value: 'any', label: 'Any' },
+            { value: 'pos_name', label: 'Position' },
+            { value: 'code', label: 'Code' },
+            { value: 'description', label: 'Description' },
+            { value: 'department', label: 'Department' },
+            { value: 'faculty', label: 'Faculty' },
+          ],
+          onChange: (value: string) => {
+            setSearchMode(value as 'any' | 'pos_name' | 'code' | 'description' | 'department' | 'faculty')
+            if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1 })
+          },
+        }}
         perPage={{
           value: perPage,
           onChange: handlePerPageChange,

@@ -99,6 +99,7 @@ const deviceIcons: Record<string, any> = {
 export default function UserActivities() {
     const { activities = [], users = [] } = usePage<UserActivitiesProps>().props;
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchMode, setSearchMode] = useState<'any' | 'user' | 'email' | 'ip' | 'device' | 'browser'>('any');
     const [filterActivity, setFilterActivity] = useState<string>('all');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterUser, setFilterUser] = useState<string>('all');
@@ -147,26 +148,48 @@ export default function UserActivities() {
     const filteredActivities = useMemo(() => {
         return activities.filter((activity) => {
             const userIdStr = activity.user_id != null ? String(activity.user_id) : '';
-            const matchesSearch = !searchTerm ||
-                userIdStr.includes(searchTerm) ||
-                activity.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                activity.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                activity.ip_address?.includes(searchTerm) ||
-                activity.device?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                activity.browser?.toLowerCase().includes(searchTerm.toLowerCase());
+            const term = searchTerm.trim().toLowerCase();
+            let matchesSearch = !searchTerm;
+            if (searchTerm) {
+                switch (searchMode) {
+                    case 'user':
+                        matchesSearch = !!(activity.user_name?.toLowerCase().includes(term) || userIdStr.includes(searchTerm));
+                        break;
+                    case 'email':
+                        matchesSearch = !!(activity.user_email?.toLowerCase().includes(term));
+                        break;
+                    case 'ip':
+                        matchesSearch = !!(activity.ip_address?.includes(searchTerm));
+                        break;
+                    case 'device':
+                        matchesSearch = !!(activity.device?.toLowerCase().includes(term));
+                        break;
+                    case 'browser':
+                        matchesSearch = !!(activity.browser?.toLowerCase().includes(term));
+                        break;
+                    default:
+                        matchesSearch = !!(
+                            userIdStr.includes(searchTerm) ||
+                            activity.user_name?.toLowerCase().includes(term) ||
+                            activity.user_email?.toLowerCase().includes(term) ||
+                            activity.ip_address?.includes(searchTerm) ||
+                            activity.device?.toLowerCase().includes(term) ||
+                            activity.browser?.toLowerCase().includes(term)
+                        );
+                }
+            }
 
             const matchesActivity = filterActivity === 'all' || activity.activity_type === filterActivity;
             const matchesStatus = filterStatus === 'all' || activity.status === filterStatus;
-            const matchesUser = filterUser === 'all' || userIdStr === filterUser;
             
             // Date range filter
             const activityDate = new Date(activity.created_at);
             const matchesDateFrom = !dateFrom || activityDate >= new Date(dateFrom);
             const matchesDateTo = !dateTo || activityDate <= new Date(dateTo + 'T23:59:59');
 
-            return matchesSearch && matchesActivity && matchesStatus && matchesUser && matchesDateFrom && matchesDateTo;
+            return matchesSearch && matchesActivity && matchesStatus && matchesDateFrom && matchesDateTo;
         });
-    }, [activities, searchTerm, filterActivity, filterStatus, filterUser, dateFrom, dateTo]);
+    }, [activities, searchTerm, searchMode, filterActivity, filterStatus, dateFrom, dateTo]);
 
     // Paginated activities
     const paginatedActivities = useMemo(() => {
@@ -187,21 +210,19 @@ export default function UserActivities() {
             searchTerm !== '' ||
             filterActivity !== 'all' ||
             filterStatus !== 'all' ||
-            filterUser !== 'all' ||
             dateFrom !== '' ||
             dateTo !== ''
         );
-    }, [searchTerm, filterActivity, filterStatus, filterUser, dateFrom, dateTo]);
+    }, [searchTerm, filterActivity, filterStatus, dateFrom, dateTo]);
 
     // Count active advanced filters (excluding activity type which is in chips)
     const advancedFilterCount = useMemo(() => {
         let count = 0;
         if (searchTerm) count++;
         if (filterStatus !== 'all') count++;
-        if (filterUser !== 'all') count++;
         if (dateFrom || dateTo) count++;
         return count;
-    }, [searchTerm, filterStatus, filterUser, dateFrom, dateTo]);
+    }, [searchTerm, filterStatus, dateFrom, dateTo]);
 
     // Group activities by date
     const groupedActivities = useMemo(() => {
@@ -380,17 +401,32 @@ export default function UserActivities() {
                             </div>
                         </div>
 
-                        {/* Search Bar */}
-                        <div className="relative flex-shrink-0">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="text"
-                                placeholder="Search..."
-                                className="pl-8 h-9 w-[180px] text-sm"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onKeyDown={handleSearch}
-                            />
+                        {/* Search Bar - integrated with search-by dropdown */}
+                        <div className="flex flex-shrink-0 min-w-[280px] w-[300px] sm:w-[360px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                            <Select value={searchMode} onValueChange={(v) => { setSearchMode(v as typeof searchMode); setCurrentPage(1); }}>
+                                <SelectTrigger className="h-9 w-[100px] sm:w-[110px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="any">Any</SelectItem>
+                                    <SelectItem value="user">User</SelectItem>
+                                    <SelectItem value="email">Email</SelectItem>
+                                    <SelectItem value="ip">IP</SelectItem>
+                                    <SelectItem value="device">Device</SelectItem>
+                                    <SelectItem value="browser">Browser</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <div className="relative flex-1 min-w-0">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                <Input
+                                    type="text"
+                                    placeholder={searchMode === 'any' ? 'Search...' : `Search by ${searchMode}...`}
+                                    className="h-9 w-full min-w-0 pl-8 pr-3 border-0 rounded-none bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onKeyDown={handleSearch}
+                                />
+                            </div>
                         </div>
 
                         {/* Export Button - Icon Only */}
@@ -412,7 +448,7 @@ export default function UserActivities() {
                                     variant="outline"
                                     size="sm"
                                     className="relative h-9 w-9 p-0 flex-shrink-0"
-                                    title="Advanced Filters"
+                                    title="Filters"
                                 >
                                     <SlidersHorizontal className="h-4 w-4" />
                                     {advancedFilterCount > 0 && (
@@ -428,7 +464,7 @@ export default function UserActivities() {
                             <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" aria-describedby={undefined}>
                                 <SheetHeader>
                                     <SheetTitle className="flex flex-wrap items-center gap-2">
-                                        <span>Advanced Filters</span>
+                                        <span>Filters</span>
                                         {hasActiveFilters && (
                                             <Button
                                                 variant="ghost"
@@ -454,24 +490,6 @@ export default function UserActivities() {
                                                 <SelectItem value="all">All Statuses</SelectItem>
                                                 <SelectItem value="success">Success</SelectItem>
                                                 <SelectItem value="failed">Failed</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    {/* User Filter */}
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">User</label>
-                                        <Select value={filterUser} onValueChange={(value) => { setFilterUser(value); setCurrentPage(1); }}>
-                                            <SelectTrigger className="h-10">
-                                                <SelectValue placeholder="All Users" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Users</SelectItem>
-                                                {users.map((user) => (
-                                                    <SelectItem key={user.id} value={String(user.id)}>
-                                                        {user.name}
-                                                    </SelectItem>
-                                                ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -555,22 +573,6 @@ export default function UserActivities() {
                                         }}
                                         className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
                                         aria-label="Remove status filter"
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                </Badge>
-                            )}
-                            {filterUser !== 'all' && (
-                                <Badge variant="outline" className="h-6 gap-1 font-normal">
-                                    {users.find(u => String(u.id) === filterUser)?.name || 'User'}
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            removeFilter('user');
-                                        }}
-                                        className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
-                                        aria-label="Remove user filter"
                                     >
                                         <X className="h-3 w-3" />
                                     </button>

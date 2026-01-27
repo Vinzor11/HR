@@ -102,6 +102,7 @@ const unitTypeConfig: Record<string, { label: string; icon: string; color: strin
 export default function OrganizationalLogs() {
     const { logs = [] } = usePage<OrganizationalLogsProps>().props;
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchMode, setSearchMode] = useState<'any' | 'id' | 'name' | 'code' | 'reference' | 'field_changed' | 'user'>('any');
     const [filterAction, setFilterAction] = useState<string>('all');
     const [filterUnitType, setFilterUnitType] = useState<string>('all');
     const [dateFrom, setDateFrom] = useState<string>('');
@@ -333,15 +334,41 @@ export default function OrganizationalLogs() {
 
     // Filter logs
     const filteredLogs = logs.filter((log) => {
+        const term = searchTerm.trim().toLowerCase();
         const unitIdStr = (getUnitId(log) ?? '').toString().toLowerCase();
         const unitNameStr = getUnitName(log)?.toLowerCase() || '';
-        const matchesSearch = !searchTerm || 
-            unitIdStr.includes(searchTerm.toLowerCase()) ||
-            log.reference_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.field_changed?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.performed_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            unitNameStr.includes(searchTerm.toLowerCase()) ||
-            log.unit_code?.toLowerCase().includes(searchTerm.toLowerCase());
+        let matchesSearch = !searchTerm;
+        if (searchTerm) {
+            switch (searchMode) {
+                case 'id':
+                    matchesSearch = unitIdStr.includes(term);
+                    break;
+                case 'name':
+                    matchesSearch = unitNameStr.includes(term);
+                    break;
+                case 'code':
+                    matchesSearch = !!(log.unit_code?.toLowerCase().includes(term));
+                    break;
+                case 'reference':
+                    matchesSearch = !!(log.reference_number?.toLowerCase().includes(term));
+                    break;
+                case 'field_changed':
+                    matchesSearch = !!(log.field_changed?.toLowerCase().includes(term));
+                    break;
+                case 'user':
+                    matchesSearch = !!(log.performed_by?.toLowerCase().includes(term));
+                    break;
+                default:
+                    matchesSearch = !!(
+                        unitIdStr.includes(term) ||
+                        unitNameStr.includes(term) ||
+                        log.unit_code?.toLowerCase().includes(term) ||
+                        log.reference_number?.toLowerCase().includes(term) ||
+                        log.field_changed?.toLowerCase().includes(term) ||
+                        log.performed_by?.toLowerCase().includes(term)
+                    );
+            }
+        }
 
         // Handle restore and permanent delete as separate action types for filtering
         let effectiveActionType = log.action_type;
@@ -483,15 +510,31 @@ export default function OrganizationalLogs() {
 
                     {/* Filters */}
                 <div className="flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-lg">
-                    <div className="relative max-w-md">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            type="text"
-                            placeholder="Search by ID, name, code, description, or user..."
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                    <div className="flex flex-1 min-w-[280px] max-w-[420px] rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                        <Select value={searchMode} onValueChange={(v) => setSearchMode(v as typeof searchMode)}>
+                            <SelectTrigger className="h-10 w-[110px] sm:w-[120px] shrink-0 border-0 rounded-none bg-muted/50 border-r border-border text-xs focus:ring-0 focus:ring-offset-0">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="any">Any</SelectItem>
+                                <SelectItem value="id">ID</SelectItem>
+                                <SelectItem value="name">Name</SelectItem>
+                                <SelectItem value="code">Code</SelectItem>
+                                <SelectItem value="reference">Reference</SelectItem>
+                                <SelectItem value="field_changed">Field</SelectItem>
+                                <SelectItem value="user">User</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <div className="relative flex-1 min-w-0">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                            <Input
+                                type="text"
+                                placeholder={searchMode === 'any' ? 'Search by ID, name, code, description, or user...' : `Search by ${searchMode.replace('_', ' ')}...`}
+                                className="h-10 w-full min-w-0 pl-10 pr-3 border-0 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
                     </div>
                     <Select value={filterUnitType} onValueChange={setFilterUnitType}>
                         <SelectTrigger className="w-full sm:w-[200px]">

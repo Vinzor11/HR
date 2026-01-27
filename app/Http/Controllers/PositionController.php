@@ -19,6 +19,7 @@ class PositionController extends Controller
 
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
+        $searchMode = $request->input('search_mode', 'any');
         $departmentId = $request->input('department_id');
         $positionCategory = $request->input('position_category');
         $showDeleted = $request->boolean('show_deleted', false);
@@ -38,19 +39,43 @@ class PositionController extends Controller
             ->when($showDeleted, function ($query) {
                 $query->onlyTrashed();
             })
-            ->when($search, function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('pos_name', 'like', "%{$search}%")
-                      ->orWhere('pos_code', 'like', "%{$search}%")
-                      ->orWhere('description', 'like', "%{$search}%")
-                      ->orWhereHas('department', function ($deptQuery) use ($search) {
-                          $deptQuery->where('name', 'like', "%{$search}%")
+            ->when($search, function ($query) use ($search, $searchMode) {
+                $query->where(function ($q) use ($search, $searchMode) {
+                    switch ($searchMode) {
+                        case 'pos_name':
+                            $q->where('pos_name', 'like', "%{$search}%");
+                            break;
+                        case 'code':
+                            $q->where('pos_code', 'like', "%{$search}%");
+                            break;
+                        case 'description':
+                            $q->where('description', 'like', "%{$search}%");
+                            break;
+                        case 'department':
+                            $q->whereHas('department', function ($deptQuery) use ($search) {
+                                $deptQuery->where('name', 'like', "%{$search}%")
                                     ->orWhere('code', 'like', "%{$search}%");
-                      })
-                      ->orWhereHas('faculty', function ($facultyQuery) use ($search) {
-                          $facultyQuery->where('name', 'like', "%{$search}%")
-                                      ->orWhere('code', 'like', "%{$search}%");
-                      });
+                            });
+                            break;
+                        case 'faculty':
+                            $q->whereHas('faculty', function ($facultyQuery) use ($search) {
+                                $facultyQuery->where('name', 'like', "%{$search}%")
+                                    ->orWhere('code', 'like', "%{$search}%");
+                            });
+                            break;
+                        default:
+                            $q->where('pos_name', 'like', "%{$search}%")
+                              ->orWhere('pos_code', 'like', "%{$search}%")
+                              ->orWhere('description', 'like', "%{$search}%")
+                              ->orWhereHas('department', function ($deptQuery) use ($search) {
+                                  $deptQuery->where('name', 'like', "%{$search}%")
+                                        ->orWhere('code', 'like', "%{$search}%");
+                              })
+                              ->orWhereHas('faculty', function ($facultyQuery) use ($search) {
+                                  $facultyQuery->where('name', 'like', "%{$search}%")
+                                          ->orWhere('code', 'like', "%{$search}%");
+                              });
+                    }
                 });
             })
             ->when($departmentId, function ($query) use ($departmentId) {
@@ -75,6 +100,7 @@ class PositionController extends Controller
             'faculties' => $faculties,
             'filters' => [
                 'search' => $search,
+                'search_mode' => $searchMode,
                 'perPage' => $perPage,
                 'department_id' => $departmentId,
                 'position_category' => $positionCategory,
