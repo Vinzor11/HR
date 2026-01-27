@@ -148,24 +148,6 @@ export function PageLayout({
                   </Select>
                 )}
 
-                {/* Page Size Dropdown */}
-                {perPage && (
-                  <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <span className="whitespace-nowrap">Rows:</span>
-                    <Select value={perPage.value} onValueChange={perPage.onChange}>
-                      <SelectTrigger className="h-9 w-[70px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PER_PAGE_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
 
                 {/* Additional Filters Slot */}
                 {filtersSlot && (
@@ -199,11 +181,7 @@ export function PageLayout({
       </div>
 
       {/* Pagination - Fixed at bottom */}
-      {pagination && (
-        <div className="flex-shrink-0 bg-card border-t border-border shadow-sm z-30">
-          {pagination}
-        </div>
-      )}
+      {pagination && pagination}
     </div>
   )
 }

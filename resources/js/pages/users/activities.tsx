@@ -3,9 +3,9 @@ import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { Clock, User, FileText, Search, Download, Calendar, LogIn, LogOut, XCircle, CheckCircle, Monitor, Smartphone, Tablet } from 'lucide-react';
+import { Clock, User, FileText, Search, Download, LogIn, LogOut, XCircle, CheckCircle, Monitor, Smartphone, Tablet, SlidersHorizontal, Filter, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
     Select,
     SelectContent,
@@ -15,6 +15,14 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -22,6 +30,9 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/users/activities',
     },
 ];
+
+// Constants
+const PER_PAGE_OPTIONS = ['10', '25', '50', '100'] as const;
 
 interface UserActivity {
     id: number;
@@ -90,8 +101,12 @@ export default function UserActivities() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterActivity, setFilterActivity] = useState<string>('all');
     const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [filterUser, setFilterUser] = useState<string>('all');
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
+    const [perPage, setPerPage] = useState<string>('50');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [isLoading, setIsLoading] = useState(false);
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return 'N/A';
@@ -123,50 +138,148 @@ export default function UserActivities() {
         };
     };
 
-    // Filter activities
-    const filteredActivities = activities.filter((activity) => {
-        const matchesSearch = !searchTerm || 
-            activity.user_id.toString().includes(searchTerm) ||
-            activity.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            activity.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            activity.ip_address?.includes(searchTerm) ||
-            activity.device?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            activity.browser?.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesActivity = filterActivity === 'all' || activity.activity_type === filterActivity;
-        const matchesStatus = filterStatus === 'all' || activity.status === filterStatus;
-        
-        // Date range filter
-        const activityDate = new Date(activity.created_at);
-        const matchesDateFrom = !dateFrom || activityDate >= new Date(dateFrom);
-        const matchesDateTo = !dateTo || activityDate <= new Date(dateTo + 'T23:59:59');
-
-        return matchesSearch && matchesActivity && matchesStatus && matchesDateFrom && matchesDateTo;
-    });
-
     // Get unique activity types
-    const uniqueActivityTypes = Array.from(new Set(activities.map(a => a.activity_type)));
+    const uniqueActivityTypes = useMemo(() => {
+        return Array.from(new Set(activities.map(a => a.activity_type)));
+    }, [activities]);
+
+    // Filter activities
+    const filteredActivities = useMemo(() => {
+        return activities.filter((activity) => {
+            const matchesSearch = !searchTerm || 
+                activity.user_id.toString().includes(searchTerm) ||
+                activity.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                activity.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                activity.ip_address?.includes(searchTerm) ||
+                activity.device?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                activity.browser?.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const matchesActivity = filterActivity === 'all' || activity.activity_type === filterActivity;
+            const matchesStatus = filterStatus === 'all' || activity.status === filterStatus;
+            const matchesUser = filterUser === 'all' || activity.user_id.toString() === filterUser;
+            
+            // Date range filter
+            const activityDate = new Date(activity.created_at);
+            const matchesDateFrom = !dateFrom || activityDate >= new Date(dateFrom);
+            const matchesDateTo = !dateTo || activityDate <= new Date(dateTo + 'T23:59:59');
+
+            return matchesSearch && matchesActivity && matchesStatus && matchesUser && matchesDateFrom && matchesDateTo;
+        });
+    }, [activities, searchTerm, filterActivity, filterStatus, filterUser, dateFrom, dateTo]);
+
+    // Paginated activities
+    const paginatedActivities = useMemo(() => {
+        const perPageNum = parseInt(perPage, 10);
+        const start = (currentPage - 1) * perPageNum;
+        const end = start + perPageNum;
+        return filteredActivities.slice(start, end);
+    }, [filteredActivities, currentPage, perPage]);
+
+    // Total pages
+    const totalPages = useMemo(() => {
+        return Math.ceil(filteredActivities.length / parseInt(perPage, 10)) || 1;
+    }, [filteredActivities.length, perPage]);
+
+    // Check if any filters are active
+    const hasActiveFilters = useMemo(() => {
+        return (
+            searchTerm !== '' ||
+            filterActivity !== 'all' ||
+            filterStatus !== 'all' ||
+            filterUser !== 'all' ||
+            dateFrom !== '' ||
+            dateTo !== ''
+        );
+    }, [searchTerm, filterActivity, filterStatus, filterUser, dateFrom, dateTo]);
+
+    // Count active advanced filters (excluding activity type which is in chips)
+    const advancedFilterCount = useMemo(() => {
+        let count = 0;
+        if (searchTerm) count++;
+        if (filterStatus !== 'all') count++;
+        if (filterUser !== 'all') count++;
+        if (dateFrom || dateTo) count++;
+        return count;
+    }, [searchTerm, filterStatus, filterUser, dateFrom, dateTo]);
 
     // Group activities by date
-    const groupedActivities = filteredActivities.reduce((acc, activity) => {
-        const date = new Date(activity.created_at);
-        const dateKey = date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
+    const groupedActivities = useMemo(() => {
+        const groups: Record<string, UserActivity[]> = {};
+        paginatedActivities.forEach((activity) => {
+            const date = new Date(activity.created_at);
+            const dateKey = date.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            
+            if (!groups[dateKey]) {
+                groups[dateKey] = [];
+            }
+            groups[dateKey].push(activity);
         });
-        
-        if (!acc[dateKey]) {
-            acc[dateKey] = [];
-        }
-        acc[dateKey].push(activity);
-        return acc;
-    }, {} as Record<string, UserActivity[]>);
+        return groups;
+    }, [paginatedActivities]);
 
     // Sort dates in descending order (newest first)
-    const sortedDates = Object.keys(groupedActivities).sort((a, b) => {
-        return new Date(b).getTime() - new Date(a).getTime();
-    });
+    const sortedDates = useMemo(() => {
+        return Object.keys(groupedActivities).sort((a, b) => {
+            return new Date(b).getTime() - new Date(a).getTime();
+        });
+    }, [groupedActivities]);
+
+    // Clear all filters
+    const clearAllFilters = useCallback(() => {
+        setSearchTerm('');
+        setFilterActivity('all');
+        setFilterStatus('all');
+        setFilterUser('all');
+        setDateFrom('');
+        setDateTo('');
+        setCurrentPage(1);
+    }, []);
+
+    // Remove individual filter
+    const removeFilter = useCallback((filterType: string) => {
+        switch (filterType) {
+            case 'search':
+                setSearchTerm('');
+                break;
+            case 'activity':
+                setFilterActivity('all');
+                break;
+            case 'status':
+                setFilterStatus('all');
+                break;
+            case 'user':
+                setFilterUser('all');
+                break;
+            case 'date':
+                setDateFrom('');
+                setDateTo('');
+                break;
+        }
+        setCurrentPage(1);
+    }, []);
+
+    // Handle per page change
+    const handlePerPageChange = useCallback((value: string) => {
+        setPerPage(value);
+        setCurrentPage(1);
+    }, []);
+
+    // Handle page change
+    const handlePageChange = useCallback((page: number) => {
+        setCurrentPage(page);
+    }, []);
+
+    // Handle search
+    const handleSearch = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            setCurrentPage(1);
+        }
+    }, []);
 
     // Export to CSV function
     const exportToCSV = useCallback(() => {
@@ -222,223 +335,532 @@ export default function UserActivities() {
             <Head title="User Activities" />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4">
-                <div className="space-y-4 md:space-y-6">
-                    {/* Header */}
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">User Activities</h1>
-                            <p className="text-xs md:text-sm text-muted-foreground">
-                                Showing {filteredActivities.length} of {activities.length} log entries
-                            </p>
+            <div className="flex flex-col overflow-hidden bg-background" style={{ height: 'calc(100vh - 80px)' }}>
+                {/* YouTube-style Activity Type Filter Bar */}
+                <div className="flex-shrink-0 z-20 px-3 md:px-4 py-3 bg-background border-b border-border">
+                    <div className="flex items-center gap-3">
+                        {/* Activity Type Chips - Horizontally Scrollable */}
+                        <div className="flex-1 overflow-x-auto scrollbar-hide">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        setFilterActivity('all');
+                                        setCurrentPage(1);
+                                    }}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
+                                        filterActivity === 'all'
+                                            ? "bg-foreground text-background shadow-sm"
+                                            : "bg-muted hover:bg-muted/80 text-foreground"
+                                    )}
+                                >
+                                    All
+                                </button>
+                                {uniqueActivityTypes.map((type) => {
+                                    const config = getActivityConfig(type);
+                                    return (
+                                        <button
+                                            key={type}
+                                            onClick={() => {
+                                                setFilterActivity(type);
+                                                setCurrentPage(1);
+                                            }}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
+                                                filterActivity === type
+                                                    ? "bg-foreground text-background shadow-sm"
+                                                    : "bg-muted hover:bg-muted/80 text-foreground"
+                                            )}
+                                        >
+                                            {config.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Filters */}
-                    <div className="flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-lg">
-                    <div className="relative max-w-md">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            type="text"
-                            placeholder="Search by user ID, name, email, IP, device, or browser..."
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <Select value={filterActivity} onValueChange={setFilterActivity}>
-                        <SelectTrigger className="w-full sm:w-[180px]">
-                            <SelectValue placeholder="All Activities" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Activities</SelectItem>
-                            {uniqueActivityTypes.map((type) => {
-                                const config = getActivityConfig(type);
-                                return (
-                                    <SelectItem key={type} value={type}>
-                                        {config.label}
-                                    </SelectItem>
-                                );
-                            })}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filterStatus} onValueChange={setFilterStatus}>
-                        <SelectTrigger className="w-full sm:w-[180px]">
-                            <SelectValue placeholder="All Statuses" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="success">Success</SelectItem>
-                            <SelectItem value="failed">Failed</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 h-auto sm:h-9 py-2 sm:py-0 rounded-lg border border-border bg-muted/30 px-3">
-                        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1">
-                            <div className="flex items-center gap-2 flex-1 min-w-[140px]">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">From</label>
-                                <Input
-                                    type="date"
-                                    className="h-9 flex-1 min-w-[140px] border-border bg-background text-sm"
-                                    value={dateFrom}
-                                    onChange={(e) => setDateFrom(e.target.value)}
-                                />
-                            </div>
-                            <div className="hidden sm:block h-4 w-px bg-border" />
-                            <div className="flex items-center gap-2 flex-1 min-w-[140px]">
-                                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">To</label>
-                                <Input
-                                    type="date"
-                                    className="h-9 flex-1 min-w-[140px] border-border bg-background text-sm"
-                                    value={dateTo}
-                                    onChange={(e) => setDateTo(e.target.value)}
-                                />
-                            </div>
+                        {/* Search Bar */}
+                        <div className="relative flex-shrink-0">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                type="text"
+                                placeholder="Search..."
+                                className="pl-8 h-9 w-[180px] text-sm"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onKeyDown={handleSearch}
+                            />
                         </div>
+
+                        {/* Export Button - Icon Only */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 w-9 p-0 flex-shrink-0"
+                            onClick={exportToCSV}
+                            disabled={filteredActivities.length === 0}
+                            title="Export CSV"
+                        >
+                            <Download className="h-4 w-4" />
+                        </Button>
+
+                        {/* Advanced Filters Sheet */}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="relative h-9 w-9 p-0 flex-shrink-0"
+                                    title="Advanced Filters"
+                                >
+                                    <SlidersHorizontal className="h-4 w-4" />
+                                    {advancedFilterCount > 0 && (
+                                        <span
+                                            className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground"
+                                            aria-label={`${advancedFilterCount} active filters`}
+                                        >
+                                            {advancedFilterCount}
+                                        </span>
+                                    )}
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+                                <SheetHeader>
+                                    <SheetTitle className="flex flex-wrap items-center gap-2">
+                                        <span>Advanced Filters</span>
+                                        {hasActiveFilters && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={clearAllFilters}
+                                                className="h-8 text-sm hover:bg-transparent -ml-1"
+                                            >
+                                                Clear all
+                                            </Button>
+                                        )}
+                                    </SheetTitle>
+                                </SheetHeader>
+                                
+                                <div className="space-y-5 px-4 pb-6 mt-2">
+                                    {/* Status Filter */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-foreground">Status</label>
+                                        <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setCurrentPage(1); }}>
+                                            <SelectTrigger className="h-10">
+                                                <SelectValue placeholder="All Statuses" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Statuses</SelectItem>
+                                                <SelectItem value="success">Success</SelectItem>
+                                                <SelectItem value="failed">Failed</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* User Filter */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-foreground">User</label>
+                                        <Select value={filterUser} onValueChange={(value) => { setFilterUser(value); setCurrentPage(1); }}>
+                                            <SelectTrigger className="h-10">
+                                                <SelectValue placeholder="All Users" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Users</SelectItem>
+                                                {users.map((user) => (
+                                                    <SelectItem key={user.id} value={String(user.id)}>
+                                                        {user.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Date Range */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-foreground">Date Range</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <span className="text-xs text-muted-foreground">From</span>
+                                                <Input
+                                                    type="date"
+                                                    className="h-10"
+                                                    value={dateFrom}
+                                                    onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <span className="text-xs text-muted-foreground">To</span>
+                                                <Input
+                                                    type="date"
+                                                    className="h-10"
+                                                    value={dateTo}
+                                                    onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </SheetContent>
+                        </Sheet>
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={exportToCSV}
-                        className="h-9 gap-2"
-                        disabled={filteredActivities.length === 0}
-                    >
-                        <Download className="h-4 w-4" />
-                        Export CSV
-                    </Button>
                 </div>
 
-                {/* Activities List */}
-                <div className="bg-card border border-border rounded-lg overflow-hidden">
-                    {filteredActivities.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                            <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                            <p className="text-sm">No activities found</p>
-                            {searchTerm || filterActivity !== 'all' || filterStatus !== 'all' || dateFrom || dateTo ? (
-                                <p className="text-xs mt-1">Try adjusting your filters</p>
-                            ) : null}
+                {/* Scrollable Content Area */}
+                <div className="flex-1 min-h-0 overflow-y-auto px-3 md:px-4 pt-1 pb-2">
+                    {/* Active Filter Tags */}
+                    {hasActiveFilters && (
+                        <div className="flex flex-wrap gap-1.5 items-center text-xs relative z-10 py-1">
+                            <span className="text-muted-foreground">Filters:</span>
+                            {searchTerm && (
+                                <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                    {searchTerm.length > 15 ? searchTerm.substring(0, 15) + '...' : searchTerm}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeFilter('search');
+                                        }}
+                                        className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                        aria-label="Remove search filter"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </Badge>
+                            )}
+                            {filterActivity !== 'all' && (
+                                <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                    {getActivityConfig(filterActivity).label}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeFilter('activity');
+                                        }}
+                                        className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                        aria-label="Remove activity filter"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </Badge>
+                            )}
+                            {filterStatus !== 'all' && (
+                                <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                    {getStatusConfig(filterStatus).label}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeFilter('status');
+                                        }}
+                                        className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                        aria-label="Remove status filter"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </Badge>
+                            )}
+                            {filterUser !== 'all' && (
+                                <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                    {users.find(u => String(u.id) === filterUser)?.name || 'User'}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeFilter('user');
+                                        }}
+                                        className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                        aria-label="Remove user filter"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </Badge>
+                            )}
+                            {(dateFrom || dateTo) && (
+                                <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                    {dateFrom || '...'} → {dateTo || '...'}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeFilter('date');
+                                        }}
+                                        className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                        aria-label="Remove date filter"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </Badge>
+                            )}
                         </div>
-                    ) : (
-                        <div className="relative">
-                            {sortedDates.map((dateKey, dateIndex) => (
-                                <div key={dateKey} className={dateIndex > 0 ? 'mt-8' : ''}>
-                                    {/* Date Separator */}
-                                    <div className="sticky top-0 z-10 bg-card border-b border-border py-3 px-6 dark:bg-card-dark dark:border-border-dark">
-                                        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">
-                                            {dateKey}
-                                        </h3>
-                                    </div>
-                                    
-                                    {/* Timeline for this date */}
-                                    <div className="relative pl-8">
-                                        {/* Vertical line */}
-                                        <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-border dark:bg-border-dark"></div>
-                                        
-                                        {groupedActivities[dateKey].map((activity) => {
-                                            const activityConfigData = getActivityConfig(activity.activity_type);
-                                            const statusConfigData = getStatusConfig(activity.status);
-                                            const ActivityIcon = (LucideIcons as any)[activityConfigData.icon] || LogIn;
-                                            const StatusIcon = (LucideIcons as any)[statusConfigData.icon] || CheckCircle;
-                                            const DeviceIcon = deviceIcons[activity.device || 'Desktop'] || Monitor;
+                    )}
 
-                                            return (
-                                                <div
-                                                    key={activity.id}
-                                                    className="relative pb-6 last:pb-4"
-                                                >
-                                                    {/* Timeline node */}
-                                                    <div className={`absolute left-0 top-1.5 w-6 h-6 rounded-full ${activityConfigData.bgColor} border-2 border-card dark:border-card-dark flex items-center justify-center z-10`}>
-                                                        <ActivityIcon className={`h-3 w-3 ${activityConfigData.color}`} />
-                                                    </div>
-                                                    
-                                                    {/* Activity content */}
-                                                    <div className="ml-6">
-                                                        <div className="bg-muted/20 hover:bg-muted/30 rounded-lg p-4 transition-colors border border-border/50 dark:bg-muted-dark/20 dark:hover:bg-muted-dark/30 dark:border-border-dark/50">
-                                                            <div className="flex items-start justify-between gap-4 mb-2">
-                                                                <div className="flex-1">
-                                                                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                                                                        <Badge variant="outline" className={`text-xs ${activityConfigData.bgColor} ${activityConfigData.color} border-0`}>
-                                                                            {activityConfigData.label}
-                                                                        </Badge>
-                                                                        <Badge variant="outline" className={`text-xs ${statusConfigData.bgColor} ${statusConfigData.color} border-0`}>
-                                                                            <StatusIcon className="h-3 w-3 mr-1" />
-                                                                            {statusConfigData.label}
-                                                                        </Badge>
-                                                                        <span className="text-sm font-medium text-foreground">
-                                                                            {activity.user_name || activity.user_email || `User #${activity.user_id}`}
-                                                                        </span>
-                                                                    </div>
-                                                                    
-                                                                    {/* Activity details */}
-                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <User className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                            <span className="text-muted-foreground">User ID:</span>
-                                                                            <span className="font-semibold text-foreground">{activity.user_id}</span>
+                    {/* Activities List */}
+                    <div className="bg-card border border-border rounded-lg overflow-hidden">
+                        {paginatedActivities.length === 0 ? (
+                            <div className="text-center py-12 text-muted-foreground">
+                                <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                <p className="text-sm font-medium">No activities found</p>
+                                {hasActiveFilters ? (
+                                    <div className="mt-2">
+                                        <p className="text-xs">Try adjusting your filters</p>
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            onClick={clearAllFilters}
+                                            className="mt-2 text-xs"
+                                        >
+                                            Clear all filters
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs mt-1">No user activity entries have been recorded yet.</p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="max-w-4xl mx-auto p-6 space-y-6">
+                                {sortedDates.map((dateKey, dateIndex) => {
+                                    const dateLogs = groupedActivities[dateKey];
+                                    const eventCount = dateLogs.length;
+                                    
+                                    return (
+                                        <section 
+                                            key={dateKey} 
+                                            className={dateIndex > 0 ? 'mt-6' : ''}
+                                        >
+                                            {/* Date Header */}
+                                            <div className="flex items-center mb-4">
+                                                <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                                                <h2 className="text-sm font-semibold text-gray-600">
+                                                    {dateKey}
+                                                </h2>
+                                                <span className="ml-auto text-sm text-gray-500">
+                                                    {eventCount} {eventCount === 1 ? 'event' : 'events'}
+                                                </span>
+                                            </div>
+
+                                            {/* Timeline Group */}
+                                            <div className="relative">
+                                                {/* Timeline line */}
+                                                {dateLogs.length > 1 && (
+                                                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                                )}
+                                                
+                                                <div className="space-y-6">
+                                                    {dateLogs.map((activity) => {
+                                                        const activityConfigData = getActivityConfig(activity.activity_type);
+                                                        const statusConfigData = getStatusConfig(activity.status);
+                                                        const ActivityIcon = (LucideIcons as any)[activityConfigData.icon] || LogIn;
+                                                        const StatusIcon = (LucideIcons as any)[statusConfigData.icon] || CheckCircle;
+                                                        const DeviceIcon = deviceIcons[activity.device || 'Desktop'] || Monitor;
+
+                                                        // Get user initials
+                                                        const getUserInitials = () => {
+                                                            if (activity.user_name) {
+                                                                const parts = activity.user_name.split(' ');
+                                                                if (parts.length >= 2) {
+                                                                    return (parts[0][0] + parts[1][0]).toUpperCase();
+                                                                }
+                                                                return activity.user_name.slice(0, 2).toUpperCase();
+                                                            }
+                                                            return 'U';
+                                                        };
+
+                                                        // Format time only
+                                                        const formatTime = (dateString: string) => {
+                                                            const date = new Date(dateString);
+                                                            return new Intl.DateTimeFormat('en-US', {
+                                                                hour: '2-digit',
+                                                                minute: '2-digit',
+                                                            }).format(date);
+                                                        };
+
+                                                        return (
+                                                            <div
+                                                                key={activity.id}
+                                                                className="relative pl-10 group"
+                                                            >
+                                                                {/* Icon Circle */}
+                                                                <div className={`absolute left-0 top-0 w-8 h-8 rounded-full ${activityConfigData.bgColor} border-2 border-white flex items-center justify-center z-10 shadow-sm`}>
+                                                                    <ActivityIcon className={`h-4 w-4 ${activityConfigData.color}`} />
+                                                                </div>
+
+                                                                {/* Content Card */}
+                                                                <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-3">
+                                                                    {/* Header */}
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                                            {/* User Avatar */}
+                                                                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                                                                <span className="text-xs font-semibold text-gray-600 uppercase">
+                                                                                    {getUserInitials()}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                {/* Main info row */}
+                                                                                <div className="text-sm font-semibold text-gray-900 flex items-center gap-1 flex-wrap">
+                                                                                    <span className="flex-shrink-0 whitespace-nowrap">
+                                                                                        {activity.user_name || activity.user_email || `User #${activity.user_id}`}
+                                                                                    </span>
+                                                                                    <span className="text-gray-500 mx-1 flex-shrink-0">
+                                                                                        {activityConfigData.label.toLowerCase()}
+                                                                                    </span>
+                                                                                    <span className="text-gray-600 mx-1 flex-shrink-0 bg-gray-100 rounded px-2 py-0.5 text-xs font-semibold">
+                                                                                        {activity.activity_type === 'login_failed' ? 'Auth' : 'Session'}
+                                                                                    </span>
+                                                                                    <span className="text-gray-500 mx-1 flex-shrink-0 font-normal">
+                                                                                        ID: {activity.user_id}
+                                                                                    </span>
+                                                                                    {/* Status badge on right */}
+                                                                                    <Badge 
+                                                                                        variant="outline" 
+                                                                                        className={`ml-auto text-xs ${statusConfigData.bgColor} ${statusConfigData.color} border-0 flex-shrink-0`}
+                                                                                    >
+                                                                                        <StatusIcon className="h-3 w-3 mr-1" />
+                                                                                        {statusConfigData.label}
+                                                                                    </Badge>
+                                                                                </div>
+                                                                                {/* Sub info row */}
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    User • {formatTime(activity.created_at)}
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
-                                                                        {activity.login_time && (
-                                                                            <div className="flex items-center gap-2">
-                                                                                <LogIn className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                                <span className="text-muted-foreground">Login:</span>
-                                                                                <span className="font-semibold text-foreground">{formatDate(activity.login_time)}</span>
-                                                                            </div>
-                                                                        )}
-                                                                        {activity.logout_time && (
-                                                                            <div className="flex items-center gap-2">
-                                                                                <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                                <span className="text-muted-foreground">Logout:</span>
-                                                                                <span className="font-semibold text-foreground">{formatDate(activity.logout_time)}</span>
-                                                                            </div>
-                                                                        )}
-                                                                        {activity.ip_address && (
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-muted-foreground">IP:</span>
-                                                                                <span className="font-semibold text-foreground">{activity.ip_address}</span>
-                                                                            </div>
-                                                                        )}
-                                                                        {activity.device && (
-                                                                            <div className="flex items-center gap-2">
-                                                                                <DeviceIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                                <span className="text-muted-foreground">Device:</span>
-                                                                                <span className="font-semibold text-foreground">{activity.device}</span>
-                                                                            </div>
-                                                                        )}
-                                                                        {activity.browser && (
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-muted-foreground">Browser:</span>
-                                                                                <span className="font-semibold text-foreground">{activity.browser}</span>
-                                                                            </div>
-                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Details Card */}
+                                                                    <div className="border border-gray-200 rounded-lg py-2 px-3 bg-gray-50">
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                                                                            {activity.ip_address && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="text-gray-500 font-medium">IP Address:</span>
+                                                                                    <span className="text-gray-900">{activity.ip_address}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {activity.device && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <DeviceIcon className="h-4 w-4 text-gray-400" />
+                                                                                    <span className="text-gray-500 font-medium">Device:</span>
+                                                                                    <span className="text-gray-900">{activity.device}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {activity.browser && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="text-gray-500 font-medium">Browser:</span>
+                                                                                    <span className="text-gray-900">{activity.browser}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {activity.login_time && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <LogIn className="h-4 w-4 text-gray-400" />
+                                                                                    <span className="text-gray-500 font-medium">Login:</span>
+                                                                                    <span className="text-gray-900">{formatDate(activity.login_time)}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {activity.logout_time && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <LogOut className="h-4 w-4 text-gray-400" />
+                                                                                    <span className="text-gray-500 font-medium">Logout:</span>
+                                                                                    <span className="text-gray-900">{formatDate(activity.logout_time)}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground mt-3 pt-3 border-t border-border/50 dark:border-border-dark/50">
-                                                                <span className="flex items-center gap-1.5">
-                                                                    <Clock className="h-3.5 w-3.5" />
-                                                                    {formatDate(activity.created_at)}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                            </div>
+                                        </section>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                    {/* Summary */}
-                    {filteredActivities.length > 0 && (
-                        <div className="text-sm text-muted-foreground text-center">
-                            Showing {filteredActivities.length} of {activities.length} activity entries
+                {/* Pagination - Fixed at bottom */}
+                <div className="flex-shrink-0 bg-card border-t border-border z-30">
+                    <div className="px-3 sm:px-4 py-1.5 flex items-center justify-between gap-2">
+                        {/* Per Page Selector - Left */}
+                        <div className="flex items-center gap-2">
+                            <Select value={perPage} onValueChange={handlePerPageChange}>
+                                <SelectTrigger className="h-7 w-[70px] text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {PER_PAGE_OPTIONS.map((option) => (
+                                        <SelectItem key={option} value={option}>
+                                            {option}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <span className="text-xs text-muted-foreground hidden sm:inline">
+                                of {filteredActivities.length}
+                            </span>
                         </div>
-                    )}
+
+                        {/* Pagination Controls - Right (only show when more than 1 page) */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="h-7 px-2"
+                                    aria-label="Previous page"
+                                >
+                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                </Button>
+                                {/* Page Numbers - Desktop */}
+                                <div className="hidden sm:flex items-center gap-1">
+                                    {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                                        let page: number;
+                                        if (totalPages <= 7) {
+                                            page = i + 1;
+                                        } else if (currentPage <= 4) {
+                                            page = i + 1;
+                                        } else if (currentPage >= totalPages - 3) {
+                                            page = totalPages - 6 + i;
+                                        } else {
+                                            page = currentPage - 3 + i;
+                                        }
+                                        return (
+                                            <Button
+                                                key={page}
+                                                variant={page === currentPage ? 'default' : 'outline'}
+                                                size="sm"
+                                                onClick={() => handlePageChange(page)}
+                                                className="min-w-[32px] h-7 text-xs"
+                                            >
+                                                {page}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                                {/* Page Indicator - Mobile */}
+                                <div className="flex sm:hidden items-center gap-1 px-2 text-xs">
+                                    <span className="font-semibold text-foreground">{currentPage}</span>
+                                    <span className="text-muted-foreground">/</span>
+                                    <span className="text-muted-foreground">{totalPages}</span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="h-7 px-2"
+                                    aria-label="Next page"
+                                >
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </AppLayout>
     );
 }
-

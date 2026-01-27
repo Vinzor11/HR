@@ -2,9 +2,8 @@ import { CustomToast, toast } from '@/components/custom-toast';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Clock, User, FileText, Search, Download, Calendar, RotateCcw, XCircle, Plus, Edit, Trash2, Eye, Check, ChevronLeft, ChevronRight, Activity, Filter, FileDown, Save, Upload, Lock, Unlock, Send, Mail, Share2, Copy, Archive, ArchiveRestore, Ban, Shield, AlertCircle, Info, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { Head, router, usePage } from '@inertiajs/react';
+import { FileText, Search, Download, ChevronLeft, ChevronRight, Filter, X, Loader2, SlidersHorizontal } from 'lucide-react';
 import { useState, useCallback, useMemo } from 'react';
 import {
     Select,
@@ -15,6 +14,19 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AuditLogTimeline, AuditLogDetailModal, getActionConfig, getUserName, getUserRole, formatModule, type AuditLog } from '@/components/audit-logs';
+import { cn } from '@/lib/utils';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet';
+
+// Constants
+const PER_PAGE_OPTIONS = ['10', '25', '50', '100'] as const;
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -22,32 +34,6 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/audit-logs',
     },
 ];
-
-interface AuditLog {
-    id: number;
-    user_id: number | null;
-    action: string;
-    module: string;
-    entity_type: string;
-    entity_id: string | null;
-    description: string;
-    old_values?: any;
-    new_values?: any;
-    snapshot?: any;
-    user_agent?: string | null;
-    reference_number?: string | null;
-    created_at: string;
-    entity_name?: string | null;
-    user?: {
-        id: number;
-        name: string;
-        email: string;
-        roles?: Array<{
-            id: number;
-            name: string;
-        }>;
-    };
-}
 
 interface AuditLogsProps {
     logs: {
@@ -68,69 +54,14 @@ interface AuditLogsProps {
         search?: string;
         date_from?: string;
         date_to?: string;
+        per_page?: number;
+        advanced_filters?: string;
     };
     modules: string[];
     actions: string[];
     entityTypes: string[];
     users: Array<{ id: number; name: string; email: string }>;
 }
-
-const actionConfig: Record<string, { label: string; icon: string; color: string; bgColor: string }> = {
-    created: {
-        label: 'Created',
-        icon: 'Plus',
-        color: 'text-green-600',
-        bgColor: 'bg-green-100',
-    },
-    updated: {
-        label: 'Updated',
-        icon: 'Edit',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100',
-    },
-    'soft-deleted': {
-        label: 'Soft Deleted',
-        icon: 'Archive',
-        color: 'text-red-600',
-        bgColor: 'bg-red-100',
-    },
-    'permanently-deleted': {
-        label: 'Permanently Deleted',
-        icon: 'Trash2',
-        color: 'text-red-700',
-        bgColor: 'bg-red-200',
-    },
-    viewed: {
-        label: 'Viewed',
-        icon: 'Eye',
-        color: 'text-gray-600',
-        bgColor: 'bg-gray-100',
-    },
-    approved: {
-        label: 'Approved',
-        icon: 'Check',
-        color: 'text-green-600',
-        bgColor: 'bg-green-100',
-    },
-    rejected: {
-        label: 'Rejected',
-        icon: 'XCircle',
-        color: 'text-red-600',
-        bgColor: 'bg-red-100',
-    },
-    restored: {
-        label: 'Restored',
-        icon: 'RotateCcw',
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-100',
-    },
-    exported: {
-        label: 'Exported',
-        icon: 'Download',
-        color: 'text-indigo-600',
-        bgColor: 'bg-indigo-100',
-    },
-};
 
 export default function AuditLogs() {
     const { logs, filters: initialFilters, modules, actions, entityTypes, users } = usePage<AuditLogsProps>().props;
@@ -139,224 +70,155 @@ export default function AuditLogs() {
     const [filterModule, setFilterModule] = useState(initialFilters.module || 'all');
     const [filterAction, setFilterAction] = useState(initialFilters.action || 'all');
     const [filterUser, setFilterUser] = useState(initialFilters.user_id || 'all');
+    const [filterEntityType, setFilterEntityType] = useState(initialFilters.entity_type || 'all');
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
+    const [perPage, setPerPage] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('audit_logs_perPage');
+            if (saved && PER_PAGE_OPTIONS.includes(saved as any)) {
+                return saved;
+            }
+        }
+        return String(initialFilters.per_page ?? 50);
+    });
     const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
+    const [isLoading, setIsLoading] = useState(false);
+    const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+    const [detailModalOpen, setDetailModalOpen] = useState(false);
 
-    const applyFilters = useCallback(() => {
+    // Handle log card click to show detail modal
+    const handleLogClick = useCallback((log: AuditLog) => {
+        setSelectedLog(log);
+        setDetailModalOpen(true);
+    }, []);
+
+    // Handle toggle field expand/collapse
+    const handleToggleField = useCallback((fieldKey: string) => {
+        setExpandedFields(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(fieldKey)) {
+                newSet.delete(fieldKey);
+            } else {
+                newSet.add(fieldKey);
+            }
+            return newSet;
+        });
+    }, []);
+
+    // Check if any filters are active
+    const hasActiveFilters = useMemo(() => {
+        return (
+            searchTerm !== '' ||
+            filterModule !== 'all' ||
+            filterAction !== 'all' ||
+            filterUser !== 'all' ||
+            filterEntityType !== 'all' ||
+            dateFrom !== '' ||
+            dateTo !== ''
+        );
+    }, [searchTerm, filterModule, filterAction, filterUser, filterEntityType, dateFrom, dateTo]);
+
+    // Count active filters
+    const activeFilterCount = useMemo(() => {
+        let count = 0;
+        if (searchTerm) count++;
+        if (filterModule !== 'all') count++;
+        if (filterAction !== 'all') count++;
+        if (filterUser !== 'all') count++;
+        if (filterEntityType !== 'all') count++;
+        if (dateFrom || dateTo) count++;
+        return count;
+    }, [searchTerm, filterModule, filterAction, filterUser, filterEntityType, dateFrom, dateTo]);
+
+    const applyFilters = useCallback((options: { page?: number; newPerPage?: string; newModule?: string } = {}) => {
+        setIsLoading(true);
         const params: any = {};
         if (searchTerm) params.search = searchTerm;
-        if (filterModule !== 'all') params.module = filterModule;
+        
+        // Use newModule if provided (for immediate chip clicks), otherwise use state
+        const effectiveModule = options.newModule !== undefined ? options.newModule : filterModule;
+        if (effectiveModule !== 'all') params.module = effectiveModule;
+        
         if (filterAction !== 'all') params.action = filterAction;
         if (filterUser !== 'all') params.user_id = filterUser;
+        if (filterEntityType !== 'all') params.entity_type = filterEntityType;
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo) params.date_to = dateTo;
+        
+        const effectivePerPage = options.newPerPage || perPage;
+        params.per_page = parseInt(effectivePerPage, 10);
+        
+        if (options.page) {
+            params.page = options.page;
+        }
 
         router.get('/audit-logs', params, {
             preserveState: true,
             preserveScroll: true,
+            onFinish: () => setIsLoading(false),
         });
-    }, [searchTerm, filterModule, filterAction, filterUser, dateFrom, dateTo]);
+    }, [searchTerm, filterModule, filterAction, filterUser, filterEntityType, dateFrom, dateTo, perPage]);
+
+    // Clear all filters
+    const clearAllFilters = useCallback(() => {
+        setSearchTerm('');
+        setFilterModule('all');
+        setFilterAction('all');
+        setFilterUser('all');
+        setFilterEntityType('all');
+        setDateFrom('');
+        setDateTo('');
+        setIsLoading(true);
+        
+        router.get('/audit-logs', { per_page: parseInt(perPage, 10) }, {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => setIsLoading(false),
+        });
+    }, [perPage]);
+
+    // Handle per page change
+    const handlePerPageChange = useCallback((value: string) => {
+        setPerPage(value);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('audit_logs_perPage', value);
+        }
+        applyFilters({ page: 1, newPerPage: value });
+    }, [applyFilters]);
 
     const handleSearch = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
-            applyFilters();
+            applyFilters({ page: 1 });
         }
     }, [applyFilters]);
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return new Intl.DateTimeFormat('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        }).format(date);
-    };
+    // Remove individual filter
+    const removeFilter = useCallback((filterType: string) => {
+        switch (filterType) {
+            case 'search':
+                setSearchTerm('');
+                break;
+            case 'module':
+                setFilterModule('all');
+                break;
+            case 'action':
+                setFilterAction('all');
+                break;
+            case 'user':
+                setFilterUser('all');
+                break;
+            case 'entity_type':
+                setFilterEntityType('all');
+                break;
+            case 'date':
+                setDateFrom('');
+                setDateTo('');
+                break;
+        }
+    }, []);
 
-    // Get entity code from snapshot, old_values, or new_values
-    const getEntityCode = (log: AuditLog): string | null => {
-        // Try to get code from snapshot first (most reliable)
-        if (log.snapshot) {
-            if (log.entity_type === 'Faculty' && log.snapshot.code) {
-                return log.snapshot.code;
-            }
-            if ((log.entity_type === 'Department' || log.entity_type === 'Office') && log.snapshot.code) {
-                return log.snapshot.code;
-            }
-            if (log.entity_type === 'Position' && log.snapshot.pos_code) {
-                return log.snapshot.pos_code;
-            }
-        }
-        
-        // Try new_values (for created/restored)
-        if (log.new_values) {
-            if (log.entity_type === 'Faculty' && log.new_values.code) {
-                return log.new_values.code;
-            }
-            if ((log.entity_type === 'Department' || log.entity_type === 'Office') && log.new_values.code) {
-                return log.new_values.code;
-            }
-            if (log.entity_type === 'Position' && log.new_values.pos_code) {
-                return log.new_values.pos_code;
-            }
-        }
-        
-        // Try old_values (for deleted)
-        if (log.old_values) {
-            if (log.entity_type === 'Faculty' && log.old_values.code) {
-                return log.old_values.code;
-            }
-            if ((log.entity_type === 'Department' || log.entity_type === 'Office') && log.old_values.code) {
-                return log.old_values.code;
-            }
-            if (log.entity_type === 'Position' && log.old_values.pos_code) {
-                return log.old_values.pos_code;
-            }
-        }
-        
-        return null;
-    };
-
-    const formatTime = (dateString: string) => {
-        const date = new Date(dateString);
-        return new Intl.DateTimeFormat('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-        }).format(date);
-    };
-
-    const getActionConfig = (action: string, description?: string) => {
-        const actionLower = action.toLowerCase();
-        
-        // Check if action exists in config
-        if (actionConfig[actionLower]) {
-            return actionConfig[actionLower];
-        }
-        
-        // Map common action patterns to appropriate icons
-        const actionIconMap: Record<string, { icon: string; color: string; bgColor: string }> = {
-            // Create variations
-            'create': { icon: 'Plus', color: 'text-green-600', bgColor: 'bg-green-100' },
-            'add': { icon: 'Plus', color: 'text-green-600', bgColor: 'bg-green-100' },
-            'insert': { icon: 'Plus', color: 'text-green-600', bgColor: 'bg-green-100' },
-            'new': { icon: 'Plus', color: 'text-green-600', bgColor: 'bg-green-100' },
-            
-            // Update variations
-            'update': { icon: 'Edit', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'modify': { icon: 'Edit', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'change': { icon: 'Edit', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'edit': { icon: 'Edit', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'save': { icon: 'Save', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            
-            // Delete variations
-            'delete': { icon: 'Trash2', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'soft-delete': { icon: 'Trash2', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'permanently-delete': { icon: 'Trash2', color: 'text-red-700', bgColor: 'bg-red-200' },
-            'remove': { icon: 'Trash2', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'destroy': { icon: 'Trash2', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'archive': { icon: 'Archive', color: 'text-orange-600', bgColor: 'bg-orange-100' },
-            
-            // View variations
-            'view': { icon: 'Eye', color: 'text-gray-600', bgColor: 'bg-gray-100' },
-            'read': { icon: 'Eye', color: 'text-gray-600', bgColor: 'bg-gray-100' },
-            'show': { icon: 'Eye', color: 'text-gray-600', bgColor: 'bg-gray-100' },
-            'display': { icon: 'Eye', color: 'text-gray-600', bgColor: 'bg-gray-100' },
-            
-            // Approval variations
-            'approve': { icon: 'Check', color: 'text-green-600', bgColor: 'bg-green-100' },
-            'accept': { icon: 'Check', color: 'text-green-600', bgColor: 'bg-green-100' },
-            'confirm': { icon: 'Check', color: 'text-green-600', bgColor: 'bg-green-100' },
-            
-            // Rejection variations
-            'reject': { icon: 'XCircle', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'deny': { icon: 'XCircle', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'decline': { icon: 'XCircle', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'cancel': { icon: 'XCircle', color: 'text-red-600', bgColor: 'bg-red-100' },
-            
-            // Restore variations
-            'restore': { icon: 'RotateCcw', color: 'text-purple-600', bgColor: 'bg-purple-100' },
-            'recover': { icon: 'RotateCcw', color: 'text-purple-600', bgColor: 'bg-purple-100' },
-            'unarchive': { icon: 'ArchiveRestore', color: 'text-purple-600', bgColor: 'bg-purple-100' },
-            'reactivate': { icon: 'RotateCcw', color: 'text-purple-600', bgColor: 'bg-purple-100' },
-            
-            // Export/Import variations
-            'export': { icon: 'Download', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
-            'import': { icon: 'Upload', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
-            'download': { icon: 'Download', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
-            'upload': { icon: 'Upload', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
-            
-            // Security variations
-            'lock': { icon: 'Lock', color: 'text-orange-600', bgColor: 'bg-orange-100' },
-            'unlock': { icon: 'Unlock', color: 'text-green-600', bgColor: 'bg-green-100' },
-            'ban': { icon: 'Ban', color: 'text-red-600', bgColor: 'bg-red-100' },
-            'unban': { icon: 'Unlock', color: 'text-green-600', bgColor: 'bg-green-100' },
-            
-            // Communication variations
-            'send': { icon: 'Send', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'email': { icon: 'Mail', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'share': { icon: 'Share2', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'copy': { icon: 'Copy', color: 'text-gray-600', bgColor: 'bg-gray-100' },
-            
-            // Security/Protection
-            'protect': { icon: 'Shield', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-            'secure': { icon: 'Shield', color: 'text-blue-600', bgColor: 'bg-blue-100' },
-        };
-        
-        // Try to find a match in the action icon map
-        for (const [key, config] of Object.entries(actionIconMap)) {
-            if (actionLower.includes(key)) {
-                return {
-                    label: action.charAt(0).toUpperCase() + action.slice(1),
-                    ...config,
-                };
-            }
-        }
-        
-        // Default fallback for unknown actions
-        return {
-            label: action.charAt(0).toUpperCase() + action.slice(1),
-            icon: 'Info',
-            color: 'text-gray-600',
-            bgColor: 'bg-gray-100',
-        };
-    };
-
-    const renderValue = (value: any) => {
-        if (value === null || value === undefined) {
-            return <span className="text-muted-foreground italic">null</span>;
-        }
-        
-        // Handle arrays - display as comma-separated text
-        if (Array.isArray(value)) {
-            return <span className="text-foreground">{value.join(', ')}</span>;
-        }
-        
-        // Handle objects - display as JSON only if it's a complex object
-        if (typeof value === 'object') {
-            // If it's a simple object with just one key-value pair, show it simply
-            const keys = Object.keys(value);
-            if (keys.length === 1) {
-                const key = keys[0];
-                const val = value[key];
-                // If the value is an array, join it
-                if (Array.isArray(val)) {
-                    return <span className="text-foreground">{key}: {val.join(', ')}</span>;
-                }
-                return <span className="text-foreground">{key}: {String(val)}</span>;
-            }
-            // For complex objects, show as formatted JSON
-            return (
-                <pre className="text-xs bg-muted/30 p-2 rounded overflow-x-auto">
-                    {JSON.stringify(value, null, 2)}
-                </pre>
-            );
-        }
-        
-        return <span className="text-foreground">{String(value)}</span>;
-    };
-
+    // Helper for CSV export - format values for display
     const formatValueForDisplay = (value: any): string => {
         if (value === null || value === undefined) {
             return '';
@@ -1059,312 +921,476 @@ export default function AuditLogs() {
             <Head title="Audit Logs" />
             <CustomToast />
 
-            <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4">
-                <div className="space-y-4 md:space-y-6">
-                    {/* Header */}
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h1 className="text-xl md:text-2xl font-semibold text-foreground">Audit Logs</h1>
-                            <p className="text-xs md:text-sm text-muted-foreground">
-                                Showing {logs.from} to {logs.to} of {logs.total} log entries
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {/* Export Button */}
+            <div className="flex flex-col overflow-hidden bg-background" style={{ height: 'calc(100vh - 80px)' }}>
+                    {/* YouTube-style Module Filter Bar */}
+                    <div className="flex-shrink-0 z-20 px-3 md:px-4 py-3 bg-background border-b border-border">
+                        <div className="flex items-center gap-3">
+                            {/* Module Chips - Horizontally Scrollable */}
+                            <div className="flex-1 overflow-x-auto scrollbar-hide">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => {
+                                            setFilterModule('all');
+                                            applyFilters({ page: 1, newModule: 'all' });
+                                        }}
+                                        disabled={isLoading}
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
+                                            filterModule === 'all'
+                                                ? "bg-foreground text-background shadow-sm"
+                                                : "bg-muted hover:bg-muted/80 text-foreground"
+                                        )}
+                                    >
+                                        All
+                                    </button>
+                                    {modules.map((module) => (
+                                        <button
+                                            key={module}
+                                            onClick={() => {
+                                                setFilterModule(module);
+                                                applyFilters({ page: 1, newModule: module });
+                                            }}
+                                            disabled={isLoading}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
+                                                filterModule === module
+                                                    ? "bg-foreground text-background shadow-sm"
+                                                    : "bg-muted hover:bg-muted/80 text-foreground"
+                                            )}
+                                        >
+                                            {module.charAt(0).toUpperCase() + module.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Search Bar */}
+                            <div className="relative flex-shrink-0">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="text"
+                                    placeholder="Search..."
+                                    className="pl-8 h-9 w-[180px] text-sm"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onKeyDown={handleSearch}
+                                />
+                            </div>
+
+                            {/* Export Button - Icon Only */}
                             <Button
-                                size="default"
-                                className="h-10 px-4 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all flex-shrink-0"
-                                style={{
-                                    background: 'hsl(221, 83%, 53%)',
-                                    color: 'white',
-                                }}
+                                variant="outline"
+                                size="sm"
+                                className="h-9 w-9 p-0 flex-shrink-0"
                                 onClick={exportToCSV}
-                                disabled={logs.total === 0}
-                                onMouseEnter={(e) => {
-                                    if (!e.currentTarget.disabled) {
-                                        e.currentTarget.style.background = 'hsl(221, 83%, 48%)';
-                                        e.currentTarget.style.transform = 'translateY(-1px)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!e.currentTarget.disabled) {
-                                        e.currentTarget.style.background = 'hsl(221, 83%, 53%)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                    }
-                                }}
+                                disabled={logs.total === 0 || isLoading}
+                                title="Export CSV"
                             >
-                                <Download className="h-4 w-4 mr-2" />
-                                Export CSV
+                                <Download className="h-4 w-4" />
                             </Button>
-                        </div>
-                    </div>
 
-                    {/* Filters */}
-                    <div className="flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-lg">
-                        <div className="relative max-w-md">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="text"
-                                placeholder="Search by description, entity ID, module, or user..."
-                                className="pl-10"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onKeyDown={handleSearch}
-                            />
-                        </div>
-                        <Select value={filterModule} onValueChange={setFilterModule}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
-                                <SelectValue placeholder="All Modules" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Modules</SelectItem>
-                                {modules.map((module) => (
-                                    <SelectItem key={module} value={module}>
-                                        {module.charAt(0).toUpperCase() + module.slice(1)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={filterAction} onValueChange={setFilterAction}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
-                                <SelectValue placeholder="All Actions" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Actions</SelectItem>
-                                {actions.map((action) => {
-                                    const config = getActionConfig(action);
-                                    return (
-                                        <SelectItem key={action} value={action}>
-                                            {config.label}
-                                        </SelectItem>
-                                    );
-                                })}
-                            </SelectContent>
-                        </Select>
-                        <Select value={filterUser} onValueChange={setFilterUser}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
-                                <SelectValue placeholder="All Users" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Users</SelectItem>
-                                {users.map((user) => (
-                                    <SelectItem key={user.id} value={String(user.id)}>
-                                        {user.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 h-auto sm:h-9 py-2 sm:py-0 rounded-lg border border-border bg-muted/30 px-3">
-                            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1">
-                                <div className="flex items-center gap-2 flex-1 min-w-[140px]">
-                                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">From</label>
-                                    <Input
-                                        type="date"
-                                        className="h-9 flex-1 min-w-[140px] border-border bg-background text-sm"
-                                        value={dateFrom}
-                                        onChange={(e) => setDateFrom(e.target.value)}
-                                    />
-                                </div>
-                                <div className="hidden sm:block h-4 w-px bg-border" />
-                                <div className="flex items-center gap-2 flex-1 min-w-[140px]">
-                                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">To</label>
-                                    <Input
-                                        type="date"
-                                        className="h-9 flex-1 min-w-[140px] border-border bg-background text-sm"
-                                        value={dateTo}
-                                        onChange={(e) => setDateTo(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={applyFilters}
-                            className="h-9 gap-2"
-                        >
-                            <Filter className="h-4 w-4" />
-                            Apply Filters
-                        </Button>
-                    </div>
-
-                    {/* Logs List */}
-                    <div className="bg-card border border-border rounded-lg overflow-hidden">
-                        {logs.data.length === 0 ? (
-                            <div className="text-center py-12 text-muted-foreground">
-                                <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p className="text-sm">No logs found</p>
-                                {(searchTerm || filterModule !== 'all' || filterAction !== 'all' || filterUser !== 'all' || dateFrom || dateTo) ? (
-                                    <p className="text-xs mt-1">Try adjusting your filters</p>
-                                ) : null}
-                            </div>
-                        ) : (
-                            <div className="max-w-4xl mx-auto p-6 space-y-6">
-                                {sortedDates.map((dateKey, dateIndex) => {
-                                    const dateLogs = groupedLogs[dateKey];
-                                    const eventCount = dateLogs.length;
-                                    
-                                    return (
-                                        <div key={dateKey} className={dateIndex > 0 ? 'mt-6' : ''}>
-                                            {/* Date Header */}
-                                            <div className="flex items-center mb-4">
-                                                <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
-                                                <h3 className="text-sm font-semibold text-gray-500">
-                                                    {dateKey}
-                                                </h3>
-                                                <span className="ml-auto text-sm text-gray-500">
-                                                    {eventCount} {eventCount === 1 ? 'event' : 'events'}
+                            {/* Advanced Filters Sheet */}
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="relative h-9 w-9 p-0 flex-shrink-0"
+                                        title="Advanced Filters"
+                                    >
+                                        <SlidersHorizontal className="h-4 w-4" />
+                                        {(() => {
+                                            const advancedCount = activeFilterCount - (filterModule !== 'all' ? 1 : 0);
+                                            return advancedCount > 0 ? (
+                                                <span
+                                                    className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground"
+                                                    aria-label={`${advancedCount} active filters`}
+                                                >
+                                                    {advancedCount}
                                                 </span>
-                                            </div>
-
-                                            {/* Timeline Group - matches employment history structure */}
-                                            <div className="relative">
-                                                {/* Timeline line - matches employment history: left-4 */}
-                                                {dateLogs.length > 1 && (
-                                                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-                                                )}
-                                                
-                                                <div className="space-y-6">
-                                                    {dateLogs.map((log, logIndex) => {
-                                                        const config = getActionConfig(log.action);
-                                                        const IconComponent = (LucideIcons as any)[config.icon] || LucideIcons.Info;
-
+                                            ) : null;
+                                        })()}
+                                    </Button>
+                                </SheetTrigger>
+                                <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+                                    <SheetHeader>
+                                        <SheetTitle className="flex flex-wrap items-center gap-2">
+                                            <span>Advanced Filters</span>
+                                            {hasActiveFilters && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={clearAllFilters}
+                                                    className="h-8 text-sm hover:bg-transparent -ml-1"
+                                                >
+                                                    Clear all
+                                                </Button>
+                                            )}
+                                        </SheetTitle>
+                                    </SheetHeader>
+                                    
+                                    <div className="space-y-5 px-4 pb-6 mt-2">
+                                        {/* Action Filter */}
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Action</label>
+                                            <Select value={filterAction} onValueChange={setFilterAction}>
+                                                <SelectTrigger className="h-10">
+                                                    <SelectValue placeholder="All Actions" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Actions</SelectItem>
+                                                    {actions.map((action) => {
+                                                        const config = getActionConfig(action);
                                                         return (
-                                                            <div key={log.id} className="relative pl-10">
-                                                                {/* Icon Circle - positioned so line at left-4 is centered (icon center = 16px, so left edge at 0px) */}
-                                                                <div className={`absolute left-0 top-0 w-8 h-8 rounded-full ${config.bgColor} border-2 border-white flex items-center justify-center z-10 shadow-sm`}>
-                                                                    <IconComponent className={`h-4 w-4 ${config.color}`} />
-                                                                </div>
+                                                            <SelectItem key={action} value={action}>
+                                                                {config.label}
+                                                            </SelectItem>
+                                                        );
+                                                    })}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                                                {/* Content Card */}
-                                                                <div>
-                                                                <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-3">
-                                                                    {/* Header */}
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                                                                                <span className="text-xs font-semibold text-gray-600 uppercase">
-                                                                                    {getUserRoleInitials(log)}
-                                                                                </span>
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
-                                                                                    <span className="flex-shrink-0 whitespace-nowrap">{getUserName(log)}</span>
-                                                                                    <span className="text-gray-400 mx-1 flex-shrink-0">{formatAction(config.label)}</span>
-                                                                                    <span className="text-gray-600 mx-1 flex-shrink-0 bg-gray-100 rounded px-2 py-0.5 text-xs font-semibold">{formatModule(log.module)}</span>
-                                                                                    {log.entity_id && (
-                                                                                        <>
-                                                                                            <span className="text-gray-400 mx-1 flex-shrink-0 font-normal">
-                                                                                                ID: {log.entity_id}
-                                                                                                {(() => {
-                                                                                                    const code = getEntityCode(log);
-                                                                                                    return code ? <span className="text-gray-900 font-semibold mx-1">{code}</span> : '';
-                                                                                                })()}
-                                                                                            </span>
-                                                                                            {/* Show entity name for update/delete actions, or for non-Training entities, but NOT for employee create actions */}
-                                                                                            {getEntityName(log) && (log.action !== 'created' || log.entity_type !== 'Training') && !(log.action === 'created' && log.module === 'employees') && (
-                                                                                                <span className="text-gray-600 mx-1 truncate font-semibold min-w-0">{getEntityName(log)}</span>
-                                                                                            )}
-                                                                                        </>
-                                                                                    )}
-                                                                                    {log.reference_number && (
-                                                                                        <span className="text-gray-400 font-medium ml-auto flex-shrink-0">Ref#: {log.reference_number}</span>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div className="text-xs text-gray-500">
-                                                                                    {getUserRole(log)} • {formatTime(log.created_at)}
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
+                                        {/* Entity Type Filter */}
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Record Type</label>
+                                            <Select value={filterEntityType} onValueChange={setFilterEntityType}>
+                                                <SelectTrigger className="h-10">
+                                                    <SelectValue placeholder="All Types" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Types</SelectItem>
+                                                    {entityTypes.map((entityType) => (
+                                                        <SelectItem key={entityType} value={entityType}>
+                                                            {entityType}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                                                    {/* Description - only show if there are no changes */}
-                                                                    {log.description && !log.old_values && !log.new_values && (
-                                                                        <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg py-2 px-3">
-                                                                            <div className="flex items-center min-h-[40px]">
-                                                                                <p className="text-sm text-gray-700">
-                                                                                    {log.description}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
+                                        {/* User Filter */}
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">User</label>
+                                            <Select value={filterUser} onValueChange={setFilterUser}>
+                                                <SelectTrigger className="h-10">
+                                                    <SelectValue placeholder="All Users" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Users</SelectItem>
+                                                    {users.map((user) => (
+                                                        <SelectItem key={user.id} value={String(user.id)}>
+                                                            {user.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                                                    {/* Changes */}
-                                                                    {renderChanges(log)}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                        {/* Date Range */}
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Date Range</label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-1">
+                                                    <span className="text-xs text-muted-foreground">From</span>
+                                                    <Input
+                                                        type="date"
+                                                        className="h-10"
+                                                        value={dateFrom}
+                                                        onChange={(e) => setDateFrom(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="text-xs text-muted-foreground">To</span>
+                                                    <Input
+                                                        type="date"
+                                                        className="h-10"
+                                                        value={dateTo}
+                                                        onChange={(e) => setDateTo(e.target.value)}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+
+                                        {/* Apply Button */}
+                                        <Button
+                                            className="w-full h-10 mt-4"
+                                            onClick={() => applyFilters({ page: 1 })}
+                                            disabled={isLoading}
+                                        >
+                                            {isLoading ? (
+                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            ) : (
+                                                <Filter className="h-4 w-4 mr-2" />
+                                            )}
+                                            Apply Filters
+                                        </Button>
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
+                        </div>
                     </div>
 
-                    {/* Pagination */}
-                    {logs.last_page > 1 && (
-                        <div className="border-t border-border px-3 sm:px-6 py-2 sm:py-3">
-                            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                                <p className="text-xs sm:text-sm text-muted-foreground">
-                                    Showing {logs.from} to {logs.to} of {logs.total} entries
-                                </p>
-                                <div className="flex items-center gap-1">
-                                    <Link
-                                        href={logs.current_page > 1 ? `/audit-logs?page=${logs.current_page - 1}` : '#'}
-                                        className={`h-8 sm:h-9 px-3 flex items-center justify-center rounded border ${
-                                            logs.current_page === 1 
-                                                ? 'pointer-events-none opacity-50 cursor-not-allowed' 
-                                                : 'hover:bg-muted'
-                                        }`}
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </Link>
-                                    {Array.from({ length: Math.min(logs.last_page, 10) }, (_, i) => {
-                                        let page: number;
-                                        if (logs.last_page <= 10) {
-                                            page = i + 1;
-                                        } else if (logs.current_page <= 5) {
-                                            page = i + 1;
-                                        } else if (logs.current_page >= logs.last_page - 4) {
-                                            page = logs.last_page - 9 + i;
-                                        } else {
-                                            page = logs.current_page - 5 + i;
-                                        }
-                                        return (
-                                            <Link
-                                                key={page}
-                                                href={`/audit-logs?page=${page}`}
-                                                className={`min-w-[40px] h-8 sm:h-9 px-3 flex items-center justify-center rounded border text-xs sm:text-sm ${
-                                                    page === logs.current_page
-                                                        ? 'bg-primary text-primary-foreground border-primary'
-                                                        : 'hover:bg-muted'
-                                                }`}
-                                            >
-                                                {page}
-                                            </Link>
-                                        );
-                                    })}
-                                    <Link
-                                        href={logs.current_page < logs.last_page ? `/audit-logs?page=${logs.current_page + 1}` : '#'}
-                                        className={`h-8 sm:h-9 px-3 flex items-center justify-center rounded border ${
-                                            logs.current_page === logs.last_page 
-                                                ? 'pointer-events-none opacity-50 cursor-not-allowed' 
-                                                : 'hover:bg-muted'
-                                        }`}
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Link>
+                    {/* Scrollable Content Area */}
+                    <div className="flex-1 min-h-0 overflow-y-auto px-3 md:px-4 pt-1 pb-2">
+                        {/* Active Filter Tags */}
+                        {hasActiveFilters && (
+                            <div className="flex flex-wrap gap-1.5 items-center text-xs relative z-10 py-1">
+                                <span className="text-muted-foreground">Filters:</span>
+                                {searchTerm && (
+                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                        {searchTerm.length > 15 ? searchTerm.substring(0, 15) + '...' : searchTerm}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFilter('search');
+                                                applyFilters({ page: 1 });
+                                            }}
+                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                            aria-label="Remove search filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                )}
+                                {filterModule !== 'all' && (
+                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                        {filterModule}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFilter('module');
+                                                applyFilters({ page: 1 });
+                                            }}
+                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                            aria-label="Remove module filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                )}
+                                {filterAction !== 'all' && (
+                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                        {getActionConfig(filterAction).label}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFilter('action');
+                                                applyFilters({ page: 1 });
+                                            }}
+                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                            aria-label="Remove action filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                )}
+                                {filterEntityType !== 'all' && (
+                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                        {filterEntityType}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFilter('entity_type');
+                                                applyFilters({ page: 1 });
+                                            }}
+                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                            aria-label="Remove entity type filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                )}
+                                {filterUser !== 'all' && (
+                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                        {users.find(u => String(u.id) === filterUser)?.name || 'User'}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFilter('user');
+                                                applyFilters({ page: 1 });
+                                            }}
+                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                            aria-label="Remove user filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                )}
+                                {(dateFrom || dateTo) && (
+                                    <Badge variant="outline" className="h-6 gap-1 font-normal">
+                                        {dateFrom || '...'} → {dateTo || '...'}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFilter('date');
+                                                applyFilters({ page: 1 });
+                                            }}
+                                            className="ml-1 inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                            aria-label="Remove date filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Logs List */}
+                        <div className="bg-card border border-border rounded-lg overflow-hidden">
+                        {isLoading ? (
+                            /* Loading Skeleton */
+                            <div className="max-w-4xl mx-auto p-6 space-y-6">
+                                {/* Skeleton Date Header */}
+                                <div className="flex items-center mb-4">
+                                    <Skeleton className="w-2 h-2 rounded-full mr-2" />
+                                    <Skeleton className="h-4 w-48" />
+                                    <Skeleton className="h-4 w-16 ml-auto" />
                                 </div>
+                                {/* Skeleton Cards */}
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="relative pl-10">
+                                        <Skeleton className="absolute left-0 top-0 w-8 h-8 rounded-full" />
+                                        <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                                            <div className="flex items-center gap-3">
+                                                <Skeleton className="w-8 h-8 rounded-full" />
+                                                <div className="flex-1 space-y-2">
+                                                    <Skeleton className="h-4 w-3/4" />
+                                                    <Skeleton className="h-3 w-1/2" />
+                                                </div>
+                                            </div>
+                                            <Skeleton className="h-16 w-full rounded-lg" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : logs.data.length === 0 ? (
+                            <div className="text-center py-12 text-muted-foreground">
+                                <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" aria-hidden="true" />
+                                <p className="text-sm font-medium">No logs found</p>
+                                {hasActiveFilters ? (
+                                    <div className="mt-2">
+                                        <p className="text-xs">Try adjusting your filters</p>
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            onClick={clearAllFilters}
+                                            className="mt-2 text-xs"
+                                        >
+                                            Clear all filters
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs mt-1">No audit log entries have been recorded yet.</p>
+                                )}
+                            </div>
+                        ) : (
+                            <AuditLogTimeline
+                                logs={logs.data}
+                                expandedFields={expandedFields}
+                                onToggleField={handleToggleField}
+                                onCardClick={handleLogClick}
+                            />
+                        )}
+                        </div>
+                    </div>
+
+                    {/* Pagination - Fixed at bottom */}
+                    <div className="flex-shrink-0 bg-card border-t border-border z-30">
+                            <div className="px-3 sm:px-4 py-1.5 flex items-center justify-between gap-2">
+                                {/* Per Page Selector - Left */}
+                                <div className="flex items-center gap-2">
+                                    <Select value={perPage} onValueChange={handlePerPageChange}>
+                                        <SelectTrigger className="h-7 w-[70px] text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {PER_PAGE_OPTIONS.map((option) => (
+                                                <SelectItem key={option} value={option}>
+                                                    {option}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                                        of {logs.total}
+                                    </span>
+                                </div>
+
+                                {/* Pagination Controls - Right (only show when more than 1 page) */}
+                                {logs.last_page > 1 && (
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => applyFilters({ page: logs.current_page - 1 })}
+                                            disabled={logs.current_page === 1 || isLoading}
+                                            className="h-7 px-2"
+                                            aria-label="Previous page"
+                                        >
+                                            <ChevronLeft className="h-3.5 w-3.5" />
+                                        </Button>
+                                        {/* Page Numbers - Desktop */}
+                                        <div className="hidden sm:flex items-center gap-1">
+                                            {Array.from({ length: Math.min(logs.last_page, 7) }, (_, i) => {
+                                                let page: number;
+                                                if (logs.last_page <= 7) {
+                                                    page = i + 1;
+                                                } else if (logs.current_page <= 4) {
+                                                    page = i + 1;
+                                                } else if (logs.current_page >= logs.last_page - 3) {
+                                                    page = logs.last_page - 6 + i;
+                                                } else {
+                                                    page = logs.current_page - 3 + i;
+                                                }
+                                                return (
+                                                    <Button
+                                                        key={page}
+                                                        variant={page === logs.current_page ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => applyFilters({ page })}
+                                                        disabled={isLoading}
+                                                        className="min-w-[32px] h-7 text-xs"
+                                                    >
+                                                        {page}
+                                                    </Button>
+                                                );
+                                            })}
+                                        </div>
+                                        {/* Page Indicator - Mobile */}
+                                        <div className="flex sm:hidden items-center gap-1 px-2 text-xs">
+                                            <span className="font-semibold text-foreground">{logs.current_page}</span>
+                                            <span className="text-muted-foreground">/</span>
+                                            <span className="text-muted-foreground">{logs.last_page}</span>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => applyFilters({ page: logs.current_page + 1 })}
+                                            disabled={logs.current_page === logs.last_page || isLoading}
+                                            className="h-7 px-2"
+                                            aria-label="Next page"
+                                        >
+                                            <ChevronRight className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    )}
-                </div>
             </div>
+
+            {/* Log Detail Modal */}
+            <AuditLogDetailModal
+                log={selectedLog}
+                open={detailModalOpen}
+                onOpenChange={setDetailModalOpen}
+            />
         </AppLayout>
     );
 }

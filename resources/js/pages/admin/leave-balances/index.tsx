@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Search, Settings, Users, Calendar, FileText } from 'lucide-react'
+import { Search, Settings, Users, Calendar, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -323,27 +323,60 @@ export default function LeaveBalanceAdminIndex({
             )}
 
             {/* Pagination */}
-            {employees.last_page > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                <div className="text-sm text-muted-foreground">
-                  Showing {(employees.current_page - 1) * employees.per_page + 1} to{' '}
-                  {Math.min(employees.current_page * employees.per_page, employees.total)} of{' '}
-                  {employees.total} employees
+            <div className="mt-4 pt-4 border-t flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                of {employees.total}
+              </span>
+              {employees.last_page > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2"
+                    disabled={employees.current_page === 1}
+                    onClick={() => {
+                      const prevLink = employees.links.find((l) => l.label === '&laquo; Previous');
+                      if (prevLink?.url) router.get(prevLink.url);
+                    }}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <div className="hidden sm:flex items-center gap-1">
+                    {employees.links
+                      .filter((l) => l.label !== '&laquo; Previous' && l.label !== 'Next &raquo;')
+                      .slice(0, 7)
+                      .map((link, index) => (
+                        <Button
+                          key={index}
+                          variant={link.active ? 'default' : 'outline'}
+                          size="sm"
+                          className="min-w-[32px] h-7 text-xs"
+                          disabled={!link.url}
+                          onClick={() => link.url && router.get(link.url)}
+                          dangerouslySetInnerHTML={{ __html: link.label }}
+                        />
+                      ))}
+                  </div>
+                  <div className="flex sm:hidden items-center gap-1 px-2 text-xs">
+                    <span className="font-semibold text-foreground">{employees.current_page}</span>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-muted-foreground">{employees.last_page}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2"
+                    disabled={employees.current_page === employees.last_page}
+                    onClick={() => {
+                      const nextLink = employees.links.find((l) => l.label === 'Next &raquo;');
+                      if (nextLink?.url) router.get(nextLink.url);
+                    }}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
-                <div className="flex gap-1">
-                  {employees.links.map((link, index) => (
-                    <Button
-                      key={index}
-                      variant={link.active ? 'default' : 'outline'}
-                      size="sm"
-                      disabled={!link.url}
-                      onClick={() => link.url && router.get(link.url)}
-                      dangerouslySetInnerHTML={{ __html: link.label }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

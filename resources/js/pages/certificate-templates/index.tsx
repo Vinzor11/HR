@@ -7,7 +7,8 @@ import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import { router, Head, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, FileText, Edit, Trash2, Eye, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
+import { Plus, FileText, Edit, Trash2, Eye, Layers } from 'lucide-react';
+import { CompactPagination } from '@/components/CompactPagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface CertificateTextLayer {
@@ -190,81 +191,15 @@ export default function CertificateTemplateIndex({ templates, filters }: Certifi
                 filtersSlot={null}
                 actionsSlot={null}
                 pagination={
-                    templates.data.length > 0 && templates.links && templates.links.length > 0 ? (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
-                            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
-                                <span className="hidden sm:inline">
-                                    Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
-                                    <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-                                    <span className="font-semibold text-foreground">{total || 0}</span> templates
-                                </span>
-                                <span className="sm:hidden">
-                                    <span className="font-semibold text-foreground">{from || 0}</span>-
-                                    <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-                                    <span className="font-semibold text-foreground">{total || 0}</span>
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-1 sm:gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        const prevLink = templates.links?.find((link, index) => 
-                                            index < currentPage - 1 && link.url !== null
-                                        );
-                                        if (prevLink?.url) {
-                                            router.visit(prevLink.url, { preserveState: true, preserveScroll: false });
-                                        }
-                                    }}
-                                    disabled={currentPage === 1}
-                                    className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                    <span className="hidden sm:inline ml-1">Previous</span>
-                                </Button>
-                                <div className="hidden sm:flex items-center gap-1">
-                                    {templates.links?.map((link, index) => {
-                                        if (link.label === '...' || !link.url) {
-                                            return <span key={index} className="px-2 text-muted-foreground">...</span>;
-                                        }
-                                        return (
-                                            <Button
-                                                key={index}
-                                                variant={link.active ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => link.url && router.visit(link.url, { preserveState: true, preserveScroll: false })}
-                                                className="h-9 min-w-[40px]"
-                                            >
-                                                {link.label}
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                                <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
-                                    <span className="font-semibold text-foreground">{currentPage}</span>
-                                    <span className="text-muted-foreground">/</span>
-                                    <span className="text-muted-foreground">{lastPage || 1}</span>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        const nextLink = templates.links?.find((link, index) => 
-                                            index > currentPage - 1 && link.url !== null
-                                        );
-                                        if (nextLink?.url) {
-                                            router.visit(nextLink.url, { preserveState: true, preserveScroll: false });
-                                        }
-                                    }}
-                                    disabled={currentPage >= lastPage}
-                                    className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <span className="hidden sm:inline mr-1">Next</span>
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    ) : null
+                    <CompactPagination
+                        currentPage={currentPage}
+                        lastPage={lastPage}
+                        perPage={perPage}
+                        total={total}
+                        onPageChange={handlePageChange}
+                        onPerPageChange={handlePerPageChange}
+                        perPageOptions={['5', '10', '25', '50', '100']}
+                    />
                 }
             >
                     {templates.data.length === 0 ? (

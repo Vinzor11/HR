@@ -377,3 +377,13 @@
     height: 0;
     background: transparent;
 }
+
+/* Scrollbar hide utility - for horizontal scrolling elements like filter chips */
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari, Opera */
+}

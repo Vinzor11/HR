@@ -11,7 +11,8 @@ import { Head, router, useForm, usePage } from '@inertiajs/react'
 import { route } from 'ziggy-js'
 import { hasPermission } from '@/utils/authorization'
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import { ArrowUpDown, ChevronLeft, ChevronRight, Archive, ArchiveRestore, Plus, Download } from 'lucide-react'
+import { ArrowUpDown, Archive, ArchiveRestore, Plus, Download } from 'lucide-react'
+import { CompactPagination } from '@/components/CompactPagination'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -783,68 +784,15 @@ const handleCategoryFilterChange = (value: string) => {
           </>
         }
         pagination={
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3">
-            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
-              <span className="hidden sm:inline">
-                Showing <span className="font-semibold text-foreground">{from || 0}</span> to{' '}
-                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-                <span className="font-semibold text-foreground">{total || 0}</span> positions
-              </span>
-              <span className="sm:hidden">
-                <span className="font-semibold text-foreground">{from || 0}</span>-
-                <span className="font-semibold text-foreground">{to || 0}</span> of{' '}
-                <span className="font-semibold text-foreground">{total || 0}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
-                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
-                <ChevronLeft className="h-4 w-4" />
-                <span className="hidden sm:inline ml-1">Previous</span>
-              </Button>
-              <div className="hidden sm:flex items-center gap-1">
-                {lastPage > 1 ? (
-                  <>
-                    {currentPage > 1 && (
-                      <Button variant="outline" size="sm" onClick={() => handlePageChange(1)} className="h-9 min-w-[40px] hover:bg-muted">1</Button>
-                    )}
-                    {currentPage > 3 && <span className="px-2 text-muted-foreground">...</span>}
-                    {Array.from({ length: Math.min(5, lastPage - 2) }, (_, i) => {
-                      const page = Math.max(2, Math.min(currentPage - 2, lastPage - 4)) + i;
-                      if (page >= 2 && page < lastPage) {
-                        return (
-                          <Button key={page} variant="outline" size="sm" onClick={() => handlePageChange(page)}
-                            className={`h-9 min-w-[40px] ${currentPage === page ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
-                            {page}
-                          </Button>
-                        );
-                      }
-                      return null;
-                    })}
-                    {currentPage < lastPage - 2 && <span className="px-2 text-muted-foreground">...</span>}
-                    {lastPage > 1 && (
-                      <Button variant="outline" size="sm" onClick={() => handlePageChange(lastPage)}
-                        className={`h-9 min-w-[40px] ${currentPage === lastPage ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'hover:bg-muted'}`}>
-                        {lastPage}
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <Button variant="outline" size="sm" disabled className="h-9 min-w-[40px] bg-primary text-primary-foreground border-primary">1</Button>
-                )}
-              </div>
-              <div className="flex sm:hidden items-center gap-1 px-2 text-sm">
-                <span className="font-semibold text-foreground">{currentPage}</span>
-                <span className="text-muted-foreground">/</span>
-                <span className="text-muted-foreground">{lastPage || 1}</span>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === lastPage || lastPage === 0}
-                className="h-8 sm:h-9 px-2 sm:px-4 disabled:opacity-50 disabled:cursor-not-allowed">
-                <span className="hidden sm:inline mr-1">Next</span>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <CompactPagination
+            currentPage={currentPage}
+            lastPage={lastPage}
+            perPage={perPage}
+            total={total}
+            onPageChange={handlePageChange}
+            onPerPageChange={handlePerPageChange}
+            perPageOptions={['5', '10', '25', '50', '100']}
+          />
         }
       >
         {/* Subtle Status Indicator */}
