@@ -22,7 +22,7 @@ export function ModalCleanup() {
       cleanup();
     };
 
-    router.on('finish', handleFinish);
+    const unsubscribeFinish = router.on('finish', handleFinish);
 
     // Cleanup on page visibility change (user switches tabs and comes back)
     const handleVisibilityChange = () => {
@@ -53,7 +53,7 @@ export function ModalCleanup() {
     }, 2000); // Check every 2 seconds
 
     return () => {
-      router.off('finish', handleFinish);
+      if (typeof unsubscribeFinish === 'function') unsubscribeFinish();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);

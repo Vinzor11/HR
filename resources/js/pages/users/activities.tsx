@@ -36,7 +36,7 @@ const PER_PAGE_OPTIONS = ['10', '25', '50', '100'] as const;
 
 interface UserActivity {
     id: number;
-    user_id: number;
+    user_id: number | null;
     user_name: string;
     user_email: string;
     activity_type: 'login' | 'logout' | 'login_failed';
@@ -146,8 +146,9 @@ export default function UserActivities() {
     // Filter activities
     const filteredActivities = useMemo(() => {
         return activities.filter((activity) => {
-            const matchesSearch = !searchTerm || 
-                activity.user_id.toString().includes(searchTerm) ||
+            const userIdStr = activity.user_id != null ? String(activity.user_id) : '';
+            const matchesSearch = !searchTerm ||
+                userIdStr.includes(searchTerm) ||
                 activity.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 activity.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 activity.ip_address?.includes(searchTerm) ||
@@ -156,7 +157,7 @@ export default function UserActivities() {
 
             const matchesActivity = filterActivity === 'all' || activity.activity_type === filterActivity;
             const matchesStatus = filterStatus === 'all' || activity.status === filterStatus;
-            const matchesUser = filterUser === 'all' || activity.user_id.toString() === filterUser;
+            const matchesUser = filterUser === 'all' || userIdStr === filterUser;
             
             // Date range filter
             const activityDate = new Date(activity.created_at);
@@ -424,7 +425,7 @@ export default function UserActivities() {
                                     )}
                                 </Button>
                             </SheetTrigger>
-                            <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+                            <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" aria-describedby={undefined}>
                                 <SheetHeader>
                                     <SheetTitle className="flex flex-wrap items-center gap-2">
                                         <span>Advanced Filters</span>
@@ -699,7 +700,7 @@ export default function UserActivities() {
                                                                                 {/* Main info row */}
                                                                                 <div className="text-sm font-semibold text-gray-900 flex items-center gap-1 flex-wrap">
                                                                                     <span className="flex-shrink-0 whitespace-nowrap">
-                                                                                        {activity.user_name || activity.user_email || `User #${activity.user_id}`}
+                                                                                        {activity.user_name || activity.user_email || (activity.user_id != null ? `User #${activity.user_id}` : 'Unknown')}
                                                                                     </span>
                                                                                     <span className="text-gray-500 mx-1 flex-shrink-0">
                                                                                         {activityConfigData.label.toLowerCase()}
@@ -707,9 +708,11 @@ export default function UserActivities() {
                                                                                     <span className="text-gray-600 mx-1 flex-shrink-0 bg-gray-100 rounded px-2 py-0.5 text-xs font-semibold">
                                                                                         {activity.activity_type === 'login_failed' ? 'Auth' : 'Session'}
                                                                                     </span>
+                                                                                    {activity.user_id != null && (
                                                                                     <span className="text-gray-500 mx-1 flex-shrink-0 font-normal">
                                                                                         ID: {activity.user_id}
                                                                                     </span>
+                                                                                    )}
                                                                                     {/* Status badge on right */}
                                                                                     <Badge 
                                                                                         variant="outline" 

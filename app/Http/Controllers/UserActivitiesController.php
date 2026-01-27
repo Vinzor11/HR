@@ -27,7 +27,7 @@ class UserActivitiesController extends Controller
                 return [
                     'id' => $activity->id,
                     'user_id' => $activity->user_id,
-                    'user_name' => $activity->user?->name ?? "User #{$activity->user_id} (record permanently deleted)",
+                    'user_name' => $activity->user?->name ?? ($activity->user_id ? "User #{$activity->user_id} (deleted)" : 'Unknown User'),
                     'user_email' => $activity->user?->email ?? '—',
                     'activity_type' => $activity->activity_type,
                     'ip_address' => $activity->ip_address,
