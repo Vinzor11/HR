@@ -40,6 +40,7 @@ return [
 
         'public' => [
             'driver' => 'local',
+            // Use default storage_path - start.sh will symlink to volume if STORAGE_PATH is set
             'root' => storage_path('app/public'),
             'url' => env('APP_URL').'/storage',
             'visibility' => 'public',
