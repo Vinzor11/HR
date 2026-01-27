@@ -6,7 +6,6 @@ use App\Http\Requests\DepartmentRequest;
 use App\Models\Department;
 use App\Models\Faculty;
 use App\Services\AuditLogService;
-use App\Services\PositionAutoCreationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -127,17 +126,6 @@ class DepartmentController extends Controller
                 null,
                 $department
             );
-
-            // Automatically create positions for academic departments under a faculty
-            if ($department->type === 'academic' && $department->faculty_id) {
-                try {
-                    $positionService = new PositionAutoCreationService();
-                    $positionService->createPositionsForDepartment($department);
-                } catch (\Exception $e) {
-                    // Log error but don't fail the department creation
-                    \Log::warning('Failed to auto-create positions for department: ' . $e->getMessage());
-                }
-            }
 
             return redirect()
                 ->route('departments.index')

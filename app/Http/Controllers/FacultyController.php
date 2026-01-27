@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\FacultyRequest;
 use App\Models\Faculty;
 use App\Services\AuditLogService;
-use App\Services\PositionAutoCreationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -96,22 +95,6 @@ class FacultyController extends Controller
                 null,
                 $faculty
             );
-
-            // Automatically create faculty-level positions (Dean, Associate Dean)
-            try {
-                $positionService = new PositionAutoCreationService();
-                $positionService->createPositionsForFaculty($faculty);
-            } catch (\Exception $e) {
-                // Log error with full details for debugging
-                \Log::error('Failed to auto-create positions for faculty', [
-                    'faculty_id' => $faculty->id,
-                    'faculty_name' => $faculty->name,
-                    'faculty_code' => $faculty->code,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-                // Don't fail the faculty creation, but log the error
-            }
 
             return redirect()
                 ->route('faculties.index')
