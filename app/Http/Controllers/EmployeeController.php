@@ -1856,6 +1856,13 @@ class EmployeeController extends Controller
         // Refresh to ensure we have the latest data
         $employee->refresh();
         
+        // Check if employee is connected to a user account
+        if ($employee->user()->exists()) {
+            $user = $employee->user;
+            return redirect()->route('employees.index')
+                ->with('error', "Cannot delete employee. This employee is connected to user account: {$user->name} ({$user->email}). Please delete or unlink the user account first.");
+        }
+        
         $employeeId = $employee->id;
         $employeeName = $this->getEmployeeFullName($employee);
         
@@ -1919,7 +1926,14 @@ class EmployeeController extends Controller
 
         $employee = Employee::withTrashed()->findOrFail($id);
         $employee->refresh();
-        
+
+        // Block if linked to a user (including soft-deleted)
+        $user = User::withTrashed()->where('employee_id', $employee->id)->first();
+        if ($user) {
+            return redirect()->route('employees.index')
+                ->with('error', "Cannot permanently delete employee. This employee is connected to user account: {$user->name} ({$user->email}). Delete or unlink the user account first.");
+        }
+
         $employeeId = $employee->id;
         $employeeName = $this->getEmployeeFullName($employee);
         
