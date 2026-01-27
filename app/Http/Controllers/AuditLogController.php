@@ -24,7 +24,7 @@ class AuditLogController extends Controller
         );
 
         $query = AuditLog::with(['user:id,name,email', 'user.roles' => function($q) {
-                $q->whereHas('permissions')->select('roles.id', 'roles.name');
+                $q->select('roles.id', 'roles.name');
             }])
             ->orderBy('created_at', 'desc');
 

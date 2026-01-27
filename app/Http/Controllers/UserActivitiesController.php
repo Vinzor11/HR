@@ -18,7 +18,8 @@ class UserActivitiesController extends Controller
         abort_unless($request->user()->can('view-user-activities'), 403, 'Unauthorized action.');
 
         $activities = UserActivity::with(['user' => function ($query) {
-                $query->withTrashed()->select('id', 'name', 'email');
+                $query->withTrashed()->select('id', 'name', 'email')
+                    ->with('roles:roles.id,roles.name');
             }])
             ->orderBy('created_at', 'desc')
             ->limit(500)
@@ -28,11 +29,25 @@ class UserActivitiesController extends Controller
                 $userName = $activity->user_name ?? $activity->user?->name
                     ?? ($activity->user_id ? "User #{$activity->user_id} (deleted)" : 'Unknown User');
                 $userEmail = $activity->user_email ?? $activity->user?->email ?? '—';
+                
+                // Get user roles
+                $userRoles = null;
+                if ($activity->user && $activity->user->relationLoaded('roles')) {
+                    $roles = $activity->user->roles;
+                    if ($roles && $roles->isNotEmpty()) {
+                        $roleNames = $roles->map(function ($role) {
+                            return ucwords(str_replace('-', ' ', $role->name));
+                        })->toArray();
+                        $userRoles = implode(', ', $roleNames);
+                    }
+                }
+                
                 return [
                     'id' => $activity->id,
                     'user_id' => $activity->user_id,
                     'user_name' => $userName,
                     'user_email' => $userEmail,
+                    'user_roles' => $userRoles,
                     'activity_type' => $activity->activity_type,
                     'ip_address' => $activity->ip_address,
                     'device' => $activity->device,

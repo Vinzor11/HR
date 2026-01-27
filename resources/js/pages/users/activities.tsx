@@ -39,6 +39,7 @@ interface UserActivity {
     user_id: number | null;
     user_name: string;
     user_email: string;
+    user_roles?: string | null;
     activity_type: 'login' | 'logout' | 'login_failed' | 'session_expired' | 'oauth_login' | 'oauth_logout';
     ip_address?: string;
     device?: string;
@@ -742,7 +743,7 @@ export default function UserActivities() {
                                                                                 </div>
                                                                                 {/* Sub info row */}
                                                                                 <div className="text-xs text-gray-500">
-                                                                                    User • {formatTime(activity.created_at)}
+                                                                                    {activity.user_roles || 'User'} • {formatTime(activity.created_at)}
                                                                                 </div>
                                                                             </div>
                                                                         </div>
