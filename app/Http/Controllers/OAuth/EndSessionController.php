@@ -98,6 +98,8 @@ class EndSessionController extends Controller
             $userAgentInfo = \App\Models\UserActivity::parseUserAgent($request->userAgent());
             \App\Models\UserActivity::create([
                 'user_id' => $user->id,
+                'user_name' => $user->name,
+                'user_email' => $user->email,
                 'activity_type' => 'oauth_logout',
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),

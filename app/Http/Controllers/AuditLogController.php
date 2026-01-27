@@ -242,7 +242,7 @@ class AuditLogController extends Controller
                         $log->id,
                         $log->reference_number ?? '',
                         $log->created_at->format('Y-m-d H:i:s'),
-                        $log->user ? $log->user->name : 'System',
+                        $log->performed_by ?? $log->user?->name ?? 'System',
                         $this->formatUserRoles($log),
                         ucfirst($log->action),
                         ucfirst($log->module),

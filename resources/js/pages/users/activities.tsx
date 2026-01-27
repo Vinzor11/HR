@@ -67,11 +67,29 @@ const activityConfig: Record<string, { label: string; icon: string; color: strin
         color: 'text-blue-700 dark:text-blue-400',
         bgColor: 'bg-blue-100 dark:bg-blue-900/30',
     },
+    oauth_login: {
+        label: 'OAuth Login',
+        icon: 'LogIn',
+        color: 'text-green-700 dark:text-green-400',
+        bgColor: 'bg-green-100 dark:bg-green-900/30',
+    },
+    oauth_logout: {
+        label: 'OAuth Logout',
+        icon: 'LogOut',
+        color: 'text-blue-700 dark:text-blue-400',
+        bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+    },
     login_failed: {
         label: 'Login Failed',
         icon: 'XCircle',
         color: 'text-red-700 dark:text-red-400',
         bgColor: 'bg-red-100 dark:bg-red-900/30',
+    },
+    session_expired: {
+        label: 'Session Expired',
+        icon: 'Clock',
+        color: 'text-amber-700 dark:text-amber-400',
+        bgColor: 'bg-amber-100 dark:bg-amber-900/30',
     },
 };
 
@@ -297,11 +315,7 @@ export default function UserActivities() {
     }, []);
 
     // Handle search
-    const handleSearch = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            setCurrentPage(1);
-        }
-    }, []);
+    // Search is handled automatically via filteredActivities useMemo - no Enter required
 
     // Export to CSV function
     const exportToCSV = useCallback(() => {
@@ -423,8 +437,10 @@ export default function UserActivities() {
                                     placeholder={searchMode === 'any' ? 'Search...' : `Search by ${searchMode}...`}
                                     className="h-9 w-full min-w-0 pl-8 pr-3 border-0 rounded-none bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
                                     value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    onKeyDown={handleSearch}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        setCurrentPage(1); // Reset to first page when search changes
+                                    }}
                                 />
                             </div>
                         </div>

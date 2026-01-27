@@ -16,6 +16,7 @@ class AuditLog extends Model
 
     protected $fillable = [
         'user_id',
+        'performed_by',
         'action',
         'module',
         'entity_type',
@@ -58,6 +59,11 @@ class AuditLog extends Model
             // Capture user_id from auth if not provided
             if (empty($log->user_id) && auth()->check()) {
                 $log->user_id = auth()->id();
+            }
+
+            // Store performer name at creation so it persists after user deletion
+            if (empty($log->performed_by)) {
+                $log->performed_by = auth()->user()?->name ?? 'System';
             }
         });
     }
@@ -199,10 +205,7 @@ class AuditLog extends Model
                     $q->where('reference_number', 'like', "%{$search}%");
                     break;
                 case 'performed_by':
-                    $q->whereHas('user', function ($uq) use ($search) {
-                        $uq->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
+                    $q->where('performed_by', 'like', "%{$search}%");
                     break;
                 case 'field':
                     $q->where(function ($fq) use ($search) {
@@ -217,10 +220,7 @@ class AuditLog extends Model
                         ->orWhere('description', 'like', "%{$search}%")
                         ->orWhere('old_values', 'like', "%{$search}%")
                         ->orWhere('new_values', 'like', "%{$search}%")
-                        ->orWhereHas('user', function ($uq) use ($search) {
-                            $uq->where('name', 'like', "%{$search}%")
-                                ->orWhere('email', 'like', "%{$search}%");
-                        });
+                        ->orWhere('performed_by', 'like', "%{$search}%");
             }
         });
     }

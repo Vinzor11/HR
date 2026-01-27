@@ -239,6 +239,7 @@ class AuditLogService
             $logData = array_merge($data, [
                 'entity_id' => $entityId,
                 'user_id' => Auth::id(),
+                'performed_by' => Auth::user()?->name ?? 'System',
                 'user_agent' => $request?->userAgent(),
             ]);
 

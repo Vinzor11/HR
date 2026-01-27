@@ -24,11 +24,15 @@ class UserActivitiesController extends Controller
             ->limit(500)
             ->get()
             ->map(function ($activity) {
+                // Use stored name/email (persist when user deleted); fallback to user relation or placeholders
+                $userName = $activity->user_name ?? $activity->user?->name
+                    ?? ($activity->user_id ? "User #{$activity->user_id} (deleted)" : 'Unknown User');
+                $userEmail = $activity->user_email ?? $activity->user?->email ?? '—';
                 return [
                     'id' => $activity->id,
                     'user_id' => $activity->user_id,
-                    'user_name' => $activity->user?->name ?? ($activity->user_id ? "User #{$activity->user_id} (deleted)" : 'Unknown User'),
-                    'user_email' => $activity->user?->email ?? '—',
+                    'user_name' => $userName,
+                    'user_email' => $userEmail,
                     'activity_type' => $activity->activity_type,
                     'ip_address' => $activity->ip_address,
                     'device' => $activity->device,

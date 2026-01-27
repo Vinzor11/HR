@@ -13,6 +13,8 @@ class UserActivity extends Model
 
     protected $fillable = [
         'user_id',
+        'user_name',
+        'user_email',
         'activity_type',
         'ip_address',
         'user_agent',

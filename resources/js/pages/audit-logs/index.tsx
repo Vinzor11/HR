@@ -5,6 +5,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { FileText, Search, Download, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, X, Loader2, SlidersHorizontal } from 'lucide-react';
 import { useState, useCallback, useMemo } from 'react';
+import { debounce } from 'lodash';
 import {
     Select,
     SelectContent,
@@ -219,18 +220,22 @@ export default function AuditLogs() {
         applyFilters({ page: 1, newPerPage: value });
     }, [applyFilters]);
 
-    const handleSearch = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            applyFilters({ page: 1, newSearch: searchTerm, newSearchMode: searchMode });
-        }
-    }, [applyFilters, searchTerm, searchMode]);
+    // Debounced search - triggers automatically as user types
+    const handleSearch = useCallback(
+        debounce((term: string, mode: SearchMode) => {
+            applyFilters({ page: 1, newSearch: term, newSearchMode: mode });
+        }, 500),
+        [applyFilters]
+    );
 
     // Remove individual filter
     const removeFilter = useCallback((filterType: string) => {
         switch (filterType) {
             case 'search':
+                handleSearch.cancel();
                 setSearchTerm('');
                 setSearchMode('any');
+                applyFilters({ page: 1, newSearch: '', newSearchMode: 'any' });
                 break;
             case 'module':
                 setFilterModule('all');
@@ -243,7 +248,7 @@ export default function AuditLogs() {
                 setDateTo('');
                 break;
         }
-    }, []);
+    }, [applyFilters, handleSearch]);
 
     // Helper for CSV export - format values for display
     const formatValueForDisplay = (value: any): string => {
@@ -822,41 +827,6 @@ export default function AuditLogs() {
         toast.success('Data exported to CSV');
     }, [logs.data]);
 
-    const getUserName = (log: AuditLog) => {
-        return log.user?.name || 'System';
-    };
-
-    const getUserRole = (log: AuditLog) => {
-        if (log.user?.roles && log.user.roles.length > 0) {
-            // Filter roles to only show those with permissions (roles are already filtered in backend)
-            // Format all role names and join them
-            const roleNames = log.user.roles.map(role => {
-                return role.name
-                    .split('-')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ');
-            });
-            return roleNames.length > 0 ? roleNames.join(', ') : 'User';
-        }
-        return 'User';
-    };
-    
-    const getUserRoleInitials = (log: AuditLog) => {
-        if (log.user?.roles && log.user.roles.length > 0) {
-            // Get first 2 letters from the first role, or combine initials from multiple roles
-            if (log.user.roles.length === 1) {
-                const roleName = log.user.roles[0].name;
-                return roleName.split('-').map(word => word[0].toUpperCase()).join('').slice(0, 2);
-            } else {
-                // For multiple roles, show first letter of first two roles
-                return log.user.roles.slice(0, 2).map(role => {
-                    return role.name.split('-')[0][0].toUpperCase();
-                }).join('');
-            }
-        }
-        return 'U';
-    };
-
     const formatEmployeeName = (firstName: string, middleName: string, surname: string): string => {
         const middleInitial = middleName ? middleName.charAt(0).toUpperCase() + '.' : '';
         const parts = [surname, firstName].filter(Boolean);
@@ -1018,8 +988,10 @@ export default function AuditLogs() {
                                         placeholder={searchMode === 'any' ? 'Search...' : `Search by ${SEARCH_MODE_LABELS[searchMode]}...`}
                                         className="h-9 w-full min-w-0 pl-8 pr-3 border-0 rounded-none bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
                                         value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        onKeyDown={handleSearch}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            handleSearch(e.target.value, searchMode);
+                                        }}
                                     />
                                 </div>
                             </div>

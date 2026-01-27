@@ -100,6 +100,8 @@ class TwoFactorVerificationController extends Controller
         $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
         $activity = UserActivity::create([
             'user_id' => $user->id,
+            'user_name' => $user->name,
+            'user_email' => $user->email,
             'activity_type' => 'login',
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),

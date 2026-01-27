@@ -6,6 +6,7 @@ import { ArrowRight, ChevronDown, ChevronUp, Info } from 'lucide-react';
 export interface AuditLog {
     id: number;
     user_id: number | null;
+    performed_by?: string | null;
     action: string;
     module: string;
     entity_type: string;
@@ -132,7 +133,7 @@ export const getActionConfig = (action: string) => {
 };
 
 export const getUserName = (log: AuditLog) => {
-    return log.user?.name || 'System';
+    return log.performed_by ?? log.user?.name ?? 'System';
 };
 
 export const getUserRole = (log: AuditLog) => {

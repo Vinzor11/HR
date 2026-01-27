@@ -62,3 +62,13 @@ Schedule::command('leave:carry-over --all')
         \Log::error('Annual leave carry-over failed');
     })
     ->description('Process annual leave carry-over for all active employees');
+
+// Log expired sessions as user activities, then remove those sessions
+// Runs every 10 minutes (session lifetime check is done inside the command)
+Schedule::command('sessions:log-expired')
+    ->everyTenMinutes()
+    ->withoutOverlapping(5)
+    ->onFailure(function () {
+        \Log::error('Log expired sessions failed');
+    })
+    ->description('Log expired sessions to user activities and clean up');

@@ -64,6 +64,8 @@ class AuthenticatedSessionController extends Controller
                 $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
                 UserActivity::create([
                     'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'user_email' => $user->email,
                     'activity_type' => 'login_failed',
                     'ip_address' => $request->ip(),
                     'user_agent' => $request->userAgent(),
@@ -100,6 +102,8 @@ class AuthenticatedSessionController extends Controller
         $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
         $activity = UserActivity::create([
             'user_id' => $user->id,
+            'user_name' => $user->name,
+            'user_email' => $user->email,
             'activity_type' => 'login',
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
@@ -136,51 +140,21 @@ class AuthenticatedSessionController extends Controller
     {
         $user = Auth::user();
         
-        // Log logout if user is authenticated
+        // Log logout if user is authenticated - always create a separate logout entry
         if ($user) {
-            $activityId = $request->session()->get('last_activity_id');
-            
-            if ($activityId) {
-                // Update the last login activity with logout time
-                $activity = UserActivity::where('id', $activityId)
-                    ->where('user_id', $user->id)
-                    ->where('activity_type', 'login')
-                    ->whereNull('logout_time')
-                    ->latest()
-                    ->first();
-                
-                if ($activity) {
-                    $activity->update([
-                        'logout_time' => now(),
-                    ]);
-                } else {
-                    // Create new logout activity if we can't find the login
-                    $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
-                    UserActivity::create([
-                        'user_id' => $user->id,
-                        'activity_type' => 'logout',
-                        'ip_address' => $request->ip(),
-                        'user_agent' => $request->userAgent(),
-                        'device' => $userAgentInfo['device'],
-                        'browser' => $userAgentInfo['browser'],
-                        'status' => 'success',
-                        'logout_time' => now(),
-                    ]);
-                }
-            } else {
-                // Create logout activity if no activity ID in session
-                $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
-                UserActivity::create([
-                    'user_id' => $user->id,
-                    'activity_type' => 'logout',
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                    'device' => $userAgentInfo['device'],
-                    'browser' => $userAgentInfo['browser'],
-                    'status' => 'success',
-                    'logout_time' => now(),
-                ]);
-            }
+            $userAgentInfo = UserActivity::parseUserAgent($request->userAgent());
+            UserActivity::create([
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'user_email' => $user->email,
+                'activity_type' => 'logout',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'device' => $userAgentInfo['device'],
+                'browser' => $userAgentInfo['browser'],
+                'status' => 'success',
+                'logout_time' => now(),
+            ]);
         }
 
         Auth::guard('web')->logout();

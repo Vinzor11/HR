@@ -7,6 +7,7 @@ use App\Http\Controllers\OAuth\EndSessionController;
 use Laravel\Passport\Http\Controllers\AuthorizationController as PassportAuthorizationController;
 use Laravel\Passport\Http\Controllers\ApproveAuthorizationController as PassportApproveAuthorizationController;
 use Laravel\Passport\Http\Controllers\DenyAuthorizationController as PassportDenyAuthorizationController;
+use App\Http\Middleware\LogOAuthAuthorization;
 use Illuminate\Support\Facades\Route;
 
 // OpenID Connect discovery endpoints (public)
@@ -14,7 +15,7 @@ Route::get('.well-known/openid-configuration', [OpenIdConfigurationController::c
 Route::get('.well-known/jwks.json', [JwksController::class, '__invoke']);
 
 // OAuth 2.0 authorization endpoint (requires authentication)
-Route::middleware(['web', 'auth'])->group(function () {
+Route::middleware(['web', 'auth', LogOAuthAuthorization::class])->group(function () {
     Route::get('oauth/authorize', [PassportAuthorizationController::class, 'authorize'])
         ->name('oauth.authorize');
     
