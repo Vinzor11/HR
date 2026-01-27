@@ -57,6 +57,11 @@ php artisan passport:keys || true
 # Create storage link if it doesn't exist
 php artisan storage:link || true
 
+# Start the Laravel scheduler in the background
+# This runs scheduled tasks like logging expired sessions
+echo "Starting Laravel scheduler in background..."
+php artisan schedule:work >> /dev/null 2>&1 &
+
 # Start the server
 php artisan serve --host=0.0.0.0 --port=$PORT
 

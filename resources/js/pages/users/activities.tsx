@@ -39,7 +39,7 @@ interface UserActivity {
     user_id: number | null;
     user_name: string;
     user_email: string;
-    activity_type: 'login' | 'logout' | 'login_failed';
+    activity_type: 'login' | 'logout' | 'login_failed' | 'session_expired' | 'oauth_login' | 'oauth_logout';
     ip_address?: string;
     device?: string;
     browser?: string;
