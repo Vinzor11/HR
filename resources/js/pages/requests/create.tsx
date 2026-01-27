@@ -156,6 +156,15 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
         [requestType.description],
     );
 
+    // Helper function to safely get numeric balance value
+    const getBalanceValue = useCallback((balance: LeaveBalance | undefined): number => {
+        if (!balance || balance.balance === undefined || balance.balance === null) {
+            return 0;
+        }
+        const value = typeof balance.balance === 'number' ? balance.balance : parseFloat(String(balance.balance)) || 0;
+        return value;
+    }, []);
+
     // Check if a leave type option should be disabled based on balance
     const isLeaveTypeDisabled = useCallback(
         (leaveTypeCode: string): boolean => {
@@ -173,13 +182,15 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
             // Forced Leave (FL) uses Vacation Leave (VL) credits
             if (leaveTypeCode === 'FL') {
                 const vlBalance = leaveBalances['VL'];
-                return !vlBalance || vlBalance.balance <= 0;
+                const balanceValue = getBalanceValue(vlBalance);
+                return !vlBalance || balanceValue <= 0;
             }
 
             // Credit-based leaves (VL, SL) require balance
             if (leaveTypeCode === 'VL' || leaveTypeCode === 'SL') {
                 const balance = leaveBalances[leaveTypeCode];
-                return !balance || balance.balance <= 0;
+                const balanceValue = getBalanceValue(balance);
+                return !balance || balanceValue <= 0;
             }
 
             // Special Privilege Leave (SPL), Solo Parent (SoloP) may have fixed entitlements
@@ -187,7 +198,8 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
                 const balance = leaveBalances[leaveTypeCode];
                 // Disable only if balance exists and is 0 or less
                 if (balance !== undefined) {
-                    return balance.balance <= 0;
+                    const balanceValue = getBalanceValue(balance);
+                    return balanceValue <= 0;
                 }
                 // If balance not found, allow it (may be granted on-demand)
                 return false;
@@ -196,13 +208,14 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
             // Default: allow if balance exists and is > 0, otherwise check if it's a special leave
             const balance = leaveBalances[leaveTypeCode];
             if (balance !== undefined) {
-                return balance.balance <= 0;
+                const balanceValue = getBalanceValue(balance);
+                return balanceValue <= 0;
             }
 
             // If balance not found, allow it (may be a special leave granted on-demand)
             return false;
         },
-        [leaveBalances],
+        [leaveBalances, getBalanceValue],
     );
 
     return (
@@ -314,7 +327,9 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
                                             {(field.options ?? []).map((option) => {
                                                 const isDisabled = isLeaveTypeField ? isLeaveTypeDisabled(option.value) : false;
                                                 const balance = isLeaveTypeField && leaveBalances?.[option.value];
-                                                const balanceText = balance !== undefined ? ` (Balance: ${balance.balance.toFixed(2)} days)` : '';
+                                                const balanceValue = balance?.balance ?? 0;
+                                                const balanceNum = typeof balanceValue === 'number' ? balanceValue : parseFloat(String(balanceValue)) || 0;
+                                                const balanceText = balance !== undefined ? ` (Balance: ${balanceNum.toFixed(2)} days)` : '';
                                                 
                                                 return (
                                                     <SelectItem 
