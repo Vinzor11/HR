@@ -115,6 +115,7 @@ class RequestSubmissionController extends Controller
 
         // Prefill CS Form 6 header fields for Leave Request
         $prefill = [];
+        $leaveBalances = [];
         if ($requestType->name === 'Leave Request') {
             $employee = request()->user()?->employee()
                 ->with(['department', 'position'])
@@ -132,6 +133,45 @@ class RequestSubmissionController extends Controller
                     'salary' => $employee->salary !== null ? number_format((float) $employee->salary, 2, '.', '') : null,
                     'date_of_filing' => now()->format('Y-m-d'),
                 ], fn ($value) => $value !== null);
+
+                // Get leave balances for the employee
+                $balances = $this->leaveService->getEmployeeBalance($employee->id, now()->year);
+                
+                // First pass: Map balances by leave type code
+                foreach ($balances as $balanceData) {
+                    $leaveType = $balanceData['leave_type'];
+                    $code = $leaveType->code;
+                    $availableBalance = $balanceData['available'] ?? 0;
+                    
+                    // Store balance by code
+                    $leaveBalances[$code] = [
+                        'code' => $code,
+                        'balance' => $availableBalance,
+                        'entitled' => $balanceData['entitled'] ?? 0,
+                        'used' => $balanceData['used'] ?? 0,
+                        'pending' => $balanceData['pending'] ?? 0,
+                    ];
+                }
+                
+                // Second pass: Map leave types that use credits from another type (e.g., FL uses VL)
+                foreach ($balances as $balanceData) {
+                    $leaveType = $balanceData['leave_type'];
+                    $code = $leaveType->code;
+                    
+                    if (!empty($leaveType->uses_credits_from)) {
+                        $sourceCode = $leaveType->uses_credits_from;
+                        // Use the source leave type's balance
+                        if (isset($leaveBalances[$sourceCode])) {
+                            $leaveBalances[$code] = [
+                                'code' => $code,
+                                'balance' => $leaveBalances[$sourceCode]['balance'],
+                                'entitled' => $leaveBalances[$sourceCode]['entitled'],
+                                'used' => $leaveBalances[$sourceCode]['used'],
+                                'pending' => $leaveBalances[$sourceCode]['pending'],
+                            ];
+                        }
+                    }
+                }
             } else {
                 // Even without employee record, provide date of filing
                 $prefill['date_of_filing'] = now()->format('Y-m-d');
@@ -155,6 +195,7 @@ class RequestSubmissionController extends Controller
                 ]),
                 'prefill_answers' => $prefill,
             ],
+            'leaveBalances' => $leaveBalances,
         ]);
     }
 

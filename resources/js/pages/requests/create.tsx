@@ -16,8 +16,17 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { ShieldCheck, Sparkles } from 'lucide-react';
 import { useMemo, useCallback } from 'react';
 
+interface LeaveBalance {
+    code: string;
+    balance: number;
+    entitled: number;
+    used: number;
+    pending: number;
+}
+
 interface RequestCreateProps {
     requestType: RequestTypeResource & { prefill_answers?: Record<string, unknown> };
+    leaveBalances?: Record<string, LeaveBalance>;
 }
 
 const breadcrumbs = (requestType: RequestTypeResource): BreadcrumbItem[] => [
@@ -38,7 +47,7 @@ const buildInitialAnswers = (fields: RequestFieldDefinition[], prefill?: Record<
         return acc;
     }, {});
 
-export default function RequestCreate({ requestType }: RequestCreateProps) {
+export default function RequestCreate({ requestType, leaveBalances = {} }: RequestCreateProps) {
     const { data, setData, post, processing, errors, reset } = useForm<{ answers: Record<string, unknown> }>({
         answers: buildInitialAnswers(requestType.fields, requestType.prefill_answers),
     });
@@ -147,6 +156,55 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
         [requestType.description],
     );
 
+    // Check if a leave type option should be disabled based on balance
+    const isLeaveTypeDisabled = useCallback(
+        (leaveTypeCode: string): boolean => {
+            // If no leave balances provided, allow all options (fallback)
+            if (!leaveBalances || Object.keys(leaveBalances).length === 0) {
+                return false;
+            }
+
+            // Special leaves that don't require balances (granted on-demand)
+            const specialLeavesWithoutBalance = ['ML', 'PL', 'VAWC', 'WSL', 'Study', 'Rehab', 'Adopt', 'CL', 'OTHER'];
+            if (specialLeavesWithoutBalance.includes(leaveTypeCode)) {
+                return false; // These are granted on-demand, not based on balance
+            }
+
+            // Forced Leave (FL) uses Vacation Leave (VL) credits
+            if (leaveTypeCode === 'FL') {
+                const vlBalance = leaveBalances['VL'];
+                return !vlBalance || vlBalance.balance <= 0;
+            }
+
+            // Credit-based leaves (VL, SL) require balance
+            if (leaveTypeCode === 'VL' || leaveTypeCode === 'SL') {
+                const balance = leaveBalances[leaveTypeCode];
+                return !balance || balance.balance <= 0;
+            }
+
+            // Special Privilege Leave (SPL), Solo Parent (SoloP) may have fixed entitlements
+            if (leaveTypeCode === 'SPL' || leaveTypeCode === 'SoloP') {
+                const balance = leaveBalances[leaveTypeCode];
+                // Disable only if balance exists and is 0 or less
+                if (balance !== undefined) {
+                    return balance.balance <= 0;
+                }
+                // If balance not found, allow it (may be granted on-demand)
+                return false;
+            }
+
+            // Default: allow if balance exists and is > 0, otherwise check if it's a special leave
+            const balance = leaveBalances[leaveTypeCode];
+            if (balance !== undefined) {
+                return balance.balance <= 0;
+            }
+
+            // If balance not found, allow it (may be a special leave granted on-demand)
+            return false;
+        },
+        [leaveBalances],
+    );
+
     return (
         <AppLayout breadcrumbs={breadcrumbs(requestType)}>
             <Head title={`Submit ${requestType.name}`} />
@@ -237,6 +295,9 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
                         }
 
                         if (field.field_type === 'dropdown') {
+                            // Special handling for leave_type field to disable options with no balance
+                            const isLeaveTypeField = key === 'leave_type';
+                            
                             return (
                                 <div key={field.clientKey ?? key} className="space-y-2">
                                     <Label className="text-sm font-medium text-foreground">
@@ -250,14 +311,35 @@ export default function RequestCreate({ requestType }: RequestCreateProps) {
                                             <SelectValue placeholder="Select an option" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {(field.options ?? []).map((option) => (
-                                                <SelectItem key={option.value} value={option.value}>
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
+                                            {(field.options ?? []).map((option) => {
+                                                const isDisabled = isLeaveTypeField ? isLeaveTypeDisabled(option.value) : false;
+                                                const balance = isLeaveTypeField && leaveBalances?.[option.value];
+                                                const balanceText = balance !== undefined ? ` (Balance: ${balance.balance.toFixed(2)} days)` : '';
+                                                
+                                                return (
+                                                    <SelectItem 
+                                                        key={option.value} 
+                                                        value={option.value}
+                                                        disabled={isDisabled}
+                                                        className={isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
+                                                    >
+                                                        {option.label}
+                                                        {isLeaveTypeField && balance !== undefined && (
+                                                            <span className="text-xs text-muted-foreground ml-1">
+                                                                {balanceText}
+                                                            </span>
+                                                        )}
+                                                    </SelectItem>
+                                                );
+                                            })}
                                         </SelectContent>
                                     </Select>
                                     {field.description && <p className="text-xs text-muted-foreground">{field.description}</p>}
+                                    {isLeaveTypeField && Object.keys(leaveBalances).length > 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Leave types with zero balance are disabled. Special leaves (ML, PL, VAWC, etc.) are granted on-demand and may not require balance.
+                                        </p>
+                                    )}
                                     {error && <p className="text-xs text-destructive">{error}</p>}
                                 </div>
                             );
