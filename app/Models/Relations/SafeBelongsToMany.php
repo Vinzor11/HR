@@ -4,6 +4,7 @@ namespace App\Models\Relations;
 
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Collection;
 
 /**
  * BelongsToMany that returns an empty collection when the pivot table doesn't exist.
@@ -41,5 +42,42 @@ class SafeBelongsToMany extends BelongsToMany
         }
 
         return parent::sync($ids, $detaching);
+    }
+
+    /**
+     * Override pluck to handle missing pivot tables gracefully.
+     * When pluck is called directly on the relationship, it bypasses get().
+     */
+    public function pluck($column, $key = null)
+    {
+        if (! $this->pivotTableExists()) {
+            return new Collection();
+        }
+
+        return parent::pluck($column, $key);
+    }
+
+    /**
+     * Override count to handle missing pivot tables gracefully.
+     */
+    public function count()
+    {
+        if (! $this->pivotTableExists()) {
+            return 0;
+        }
+
+        return parent::count();
+    }
+
+    /**
+     * Override exists to handle missing pivot tables gracefully.
+     */
+    public function exists()
+    {
+        if (! $this->pivotTableExists()) {
+            return false;
+        }
+
+        return parent::exists();
     }
 }

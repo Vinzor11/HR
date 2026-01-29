@@ -237,9 +237,10 @@ class TrainingController extends Controller
         $original = $training->getOriginal();
         
         // Get current relationships BEFORE sync
-        $oldSectorIds = $training->allowedSectors()->pluck('sectors.id')->toArray();
-        $oldUnitIds = $training->allowedUnits()->pluck('units.id')->toArray();
-        $oldPositionIds = $training->allowedPositions()->pluck('positions.id')->toArray();
+        // Use get() first to leverage SafeBelongsToMany safety checks, then pluck from collection
+        $oldSectorIds = $training->allowedSectors()->get()->pluck('id')->toArray();
+        $oldUnitIds = $training->allowedUnits()->get()->pluck('id')->toArray();
+        $oldPositionIds = $training->allowedPositions()->pluck('id')->toArray();
         
         $training->update($trainingData);
         $training->refresh(); // Refresh to get updated request_type_id value
