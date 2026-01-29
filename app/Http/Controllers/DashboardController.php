@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -536,40 +537,42 @@ class DashboardController extends Controller
             ];
         }
 
-        // Contract end date notifications (1 week ahead)
+        // Contract end date notifications (1 week ahead) — only if employees table has end_date (migration run)
         $oneWeekFromNow = Carbon::now()->addWeek();
         $today = Carbon::now();
-        
-        // Check if user has employee access permission or is an employee
-        $hasEmployeeAccess = $user->can('access-employees-module');
-        $isEmployee = $user->employee_id !== null;
-        
-        if ($hasEmployeeAccess || $isEmployee) {
-            $query = Employee::whereIn('employment_status', ['Contractual', 'Job-Order'])
-                ->whereNotNull('end_date')
-                ->whereBetween('end_date', [$today->toDateString(), $oneWeekFromNow->toDateString()])
-                ->where('status', 'active');
-            
-            // If user has employee access, show all employees
-            // If user is just an employee, only show their own contract
-            if (!$hasEmployeeAccess && $isEmployee) {
-                $query->where('id', $user->employee_id);
-            }
-            
-            $expiringContracts = $query->count();
-            
-            if ($expiringContracts > 0) {
-                $notifications[] = [
-                    'type' => 'warning',
-                    'title' => "{$expiringContracts} contract(s) expiring within 1 week",
-                    'message' => $hasEmployeeAccess 
-                        ? 'Review and take necessary action for these employees.'
-                        : 'Your contract is expiring soon. Please contact HR.',
-                    'link' => $hasEmployeeAccess 
-                        ? route('employees.index', ['employment_status' => 'Contractual,Job-Order'])
-                        : route('employees.my-profile'),
-                    'icon' => 'Calendar',
-                ];
+
+        if (Schema::hasColumn('employees', 'end_date')) {
+            // Check if user has employee access permission or is an employee
+            $hasEmployeeAccess = $user->can('access-employees-module');
+            $isEmployee = $user->employee_id !== null;
+
+            if ($hasEmployeeAccess || $isEmployee) {
+                $query = Employee::whereIn('employment_status', ['Contractual', 'Job-Order'])
+                    ->whereNotNull('end_date')
+                    ->whereBetween('end_date', [$today->toDateString(), $oneWeekFromNow->toDateString()])
+                    ->where('status', 'active');
+
+                // If user has employee access, show all employees
+                // If user is just an employee, only show their own contract
+                if (!$hasEmployeeAccess && $isEmployee) {
+                    $query->where('id', $user->employee_id);
+                }
+
+                $expiringContracts = $query->count();
+
+                if ($expiringContracts > 0) {
+                    $notifications[] = [
+                        'type' => 'warning',
+                        'title' => "{$expiringContracts} contract(s) expiring within 1 week",
+                        'message' => $hasEmployeeAccess
+                            ? 'Review and take necessary action for these employees.'
+                            : 'Your contract is expiring soon. Please contact HR.',
+                        'link' => $hasEmployeeAccess
+                            ? route('employees.index', ['employment_status' => 'Contractual,Job-Order'])
+                            : route('employees.my-profile'),
+                        'icon' => 'Calendar',
+                    ];
+                }
             }
         }
 
