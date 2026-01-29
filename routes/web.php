@@ -174,7 +174,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Approval Delegations (in Settings)
     Route::get('settings/delegations', [App\Http\Controllers\ApprovalDelegationController::class, 'index'])->name('settings.delegations');
     Route::post('settings/delegations', [App\Http\Controllers\ApprovalDelegationController::class, 'store'])->name('settings.delegations.store');
-    Route::delete('settings/delegations/{delegation}', [App\Http\Controllers\ApprovalDelegationController::class, 'destroy'])->name('settings.delegations.destroy');
+    Route::delete('settings/delegations/{id}', [App\Http\Controllers\ApprovalDelegationController::class, 'destroy'])->name('settings.delegations.destroy');
     Route::get('api/delegations/active', [App\Http\Controllers\ApprovalDelegationController::class, 'getActiveDelegation'])->name('api.delegations.active');
     Route::get('api/delegations/to-me', [App\Http\Controllers\ApprovalDelegationController::class, 'getDelegationsToMe'])->name('api.delegations.to-me');
     

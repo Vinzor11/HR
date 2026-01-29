@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,12 +17,28 @@ use Inertia\Response;
 class ApprovalDelegationController extends Controller
 {
     /**
+     * Check if approval_delegations table exists (e.g. migration not yet run).
+     */
+    protected function delegationsTableExists(): bool
+    {
+        return Schema::hasTable('approval_delegations');
+    }
+
+    /**
      * Display a listing of the delegations.
      */
     public function index(Request $request): Response
     {
         $user = $request->user();
-        
+
+        if (!$this->delegationsTableExists()) {
+            return Inertia::render('settings/delegations', [
+                'delegations' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15),
+                'users' => [],
+                'canManage' => $user->can('access-request-types-module'),
+            ]);
+        }
+
         // Get delegations where user is delegator or delegate
         $delegations = ApprovalDelegation::with(['delegator', 'delegate', 'creator'])
             ->where(function ($query) use ($user) {
@@ -157,6 +174,10 @@ class ApprovalDelegationController extends Controller
      */
     public function store(Request $request)
     {
+        if (!$this->delegationsTableExists()) {
+            return back()->with('error', 'Delegation feature is not available yet. Please try again after the next deployment.');
+        }
+
         $request->validate([
             'delegate_id' => [
                 'required',
@@ -206,8 +227,14 @@ class ApprovalDelegationController extends Controller
     /**
      * Deactivate a delegation.
      */
-    public function destroy(Request $request, ApprovalDelegation $delegation)
+    public function destroy(Request $request, int $id)
     {
+        if (!$this->delegationsTableExists()) {
+            return back()->with('error', 'Delegation feature is not available yet. Please try again after the next deployment.');
+        }
+
+        $delegation = ApprovalDelegation::findOrFail($id);
+
         // Only delegator or admin can deactivate
         if ($delegation->delegator_id !== $request->user()->id && !$request->user()->can('access-request-types-module')) {
             abort(403, 'You can only deactivate your own delegations.');
@@ -233,6 +260,10 @@ class ApprovalDelegationController extends Controller
      */
     public function getActiveDelegation(Request $request)
     {
+        if (!$this->delegationsTableExists()) {
+            return response()->json(['delegation' => null]);
+        }
+
         $delegation = ApprovalDelegation::active()
             ->forDelegator($request->user()->id)
             ->with('delegate')
@@ -257,6 +288,10 @@ class ApprovalDelegationController extends Controller
      */
     public function getDelegationsToMe(Request $request)
     {
+        if (!$this->delegationsTableExists()) {
+            return response()->json(['delegations' => []]);
+        }
+
         $delegations = ApprovalDelegation::active()
             ->forDelegate($request->user()->id)
             ->with('delegator')
