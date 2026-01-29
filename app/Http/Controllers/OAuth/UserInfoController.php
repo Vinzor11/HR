@@ -11,7 +11,16 @@ class UserInfoController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $user = $request->user();
-        $user->load('employee.primaryDesignation.unit.sector', 'employee.primaryDesignation.position');
+        $user->load([
+            'employee.primaryDesignation.unit.sector',
+            'employee.primaryDesignation.position',
+            'employee.primaryDesignation.academicRank',
+            'employee.primaryDesignation.staffGrade',
+            'employee.designations.unit.sector',
+            'employee.designations.position',
+            'employee.designations.academicRank',
+            'employee.designations.staffGrade'
+        ]);
         $employee = $user->employee ?? null;
 
         $claims = [
@@ -28,6 +37,7 @@ class UserInfoController extends Controller
             $claims['last_name'] = $employee->surname ?? null;
             $claims['middle_name'] = $employee->middle_name ?? null;
 
+            // Primary designation (for backward compatibility)
             $designation = $employee->primaryDesignation;
             if ($designation) {
                 if ($designation->unit) {
@@ -43,6 +53,63 @@ class UserInfoController extends Controller
                     $claims['position'] = $designation->position->pos_name ?? null;
                 }
             }
+
+            // All designations
+            $claims['designations'] = $employee->designations->map(function ($designation) {
+                $designationData = [
+                    'id' => (string) $designation->id,
+                    'is_primary' => $designation->is_primary ?? false,
+                    'start_date' => $designation->start_date ? $designation->start_date->format('Y-m-d') : null,
+                    'end_date' => $designation->end_date ? $designation->end_date->format('Y-m-d') : null,
+                    'remarks' => $designation->remarks ?? null,
+                ];
+
+                if ($designation->unit) {
+                    $designationData['unit'] = [
+                        'id' => (string) $designation->unit->id,
+                        'code' => $designation->unit->code ?? null,
+                        'name' => $designation->unit->name ?? null,
+                        'unit_type' => $designation->unit->unit_type ?? null,
+                    ];
+
+                    if ($designation->unit->sector) {
+                        $designationData['unit']['sector'] = [
+                            'id' => (string) $designation->unit->sector->id,
+                            'code' => $designation->unit->sector->code ?? null,
+                            'name' => $designation->unit->sector->name ?? null,
+                        ];
+                    }
+                }
+
+                if ($designation->position) {
+                    $designationData['position'] = [
+                        'id' => (string) $designation->position->id,
+                        'code' => $designation->position->pos_code ?? null,
+                        'name' => $designation->position->pos_name ?? null,
+                        'authority_level' => $designation->position->authority_level ?? null,
+                    ];
+                }
+
+                if ($designation->academicRank) {
+                    $designationData['academic_rank'] = [
+                        'id' => (string) $designation->academicRank->id,
+                        'code' => $designation->academicRank->code ?? null,
+                        'name' => $designation->academicRank->name ?? null,
+                        'level' => $designation->academicRank->level ?? null,
+                    ];
+                }
+
+                if ($designation->staffGrade) {
+                    $designationData['staff_grade'] = [
+                        'id' => (string) $designation->staffGrade->id,
+                        'code' => $designation->staffGrade->code ?? null,
+                        'name' => $designation->staffGrade->name ?? null,
+                        'level' => $designation->staffGrade->level ?? null,
+                    ];
+                }
+
+                return $designationData;
+            })->toArray();
         }
 
         $claims['roles'] = $user->getRoleNames()->toArray();
