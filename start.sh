@@ -47,8 +47,12 @@ if [ -n "$STORAGE_PATH" ]; then
     fi
 fi
 
-# Run migrations and seeders
+# Run migrations on every deploy/rebuild (--force for non-interactive)
+echo "Running database migrations..."
 php artisan migrate --force
+
+# Run seeders (e.g. LegacyCleanupSeeder via DatabaseSeeder; skip if none)
+echo "Running database seeders..."
 php artisan db:seed --force || true
 
 # Generate passport keys (fail gracefully if already exists)
