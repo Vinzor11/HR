@@ -62,7 +62,7 @@ class Training extends Model
     {
         $instance = $this->newRelatedInstance(Sector::class);
 
-        return new SafeBelongsToMany(
+        $relation = new SafeBelongsToMany(
             $instance->newQuery(),
             $this,
             'training_allowed_sectors',
@@ -71,14 +71,16 @@ class Training extends Model
             $this->getKeyName(),
             $instance->getKeyName(),
             'allowedSectors'
-        )->withTimestamps();
+        );
+
+        return $relation->withTimestamps();
     }
 
     public function allowedUnits()
     {
         $instance = $this->newRelatedInstance(Unit::class);
 
-        return new SafeBelongsToMany(
+        $relation = new SafeBelongsToMany(
             $instance->newQuery(),
             $this,
             'training_allowed_units',
@@ -87,7 +89,9 @@ class Training extends Model
             $this->getKeyName(),
             $instance->getKeyName(),
             'allowedUnits'
-        )->withTimestamps();
+        );
+
+        return $relation->withTimestamps();
     }
 
     public function allowedPositions()
