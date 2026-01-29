@@ -238,9 +238,10 @@ class TrainingController extends Controller
         
         // Get current relationships BEFORE sync
         // Use get() first to leverage SafeBelongsToMany safety checks, then pluck from collection
+        // Also prevents ambiguous column errors when plucking 'id' from joined tables
         $oldSectorIds = $training->allowedSectors()->get()->pluck('id')->toArray();
         $oldUnitIds = $training->allowedUnits()->get()->pluck('id')->toArray();
-        $oldPositionIds = $training->allowedPositions()->pluck('id')->toArray();
+        $oldPositionIds = $training->allowedPositions()->get()->pluck('id')->toArray();
         
         $training->update($trainingData);
         $training->refresh(); // Refresh to get updated request_type_id value
