@@ -1559,8 +1559,10 @@ class EmployeeController extends Controller
             'learningDevelopment',
             'questionnaire',
             'references',
-            'department',
-            'position',
+            'primaryDesignation.unit',
+            'primaryDesignation.position',
+            'primaryDesignation.academicRank',
+            'primaryDesignation.staffGrade',
             'otherInformation',
         ]);
 

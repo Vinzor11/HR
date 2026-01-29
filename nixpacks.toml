@@ -20,13 +20,9 @@ cmds = [
   # Ensure Composer is available before running install
   "curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer",
   "php /usr/local/bin/composer install --optimize-autoloader --no-dev --no-interaction",
-  "npm ci --omit=dev"
+  # Use npm ci (with lockfile) so builds are reproducible; install devDeps so Vite can build
+  "npm ci"
 ]
 
 [phases.build]
-cmds = [
-  "npm run build",
-  "php artisan config:cache || true",
-  "php artisan route:cache || true",
-  "php artisan view:cache || true"
-]
+cmds = [ "npm run build" ]

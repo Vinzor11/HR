@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# Clear caches (fail gracefully if database not available)
-php artisan config:clear || true
-php artisan cache:clear || true
-php artisan route:clear || true
-php artisan view:clear || true
+# Clear all caches so config/routes/views pick up Railway env and latest code
+php artisan optimize:clear || true
+# Re-cache for production (uses current env from Railway Variables)
+php artisan config:cache || true
+php artisan route:cache || true
+php artisan view:cache || true
 
 # Setup persistent storage if STORAGE_PATH is set (Railway volume)
 if [ -n "$STORAGE_PATH" ]; then
@@ -60,6 +61,9 @@ php artisan passport:keys || true
 
 # Create storage link if it doesn't exist
 php artisan storage:link || true
+
+# Restart queue workers so they run new code (no-op if no workers)
+php artisan queue:restart || true
 
 # Start the Laravel scheduler in the background
 # This runs scheduled tasks like logging expired sessions
