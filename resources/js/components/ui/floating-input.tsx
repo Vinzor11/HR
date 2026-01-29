@@ -5,10 +5,11 @@ interface FloatingInputProps extends React.ComponentProps<"input"> {
   label: string;
   error?: string;
   helperText?: string;
+  onErrorClick?: () => void;
 }
 
 export const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputProps>(
-  ({ className, label = '', error, helperText, id, value, ...props }, ref) => {
+  ({ className, label = '', error, helperText, id, value, onErrorClick, ...inputProps }, ref) => {
     const inputId = id || `floating-input-${(label || 'input').toLowerCase().replace(/\s+/g, '-')}`;
     const hasValue = value !== undefined && value !== null && value !== '';
     const isFocused = React.useRef(false);
@@ -35,7 +36,7 @@ export const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputPro
             onBlur={() => setIsFocusedState(false)}
             aria-invalid={error ? 'true' : 'false'}
             aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
-            {...props}
+            {...inputProps}
           />
           <label
             htmlFor={inputId}
@@ -47,7 +48,7 @@ export const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputPro
             )}
           >
             {label}
-            {props.required && <span className="text-destructive ml-1">*</span>}
+            {inputProps.required && <span className="text-destructive ml-1">*</span>}
           </label>
         </div>
         {helperText && !error && (
@@ -60,10 +61,14 @@ export const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputPro
             id={`${inputId}-error`} 
             className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
             onClick={() => {
-              const input = document.getElementById(inputId);
-              if (input) {
-                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                setTimeout(() => input.focus(), 100);
+              if (onErrorClick) {
+                onErrorClick();
+              } else {
+                const input = document.getElementById(inputId);
+                if (input) {
+                  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  setTimeout(() => input.focus(), 100);
+                }
               }
             }}
           >

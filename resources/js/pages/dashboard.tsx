@@ -69,7 +69,7 @@ interface DashboardProps {
         fulfillment_url: string;
     }>;
     employee_insights?: {
-        top_departments: Array<{ name: string; count: number }>;
+        top_units: Array<{ name: string; count: number }>;
         on_leave_today: number;
         status_summary: Record<string, number>;
         total_active: number;
@@ -402,12 +402,12 @@ export default function Dashboard() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                                     <div className="space-y-3 md:space-y-4">
                                         <div>
-                                            <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1.5 md:mb-2">Top Departments</p>
+                                            <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1.5 md:mb-2">Top Units</p>
                                             <div className="space-y-1.5 md:space-y-2">
-                                                {props.employee_insights.top_departments.map((dept, idx) => (
+                                                {props.employee_insights.top_units?.map((unit, idx) => (
                                                     <div key={idx} className="flex items-center justify-between text-xs md:text-sm">
-                                                        <span className="text-foreground truncate max-w-[150px] md:max-w-none">{dept.name}</span>
-                                                        <span className="font-semibold text-muted-foreground ml-2">{dept.count}</span>
+                                                        <span className="text-foreground truncate max-w-[150px] md:max-w-none">{unit.name}</span>
+                                                        <span className="font-semibold text-muted-foreground ml-2">{unit.count}</span>
                                                     </div>
                                                 ))}
                                             </div>

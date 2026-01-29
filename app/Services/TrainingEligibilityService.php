@@ -2,14 +2,17 @@
 
 namespace App\Services;
 
-use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Training;
+use App\Models\Unit;
 
+/**
+ * Training Eligibility Service - Updated for new org structure (Sector/Unit/Position)
+ */
 class TrainingEligibilityService
 {
     /**
-     * Check if an employee is eligible for a training based on faculty, department, and position restrictions.
+     * Check if an employee is eligible for a training based on sector, unit, and position restrictions.
      *
      * @param Training $training The training to check eligibility for
      * @param Employee|null $employee The employee to check eligibility for
@@ -21,80 +24,46 @@ class TrainingEligibilityService
             return false;
         }
 
-        $training->loadMissing(['allowedFaculties:id', 'allowedDepartments:id', 'allowedPositions:id']);
+        // Load training restrictions - try new structure first, fall back to legacy
+        $training->loadMissing(['allowedSectors:id', 'allowedUnits:id', 'allowedPositions:id']);
 
-        $facultyAllowed = $training->allowedFaculties->pluck('id');
-        $departmentAllowed = $training->allowedDepartments->pluck('id');
-        $positionAllowed = $training->allowedPositions->pluck('id');
+        // Get employee's primary designation
+        $employee->load(['primaryDesignation.unit.sector', 'primaryDesignation.position']);
+        $primaryDesignation = $employee->primaryDesignation;
 
-        // Check faculty match: if restrictions exist, employee's department or position faculty_id must match
-        $employeeFacultyId = $this->getEmployeeFacultyId($employee);
+        // If employee has no designation, check if there are any restrictions
+        if (!$primaryDesignation) {
+            // No designation = not eligible if there are any restrictions
+            $hasSectorRestrictions = method_exists($training, 'allowedSectors') && $training->allowedSectors->isNotEmpty();
+            $hasUnitRestrictions = method_exists($training, 'allowedUnits') && $training->allowedUnits->isNotEmpty();
+            $hasPositionRestrictions = $training->allowedPositions->isNotEmpty();
+            
+            return !$hasSectorRestrictions && !$hasUnitRestrictions && !$hasPositionRestrictions;
+        }
 
-        $facultyMatch = $facultyAllowed->isEmpty() ||
-            ($employeeFacultyId && $facultyAllowed->contains($employeeFacultyId));
+        // Check sector match (if training has sector restrictions)
+        $sectorMatch = true;
+        if (method_exists($training, 'allowedSectors') && $training->allowedSectors->isNotEmpty()) {
+            $employeeSectorId = $primaryDesignation->unit?->sector_id;
+            $sectorMatch = $employeeSectorId && $training->allowedSectors->pluck('id')->contains($employeeSectorId);
+        }
 
-        // Check department match: if restrictions exist, employee's department_id must match
-        // For faculty-level positions (no department), check if employee's faculty matches
-        // the faculty of any allowed department
-        $departmentMatch = $this->checkDepartmentMatch($employee, $departmentAllowed, $employeeFacultyId);
+        // Check unit match (if training has unit restrictions)
+        $unitMatch = true;
+        if (method_exists($training, 'allowedUnits') && $training->allowedUnits->isNotEmpty()) {
+            $employeeUnitId = $primaryDesignation->unit_id;
+            $unitMatch = $employeeUnitId && $training->allowedUnits->pluck('id')->contains($employeeUnitId);
+        }
 
-        // Check position match: if restrictions exist, employee's position_id must match
-        $positionMatch = $positionAllowed->isEmpty() ||
-            ($employee->position_id && $positionAllowed->contains($employee->position_id));
+        // Check position match (if training has position restrictions)
+        $positionMatch = true;
+        if ($training->allowedPositions->isNotEmpty()) {
+            $employeePositionId = $primaryDesignation->position_id;
+            $positionMatch = $employeePositionId && $training->allowedPositions->pluck('id')->contains($employeePositionId);
+        }
 
         // All conditions must pass (AND logic)
-        return $facultyMatch && $departmentMatch && $positionMatch;
-    }
-
-    /**
-     * Get the employee's faculty ID from their department or position.
-     *
-     * @param Employee $employee
-     * @return int|null
-     */
-    protected function getEmployeeFacultyId(Employee $employee): ?int
-    {
-        if ($employee->department && $employee->department->faculty_id) {
-            return $employee->department->faculty_id;
-        }
-
-        if ($employee->position && $employee->position->faculty_id) {
-            return $employee->position->faculty_id;
-        }
-
-        return null;
-    }
-
-    /**
-     * Check if employee's department matches training's allowed departments.
-     *
-     * @param Employee $employee
-     * @param \Illuminate\Support\Collection $departmentAllowed
-     * @param int|null $employeeFacultyId
-     * @return bool
-     */
-    protected function checkDepartmentMatch(Employee $employee, $departmentAllowed, ?int $employeeFacultyId): bool
-    {
-        // If no department restrictions, everyone is eligible
-        if ($departmentAllowed->isEmpty()) {
-            return true;
-        }
-
-        // Employee has a department, check if it's in the allowed list
-        if ($employee->department_id) {
-            return $departmentAllowed->contains($employee->department_id);
-        }
-
-        // Employee has no department but has a faculty (faculty-level position)
-        // Check if any allowed department belongs to the same faculty
-        if ($employeeFacultyId) {
-            return Department::whereIn('id', $departmentAllowed->toArray())
-                ->where('faculty_id', $employeeFacultyId)
-                ->exists();
-        }
-
-        // No department and no faculty - not eligible
-        return false;
+        return $sectorMatch && $unitMatch && $positionMatch;
     }
 
     /**
@@ -105,12 +74,10 @@ class TrainingEligibilityService
      */
     public function hasCapacity(Training $training): bool
     {
-        // If no capacity is set, assume unlimited
         if ($training->capacity === null) {
             return true;
         }
 
-        // Count approved and signed up applications
         $currentApplications = $training->applications()
             ->whereIn('status', ['Signed Up', 'Approved'])
             ->count();
@@ -127,7 +94,7 @@ class TrainingEligibilityService
     public function getAvailableSpots(Training $training): ?int
     {
         if ($training->capacity === null) {
-            return null; // Unlimited
+            return null;
         }
 
         $currentApplications = $training->applications()
@@ -137,4 +104,3 @@ class TrainingEligibilityService
         return max(0, $training->capacity - $currentApplications);
     }
 }
-

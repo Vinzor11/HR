@@ -36,9 +36,10 @@ interface LeaveType {
   color: string
 }
 
-interface Department {
+interface Unit {
   id: number
   name: string
+  code?: string
 }
 
 interface Employee {
@@ -46,8 +47,10 @@ interface Employee {
   first_name: string
   middle_name: string | null
   surname: string
-  department: Department | null
-  position: { title: string } | null
+  primary_designation?: {
+    unit?: { name: string; code?: string }
+    position?: { pos_name?: string }
+  } | null
   leave_balances: Record<
     string,
     {
@@ -72,20 +75,20 @@ interface PaginatedEmployees {
 interface Props {
   employees: PaginatedEmployees
   leaveTypes: LeaveType[]
-  departments: Department[]
+  units: Unit[]
   year: number
   availableYears: number[]
   filters: {
     search: string | null
     search_mode?: string
-    department_id: number | null
+    unit_id: number
   }
 }
 
 export default function LeaveBalanceAdminIndex({
   employees,
   leaveTypes,
-  departments,
+  units,
   year,
   availableYears,
   filters,
@@ -99,7 +102,7 @@ export default function LeaveBalanceAdminIndex({
     e.preventDefault()
     router.get(
       '/admin/leave-balances',
-      { search, search_mode: searchMode, year, department_id: filters.department_id },
+      { search, search_mode: searchMode, year, unit_id: filters.unit_id },
       { preserveState: true }
     )
   }
@@ -107,19 +110,19 @@ export default function LeaveBalanceAdminIndex({
   const handleYearChange = (newYear: string) => {
     router.get(
       '/admin/leave-balances',
-      { year: parseInt(newYear), search: filters.search, search_mode: filters.search_mode || 'any', department_id: filters.department_id },
+      { year: parseInt(newYear), search: filters.search, search_mode: filters.search_mode || 'any', unit_id: filters.unit_id },
       { preserveState: true }
     )
   }
 
-  const handleDepartmentChange = (deptId: string) => {
+  const handleUnitChange = (unitId: string) => {
     router.get(
       '/admin/leave-balances',
       {
         year,
         search: filters.search,
         search_mode: filters.search_mode || 'any',
-        department_id: deptId === 'all' ? null : parseInt(deptId),
+        unit_id: unitId === 'all' ? 0 : parseInt(unitId),
       },
       { preserveState: true }
     )
@@ -176,12 +179,12 @@ export default function LeaveBalanceAdminIndex({
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Departments</CardTitle>
+              <CardTitle className="text-sm font-medium">Units</CardTitle>
               <Settings className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{departments.length}</div>
-              <p className="text-xs text-muted-foreground">Active departments</p>
+              <div className="text-2xl font-bold">{units.length}</div>
+              <p className="text-xs text-muted-foreground">Active units</p>
             </CardContent>
           </Card>
         </div>
@@ -217,17 +220,17 @@ export default function LeaveBalanceAdminIndex({
                 </Button>
               </form>
               <Select
-                value={filters.department_id?.toString() || 'all'}
-                onValueChange={handleDepartmentChange}
+                value={filters.unit_id ? filters.unit_id.toString() : 'all'}
+                onValueChange={handleUnitChange}
               >
                 <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="All Departments" />
+                  <SelectValue placeholder="All Units" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id.toString()}>
-                      {dept.name}
+                  <SelectItem value="all">All Units</SelectItem>
+                  {units.map((unit) => (
+                    <SelectItem key={unit.id} value={unit.id.toString()}>
+                      {unit.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -258,7 +261,7 @@ export default function LeaveBalanceAdminIndex({
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
-                  <TableHead>Department</TableHead>
+                  <TableHead>Unit</TableHead>
                   {mainLeaveTypes.map((lt) => (
                     <TableHead key={lt.id} className="text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -288,9 +291,9 @@ export default function LeaveBalanceAdminIndex({
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        {employee.department?.name || 'N/A'}
-                        {employee.position && (
-                          <div className="text-muted-foreground">{employee.position.title}</div>
+                        {employee.primary_designation?.unit?.name || 'N/A'}
+                        {employee.primary_designation?.position?.pos_name && (
+                          <div className="text-muted-foreground">{employee.primary_designation.position.pos_name}</div>
                         )}
                       </div>
                     </TableCell>

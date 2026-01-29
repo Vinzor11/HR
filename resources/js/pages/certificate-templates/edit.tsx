@@ -6,6 +6,9 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { router } from '@inertiajs/react';
 import { CertificateTemplateEditor } from '@/components/certificate-template-editor';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useMemo, useState } from 'react';
 
 interface CertificateTextLayer {
     id: number;
@@ -37,8 +40,16 @@ interface CertificateTemplate {
     updated_at: string;
 }
 
+interface RequestTypeOption {
+    id: number;
+    name: string;
+    fields: Array<{ field_key: string; label: string }>;
+}
+
 interface CertificateTemplateEditProps {
     template: CertificateTemplate;
+    requestTypes?: RequestTypeOption[];
+    systemFieldKeys?: string[];
 }
 
 const breadcrumbs = (template: CertificateTemplate): BreadcrumbItem[] => [
@@ -76,7 +87,22 @@ interface TextLayer {
     sort_order: number;
 }
 
-export default function CertificateTemplateEdit({ template }: CertificateTemplateEditProps) {
+export default function CertificateTemplateEdit({ template, requestTypes = [], systemFieldKeys = [] }: CertificateTemplateEditProps) {
+    const [selectedRequestTypeId, setSelectedRequestTypeId] = useState<number | ''>('');
+
+    const availableFieldKeys = useMemo(() => {
+        const system = systemFieldKeys.length > 0 ? systemFieldKeys : [
+            'user_name', 'user_email', 'employee_full_name', 'employee_first_name', 'employee_last_name',
+            'employee_position', 'employee_unit', 'employee_department', 'reference_code',
+            'submitted_date', 'completed_date', 'current_date', 'current_year',
+        ];
+        if (!selectedRequestTypeId) return system;
+        const rt = requestTypes.find((r) => r.id === selectedRequestTypeId);
+        if (!rt) return system;
+        const requestKeys = rt.fields.map((f) => f.field_key).filter(Boolean);
+        return [...system, ...requestKeys];
+    }, [systemFieldKeys, selectedRequestTypeId, requestTypes]);
+
     const form = useForm({
         _method: 'PUT',
         name: template.name || '',
@@ -146,10 +172,33 @@ export default function CertificateTemplateEdit({ template }: CertificateTemplat
                                 Update the certificate template design and configuration
                             </p>
                         </div>
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium">Show fields for request type (optional)</Label>
+                            <Select
+                                value={selectedRequestTypeId === '' ? 'none' : String(selectedRequestTypeId)}
+                                onValueChange={(v) => setSelectedRequestTypeId(v === 'none' ? '' : Number(v))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a request type to see its form fields" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">— System fields only —</SelectItem>
+                                    {requestTypes.map((rt) => (
+                                        <SelectItem key={rt.id} value={String(rt.id)}>
+                                            {rt.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                Choosing a request type adds its form field keys to the Available Fields list below.
+                            </p>
+                        </div>
                     </Card>
 
                     <Card className="p-5 space-y-6">
                         <CertificateTemplateEditor
+                            availableFieldKeys={availableFieldKeys}
                             name={data.name}
                             description={data.description}
                             backgroundImage={data.background_image}

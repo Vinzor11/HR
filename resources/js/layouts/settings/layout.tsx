@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
 import { type PropsWithChildren } from 'react';
-import { User, Lock, Shield, Palette } from 'lucide-react';
+import { User, Lock, Shield, Palette, UserCheck } from 'lucide-react';
 
 const sidebarNavItems: NavItem[] = [
     {
@@ -28,6 +28,11 @@ const sidebarNavItems: NavItem[] = [
         title: 'Appearance',
         href: '/settings/appearance',
         icon: Palette,
+    },
+    {
+        title: 'Delegations',
+        href: '/settings/delegations',
+        icon: UserCheck,
     },
 ];
 

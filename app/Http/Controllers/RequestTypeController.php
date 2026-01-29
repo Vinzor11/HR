@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreRequestTypeRequest;
 use App\Http\Requests\UpdateRequestTypeRequest;
 use App\Models\CertificateTemplate;
-use App\Models\Department;
-use App\Models\Faculty;
+use App\Models\Sector;
+use App\Models\Unit;
 use App\Models\Position;
 use App\Models\RequestField;
 use App\Models\RequestSubmission;
@@ -15,6 +15,7 @@ use App\Models\Role;
 use App\Models\Training;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CertificateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -68,6 +69,8 @@ class RequestTypeController extends Controller
             'mode' => 'create',
             'requestType' => null,
             'formOptions' => $this->formOptions(null),
+            'selectedCertificateTemplate' => null,
+            'systemFieldKeys' => CertificateService::getSystemFieldKeys(),
         ]);
     }
 
@@ -116,6 +119,25 @@ class RequestTypeController extends Controller
         
         $requestType->load(['fields' => fn ($query) => $query->orderBy('sort_order')]);
 
+        $selectedCertificateTemplate = null;
+        $layerNames = null;
+        if ($requestType->certificate_template_id) {
+            $template = CertificateTemplate::with('textLayers')
+                ->find($requestType->certificate_template_id);
+            if ($template) {
+                $layerNames = $template->textLayers->pluck('name')->toArray();
+                $selectedCertificateTemplate = [
+                    'id' => $template->id,
+                    'name' => $template->name,
+                    'text_layers' => $template->textLayers->map(fn ($layer) => [
+                        'id' => $layer->id,
+                        'name' => $layer->name,
+                    ])->toArray(),
+                ];
+            }
+        }
+        $certificateConfig = $this->normalizeCertificateConfigForBuilder($requestType, $layerNames);
+
         return Inertia::render('request-types/builder', [
             'mode' => 'edit',
             'requestType' => [
@@ -125,7 +147,7 @@ class RequestTypeController extends Controller
                 'has_fulfillment' => $requestType->has_fulfillment,
                 'is_published' => $requestType->is_published,
                 'certificate_template_id' => $requestType->certificate_template_id,
-                'certificate_config' => $requestType->certificate_config,
+                'certificate_config' => $certificateConfig,
                 'approval_steps' => $requestType->approvalSteps(),
                 'fields' => $requestType->fields->map(fn (RequestField $field) => [
                     'id' => $field->id,
@@ -139,6 +161,8 @@ class RequestTypeController extends Controller
                 ]),
             ],
             'formOptions' => $this->formOptions($requestType),
+            'selectedCertificateTemplate' => $selectedCertificateTemplate,
+            'systemFieldKeys' => CertificateService::getSystemFieldKeys(),
         ]);
     }
 
@@ -329,6 +353,48 @@ class RequestTypeController extends Controller
         return $candidate;
     }
 
+    /**
+     * Normalize certificate_config.field_mappings to "layer name → data key" for the builder.
+     * Converts legacy "data key → layer name" format so the UI and backend stay consistent.
+     */
+    protected function normalizeCertificateConfigForBuilder(RequestType $requestType, ?array $layerNames = null): array
+    {
+        $config = $requestType->certificate_config ?? [];
+        $mappings = $config['field_mappings'] ?? [];
+
+        if (empty($mappings)) {
+            return $config;
+        }
+
+        if ($layerNames === null && $requestType->certificate_template_id) {
+            $template = CertificateTemplate::with('textLayers')->find($requestType->certificate_template_id);
+            $layerNames = $template ? $template->textLayers->pluck('name')->toArray() : [];
+        }
+
+        $layerNames = $layerNames ?? [];
+        $firstKey = array_key_first($mappings);
+        $firstValue = $mappings[$firstKey] ?? null;
+
+        // New format: keys are layer names
+        $isNewFormat = $firstKey !== null && in_array($firstKey, $layerNames, true);
+        // Old format: values are layer names (data_key → layer_name)
+        $isOldFormat = $firstValue !== null && in_array($firstValue, $layerNames, true);
+
+        if ($isNewFormat || ! $isOldFormat) {
+            return $config;
+        }
+
+        $inverted = [];
+        foreach ($mappings as $dataKey => $layerName) {
+            if ($layerName !== '' && $layerName !== null) {
+                $inverted[$layerName] = $dataKey;
+            }
+        }
+        $config['field_mappings'] = $inverted;
+
+        return $config;
+    }
+
     protected function normalizeApprovalSteps(array $steps): array
     {
         return collect($steps)
@@ -355,9 +421,15 @@ class RequestTypeController extends Controller
                             'approver_id' => $type === 'user' ? data_get($approver, 'approver_id') : null,
                             'approver_role_id' => $type === 'role' ? data_get($approver, 'approver_role_id') : null,
                             'approver_position_id' => $type === 'position' ? data_get($approver, 'approver_position_id') : null,
+                            'min_authority_level' => $type === 'hierarchical' ? data_get($approver, 'min_authority_level') : null,
                         ];
                     })
-                    ->filter(fn ($approver) => $approver['approver_type'] && ($approver['approver_id'] || $approver['approver_role_id'] || $approver['approver_position_id']))
+                    ->filter(fn ($approver) => $approver['approver_type'] && (
+                        $approver['approver_id'] || 
+                        $approver['approver_role_id'] || 
+                        $approver['approver_position_id'] ||
+                        $approver['approver_type'] === 'hierarchical'
+                    ))
                     ->values();
 
                 return [
@@ -391,53 +463,40 @@ class RequestTypeController extends Controller
         $positionsQuery = Position::orderBy('pos_name');
         
         if ($requestType) {
-            // Get all trainings that use this request type
+            // Get all trainings that use this request type (using new org structure)
             $trainings = Training::where('request_type_id', $requestType->id)
-                ->with(['allowedFaculties:id', 'allowedDepartments:id'])
+                ->with(['allowedSectors:id', 'allowedUnits:id'])
                 ->get();
             
             if ($trainings->isNotEmpty()) {
-                // Collect all unique faculty and department IDs from all trainings
-                $allFacultyIds = $trainings->flatMap(function ($training) {
-                    return $training->allowedFaculties->pluck('id');
+                // Collect all unique sector IDs from all trainings
+                $allSectorIds = $trainings->flatMap(function ($training) {
+                    return method_exists($training, 'allowedSectors') ? $training->allowedSectors->pluck('id') : collect();
                 })->unique()->values()->toArray();
                 
-                $allDepartmentIds = $trainings->flatMap(function ($training) {
-                    return $training->allowedDepartments->pluck('id');
-                })->unique()->values()->toArray();
-                
-                // Filter positions to only those associated with these faculties/departments
-                if (!empty($allFacultyIds) || !empty($allDepartmentIds)) {
-                    $positionsQuery->where(function ($query) use ($allFacultyIds, $allDepartmentIds) {
-                        if (!empty($allFacultyIds)) {
-                            $query->whereIn('faculty_id', $allFacultyIds);
-                        }
-                        if (!empty($allDepartmentIds)) {
-                            $query->orWhereIn('department_id', $allDepartmentIds);
-                        }
-                    });
+                // Filter positions to only those associated with these sectors
+                if (!empty($allSectorIds)) {
+                    $positionsQuery->whereIn('sector_id', $allSectorIds);
                 }
             }
         }
         
-        $positions = $positionsQuery->with(['faculty:id,name', 'department:id,name,type'])->get(['id', 'pos_name as name', 'faculty_id', 'department_id']);
+        $positions = $positionsQuery->with(['sector:id,name'])->get(['id', 'pos_name as name', 'sector_id', 'authority_level']);
         
-        // Get all faculties, departments, and offices for filtering
-        $faculties = Faculty::orderBy('name')->get(['id', 'name']);
-        $departments = Department::where('type', 'academic')
+        // Get all sectors and units for filtering (new org structure)
+        $sectors = Sector::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
+        $units = Unit::where('is_active', true)
             ->orderBy('name')
-            ->with('faculty:id,name')
-            ->get(['id', 'name', 'faculty_id']);
-        $offices = Department::where('type', 'administrative')
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        $certificateTemplates = CertificateTemplate::active()->orderBy('name')->get(['id', 'name', 'description']);
+            ->with('sector:id,name')
+            ->get(['id', 'name', 'code', 'unit_type', 'sector_id']);
+        $certificateTemplates = CertificateTemplate::active()->with('textLayers')->orderBy('name')->get(['id', 'name', 'description']);
         
         return [
             'fieldTypes' => $fieldTypes,
             'approvalModes' => [
-                ['value' => 'user', 'label' => 'Specific User'],
-                ['value' => 'position', 'label' => 'Position Based (Org Structure)'],
+                ['value' => 'user', 'label' => 'Specific User', 'description' => 'Route approval to a specific user'],
+                ['value' => 'position', 'label' => 'Position Based', 'description' => 'Route approval to anyone holding this position'],
+                ['value' => 'hierarchical', 'label' => 'Hierarchical (Authority Level)', 'description' => 'Auto-route based on requester hierarchy using authority_level'],
             ],
             'roles' => $roles,
             'users' => $users,
@@ -445,31 +504,31 @@ class RequestTypeController extends Controller
                 return [
                     'id' => $position->id,
                     'name' => $position->name,
-                    'faculty_id' => $position->faculty_id,
-                    'department_id' => $position->department_id,
-                    'faculty' => $position->faculty ? ['id' => $position->faculty->id, 'name' => $position->faculty->name] : null,
-                    'department' => $position->department ? [
-                        'id' => $position->department->id,
-                        'name' => $position->department->name,
-                        'type' => $position->department->type,
-                    ] : null,
+                    'sector_id' => $position->sector_id,
+                    'authority_level' => $position->authority_level,
+                    'sector' => $position->sector ? ['id' => $position->sector->id, 'name' => $position->sector->name] : null,
                 ];
             })->toArray(),
-            'faculties' => $faculties->toArray(),
-            'departments' => $departments->map(function ($dept) {
+            'sectors' => $sectors->toArray(),
+            'units' => $units->map(function ($unit) {
                 return [
-                    'id' => $dept->id,
-                    'name' => $dept->name,
-                    'faculty_id' => $dept->faculty_id,
-                    'faculty' => $dept->faculty ? ['id' => $dept->faculty->id, 'name' => $dept->faculty->name] : null,
+                    'id' => $unit->id,
+                    'name' => $unit->name,
+                    'code' => $unit->code,
+                    'unit_type' => $unit->unit_type,
+                    'sector_id' => $unit->sector_id,
+                    'sector' => $unit->sector ? ['id' => $unit->sector->id, 'name' => $unit->sector->name] : null,
                 ];
             })->toArray(),
-            'offices' => $offices->toArray(),
             'certificateTemplates' => $certificateTemplates->map(function ($template) {
                 return [
                     'id' => $template->id,
                     'name' => $template->name,
                     'description' => $template->description,
+                    'text_layers' => $template->textLayers->map(fn ($layer) => [
+                        'id' => $layer->id,
+                        'name' => $layer->name,
+                    ])->toArray(),
                 ];
             })->toArray(),
         ];

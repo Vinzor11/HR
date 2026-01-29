@@ -341,103 +341,51 @@ class RoleController extends Controller
 
     /**
      * Sort Organizational Structure permissions with separators
-     * Order: Faculty (access - create - edit - delete - view - restore - force-delete) 
-     *        -> Separator
-     *        -> Department (access - create - edit - delete - view - restore - force-delete)
-     *        -> Separator
-     *        -> Office (access - create - edit - delete - view - restore - force-delete)
-     *        -> Separator
-     *        -> Position (access - create - edit - delete - view - restore - force-delete)
-     *        -> Separator
-     *        -> view-organizational-log
+     * Order: Sectors -> Units -> Positions -> Position Whitelist -> Academic Ranks -> Staff Grades
+     * Each group: access -> create -> edit -> delete -> view -> restore -> force-delete
      */
     private function sortOrganizationalStructurePermissions($permissions)
     {
         $sorted = collect();
         $usedIds = collect();
         
-        // 1. Faculty permissions
-        $facultyPerms = $permissions->filter(function ($perm) use ($usedIds) {
-            $name = $perm->name;
-            $isFaculty = str_contains($name, 'faculty');
-            if ($isFaculty && !$usedIds->contains($perm->id)) {
-                $usedIds->push($perm->id);
-                return true;
-            }
-            return false;
-        })->sortBy(function ($permission) {
-            return $this->getPermissionOrder($permission->name, 'faculty');
-        });
+        // Define the order of resource types
+        $resourceOrder = [
+            'sector',
+            'unit',
+            'position',
+            'unit-position',  // Position Whitelist
+            'academic-rank',
+            'staff-grade',
+        ];
         
-        if ($facultyPerms->isNotEmpty()) {
-            $sorted = $sorted->merge($facultyPerms);
+        foreach ($resourceOrder as $resourceType) {
+            $resourcePerms = $permissions->filter(function ($perm) use ($usedIds, $resourceType) {
+                $name = $perm->name;
+                $matches = $this->matchesResourceType($name, $resourceType);
+                if ($matches && !$usedIds->contains($perm->id)) {
+                    $usedIds->push($perm->id);
+                    return true;
+                }
+                return false;
+            })->sortBy(function ($permission) use ($resourceType) {
+                return $this->getPermissionOrder($permission->name, $resourceType);
+            });
+            
+            if ($resourcePerms->isNotEmpty()) {
+                $sorted = $sorted->merge($resourcePerms);
+            }
         }
         
-        // 2. Department permissions
-        $deptPerms = $permissions->filter(function ($perm) use ($usedIds) {
-            $name = $perm->name;
-            $isDepartment = str_contains($name, 'department') && 
-                           !str_contains($name, 'organizational-log');
-            if ($isDepartment && !$usedIds->contains($perm->id)) {
-                $usedIds->push($perm->id);
-                return true;
-            }
-            return false;
+        // Add any remaining permissions that weren't matched
+        $remainingPerms = $permissions->filter(function ($perm) use ($usedIds) {
+            return !$usedIds->contains($perm->id);
         })->sortBy(function ($permission) {
-            return $this->getPermissionOrder($permission->name, 'department');
+            return $this->getPermissionOrder($permission->name, 'other');
         });
         
-        if ($deptPerms->isNotEmpty()) {
-            $sorted = $sorted->merge($deptPerms);
-        }
-        
-        // 3. Office permissions
-        $officePerms = $permissions->filter(function ($perm) use ($usedIds) {
-            $name = $perm->name;
-            $isOffice = str_contains($name, 'office');
-            if ($isOffice && !$usedIds->contains($perm->id)) {
-                $usedIds->push($perm->id);
-                return true;
-            }
-            return false;
-        })->sortBy(function ($permission) {
-            return $this->getPermissionOrder($permission->name, 'office');
-        });
-        
-        if ($officePerms->isNotEmpty()) {
-            $sorted = $sorted->merge($officePerms);
-        }
-        
-        // 4. Position permissions
-        $positionPerms = $permissions->filter(function ($perm) use ($usedIds) {
-            $name = $perm->name;
-            $isPosition = str_contains($name, 'position');
-            if ($isPosition && !$usedIds->contains($perm->id)) {
-                $usedIds->push($perm->id);
-                return true;
-            }
-            return false;
-        })->sortBy(function ($permission) {
-            return $this->getPermissionOrder($permission->name, 'position');
-        });
-        
-        if ($positionPerms->isNotEmpty()) {
-            $sorted = $sorted->merge($positionPerms);
-        }
-        
-        // 5. View organizational log (last)
-        $logPerms = $permissions->filter(function ($perm) use ($usedIds) {
-            $name = $perm->name;
-            $isLog = str_contains($name, 'organizational-log');
-            if ($isLog && !$usedIds->contains($perm->id)) {
-                $usedIds->push($perm->id);
-                return true;
-            }
-            return false;
-        });
-        
-        if ($logPerms->isNotEmpty()) {
-            $sorted = $sorted->merge($logPerms);
+        if ($remainingPerms->isNotEmpty()) {
+            $sorted = $sorted->merge($remainingPerms);
         }
         
         // Add resource type metadata to each permission for frontend separator detection
@@ -449,24 +397,50 @@ class RoleController extends Controller
     }
     
     /**
+     * Check if permission name matches a resource type
+     */
+    private function matchesResourceType($name, $resourceType)
+    {
+        switch ($resourceType) {
+            case 'sector':
+                return str_contains($name, '-sector') && !str_contains($name, 'unit');
+            case 'unit':
+                return str_contains($name, '-unit') && !str_contains($name, 'unit-position');
+            case 'position':
+                return str_contains($name, '-position') && !str_contains($name, 'unit-position');
+            case 'unit-position':
+                return str_contains($name, 'unit-position');
+            case 'academic-rank':
+                return str_contains($name, 'academic-rank');
+            case 'staff-grade':
+                return str_contains($name, 'staff-grade');
+            default:
+                return false;
+        }
+    }
+    
+    /**
      * Determine resource type from permission name
      */
     private function getResourceType($name)
     {
-        if (str_contains($name, 'faculty')) {
-            return 'faculty';
+        if (str_contains($name, 'unit-position')) {
+            return 'unit-position';
         }
-        if (str_contains($name, 'department')) {
-            return 'department';
+        if (str_contains($name, '-sector')) {
+            return 'sector';
         }
-        if (str_contains($name, 'office')) {
-            return 'office';
+        if (str_contains($name, '-unit')) {
+            return 'unit';
         }
-        if (str_contains($name, 'position')) {
+        if (str_contains($name, '-position')) {
             return 'position';
         }
-        if (str_contains($name, 'organizational-log')) {
-            return 'log';
+        if (str_contains($name, 'academic-rank')) {
+            return 'academic-rank';
+        }
+        if (str_contains($name, 'staff-grade')) {
+            return 'staff-grade';
         }
         return 'other';
     }

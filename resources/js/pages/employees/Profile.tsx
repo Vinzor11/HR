@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import EmployeeDocuments from '@/components/EmployeeDocuments';
+import { PromotionsPanel } from '@/components/employee/PromotionsPanel';
 import { useState, useEffect, useRef } from 'react';
 import {
   User,
@@ -47,8 +48,7 @@ interface Employee {
   salary?: number | string;
   date_hired?: string;
   date_regularized?: string;
-  department?: { faculty_name?: string; name?: string; type?: string };
-  position?: { pos_name?: string; name?: string };
+  // Legacy fields removed - use primary_designation instead
   birth_date?: string;
   birth_place?: string;
   sex?: string;
@@ -100,6 +100,13 @@ interface Employee {
   references?: any[];
   other_information?: any;
   questionnaire?: any[];
+  primary_designation?: {
+    id: number;
+    unit?: { id: number; name: string; unit_type?: string } | null;
+    position?: { id: number; pos_name: string } | null;
+    academic_rank?: { id: number; name: string } | null;
+    staff_grade?: { id: number; name: string } | null;
+  } | null;
   [key: string]: any;
 }
 
@@ -116,6 +123,8 @@ interface EmploymentHistoryItem {
 interface ProfilePageProps {
   employee: Employee;
   employmentHistory?: EmploymentHistoryItem[];
+  canEdit?: boolean;
+  canPromote?: boolean;
 }
 
 const formatDate = (dateString: string | null | undefined): string => {
@@ -174,7 +183,25 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-export default function EmployeeProfile({ employee, employmentHistory = [] }: ProfilePageProps) {
+export default function EmployeeProfile({ 
+  employee, 
+  employmentHistory = [], 
+  canEdit = false, 
+  canPromote = false
+}: ProfilePageProps) {
+  // Safety check: ensure employee exists and has an ID
+  if (!employee || !employee.id) {
+    return (
+      <AppLayout>
+        <Card className="p-4">
+          <div className="text-center py-8 text-muted-foreground">
+            <p>Employee data not available. Please refresh the page.</p>
+          </div>
+        </Card>
+      </AppLayout>
+    )
+  }
+
   const fullName = [
     employee.surname,
     employee.first_name,
@@ -189,11 +216,8 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
     { title: fullName, href: '#' },
   ];
 
-  const facultyName =
-    employee.department?.faculty_name ||
-    employee.department?.name ||
-    (employee.department?.type === 'administrative' ? 'Office' : 'Department') ||
-    'N/A';
+  // Get unit name from primary designation
+  const unitName = employee.primary_designation?.unit?.name || 'No Unit Assigned';
 
   const hasGovernmentIds = Boolean(
     employee.gsis_id_no ||
@@ -228,6 +252,8 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
   const quickLinks = [
     { id: 'personal-information', label: 'Personal Information', icon: User, show: true },
     { id: 'contact-information', label: 'Contact Information', icon: Phone, show: true },
+    { id: 'assignments', label: 'Designation', icon: Building2, show: true },
+    { id: 'promotions', label: 'Promotion History', icon: Award, show: true },
     { id: 'employment-history', label: 'Employment History', icon: History, show: hasEmploymentHistory },
     { id: 'government-ids', label: 'Government IDs', icon: CreditCard, show: hasGovernmentIds },
     { id: 'family-background', label: 'Family Background', icon: Users, show: hasFamilyBackground },
@@ -333,10 +359,10 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
                       </div>
                       <div className="space-y-1">
                         <p className="text-foreground text-xl font-semibold">
-                          {employee.position?.pos_name || employee.position?.name || 'No Position'}
+                          {employee.primary_designation?.position?.pos_name || 'No Position'}
                         </p>
                         <p className="text-muted-foreground text-base">
-                          {employee.department?.faculty_name || employee.department?.name || (employee.department?.type === 'administrative' ? 'No Office' : 'No Department')}
+                          {employee.primary_designation?.unit?.name || 'No Unit Assigned'}
                         </p>
                       </div>
                     </div>
@@ -366,8 +392,8 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
                         <Landmark className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Faculty / Office</p>
-                        <p className="text-sm font-semibold text-foreground truncate">{facultyName}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Unit</p>
+                        <p className="text-sm font-semibold text-foreground truncate">{unitName}</p>
                       </div>
                     </div>
                       {employee.employment_status && (
@@ -563,6 +589,91 @@ export default function EmployeeProfile({ employee, employmentHistory = [] }: Pr
                 </div>
               </CardContent>
             </Card>
+
+            {/* Assignments Summary - Read Only */}
+            <div id="assignments">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Briefcase className="h-5 w-5" />
+                        Current Designation
+                      </CardTitle>
+                      <CardDescription>
+                        Primary unit and position designation
+                      </CardDescription>
+                    </div>
+                    <Link href={`/employees/${employee.id}/designations/manage`}>
+                      <Button variant="outline" size="sm">
+                        Manage Designations
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </Button>
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {employee.primary_designation ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="default">
+                          <Award className="h-3 w-3 mr-1" />
+                          Primary
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Position</label>
+                          <p className="text-sm font-medium">{employee.primary_designation.position?.pos_name || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unit</label>
+                          <p className="text-sm font-medium">{employee.primary_designation.unit?.name || 'N/A'}</p>
+                        </div>
+                        {employee.primary_designation.academic_rank && (
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Academic Rank</label>
+                            <p className="text-sm font-medium">{employee.primary_designation.academic_rank.name}</p>
+                          </div>
+                        )}
+                        {employee.primary_designation.staff_grade && (
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Staff Grade</label>
+                            <p className="text-sm font-medium">{employee.primary_designation.staff_grade.name}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <Building2 className="h-8 w-8 mx-auto text-muted-foreground opacity-50 mb-2" />
+                      <p className="text-sm text-muted-foreground">No primary designation</p>
+                      <Link href={`/employees/${employee.id}/designations/manage`}>
+                        <Button variant="link" size="sm">
+                          Add Designation
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Promotions Panel */}
+            <div id="promotions">
+              {employee?.id ? (
+                <PromotionsPanel 
+                  employeeId={employee.id} 
+                  canPromote={canPromote} 
+                />
+              ) : (
+                <Card className="p-4">
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>Employee ID not available. Please refresh the page.</p>
+                  </div>
+                </Card>
+              )}
+            </div>
 
             {/* Employment History Timeline */}
             {hasEmploymentHistory && (

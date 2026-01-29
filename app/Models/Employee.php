@@ -24,11 +24,12 @@ class Employee extends Model
         'status',
         'employment_status',
         'employee_type',
-        'department_id',
-        'position_id',
+        'primary_designation_id',
         'salary',
         'date_hired',
         'date_regularized',
+        'start_date',
+        'end_date',
         'birth_date',
         'birth_place',
         'sex',
@@ -78,18 +79,14 @@ class Employee extends Model
         'dual_citizenship' => 'boolean',
         'date_hired' => 'date',
         'date_regularized' => 'date',
+        'start_date' => 'date',
+        'end_date' => 'date',
         'salary' => 'decimal:2',
     ];
 
-    public function department()
-    {
-        return $this->belongsTo(Department::class);
-    }
-
-    public function position()
-    {
-        return $this->belongsTo(Position::class);
-    }
+    // Legacy relationships removed - use designations() and primaryDesignation() instead
+    // public function department() - use primaryDesignation()->unit instead
+    // public function position() - use primaryDesignation()->position instead
 
     public function user()
     {
@@ -157,5 +154,25 @@ class Employee extends Model
     public function documents()
     {
         return $this->hasMany(EmployeeDocument::class)->orderBy('created_at', 'desc');
+    }
+
+    public function primaryDesignation()
+    {
+        return $this->belongsTo(EmployeeDesignation::class, 'primary_designation_id');
+    }
+
+    public function designations()
+    {
+        return $this->hasMany(EmployeeDesignation::class, 'employee_id', 'id');
+    }
+
+    public function promotions()
+    {
+        return $this->hasMany(EmployeePromotion::class, 'employee_id', 'id');
+    }
+
+    public function rankPromotions()
+    {
+        return $this->hasMany(EmployeeRankPromotion::class, 'employee_id', 'id');
     }
 }

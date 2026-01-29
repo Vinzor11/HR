@@ -51,18 +51,6 @@ interface PaginationLink {
   url: string | null;
 }
 
-interface Department {
-  id: number;
-  faculty_name?: string;
-  name?: string;
-}
-
-interface Position {
-  id: number;
-  pos_name?: string;
-  name?: string;
-}
-
 interface Employee {
   id: string;
   surname: string;
@@ -74,8 +62,13 @@ interface Employee {
   employee_type: string;
   date_hired?: string;
   date_regularized?: string;
-  department: Department | null;
-  position: Position | null;
+  primary_designation?: {
+    id: number;
+    unit?: { id: number; name: string; unit_type?: string; sector?: { id: number; name: string } } | null;
+    position?: { id: number; pos_name: string } | null;
+    academic_rank?: { id: number; name: string } | null;
+    staff_grade?: { id: number; name: string } | null;
+  } | null;
   mobile_no?: string;
   email_address?: string;
   birth_date?: string;
@@ -114,8 +107,8 @@ const LOCAL_STORAGE_KEY = 'employeeTableVisibleColumns';
 const CORE_COLUMNS = [
   'id',
   'fullname',
-  'position.pos_name',
-  'department.faculty_name',
+  'primary_designation.position.pos_name',
+  'primary_designation.unit.name',
   'status',
   'employment_status',
   'employee_type',
@@ -131,16 +124,12 @@ const COLUMN_GROUP_LABELS: Record<string, string> = {
 };
 
 export default function Index() {
-  const { employees, filters, flash, departments = [], positions = [], auth, filter_fields_config } = usePage<{
+  const { employees, filters, flash, auth, filter_fields_config } = usePage<{
     employees: EmployeeData;
     filters?: {
       search?: string;
       per_page?: number;
       status?: string;
-      department_id?: string;
-      department_ids?: string[];
-      position_id?: string;
-      position_ids?: string[];
       employee_type?: string;
       show_deleted?: boolean;
       sort_by?: string;
@@ -148,8 +137,6 @@ export default function Index() {
       advanced_filters?: FilterCondition[];
     };
     flash?: { success?: string; error?: string };
-    departments?: Department[];
-    positions?: Position[];
     auth?: { permissions?: string[] };
     filter_fields_config?: Record<string, Record<string, { type: string; label: string; options?: string[] }>>;
   }>().props;
@@ -187,42 +174,7 @@ export default function Index() {
     }
     return filters?.status || '';
   });
-  const [departmentFilter, setDepartmentFilter] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('employees_filter_department');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : (parsed ? [String(parsed)] : []);
-        } catch {
-          return saved ? [saved] : [];
-        }
-      }
-    }
-    // Handle both old single value and new array format from backend
-    if (filters?.department_ids && Array.isArray(filters.department_ids)) {
-      return filters.department_ids.map(String);
-    }
-    return filters?.department_id ? [String(filters.department_id)] : [];
-  });
-  const [positionFilter, setPositionFilter] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('employees_filter_position');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          return Array.isArray(parsed) ? parsed : (parsed ? [String(parsed)] : []);
-        } catch {
-          return saved ? [saved] : [];
-        }
-      }
-    }
-    // Handle both old single value and new array format from backend
-    if (filters?.position_ids && Array.isArray(filters.position_ids)) {
-      return filters.position_ids.map(String);
-    }
-    return filters?.position_id ? [String(filters.position_id)] : [];
-  });
+  // Legacy department/position filters removed - use advanced filters instead
   const [employeeTypeFilter, setEmployeeTypeFilter] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('employees_filter_employee_type');
@@ -351,8 +303,7 @@ export default function Index() {
     return (
       employees?.data?.map((employee) => ({
         ...employee,
-        department: employee.department || null,
-        position: employee.position || null,
+        primary_designation: employee.primary_designation || null,
       })) || []
     );
   }, [employees?.data]);
@@ -377,13 +328,10 @@ export default function Index() {
       search?: string;
       search_mode?: string;
       status?: string;
-      department_id?: string;
-      position_id?: string;
       employee_type?: string;
       per_page?: number;
       sort_by?: string;
       sort_order?: string;
-      need_dropdowns?: boolean;
       show_deleted?: boolean;
     } = {}) => {
       setIsLoading(true);
@@ -393,11 +341,6 @@ export default function Index() {
         search: params.search !== undefined ? params.search : searchTerm,
         search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
         status: params.status !== undefined ? params.status : statusFilter,
-        department_ids: params.department_ids !== undefined ? params.department_ids : (Array.isArray(departmentFilter) ? departmentFilter : (departmentFilter ? [departmentFilter] : [])),
-        position_ids: params.position_ids !== undefined ? params.position_ids : (Array.isArray(positionFilter) ? positionFilter : (positionFilter ? [positionFilter] : [])),
-        // Keep backward compatibility
-        department_id: params.department_id !== undefined ? params.department_id : (Array.isArray(departmentFilter) && departmentFilter.length === 1 ? departmentFilter[0] : ''),
-        position_id: params.position_id !== undefined ? params.position_id : (Array.isArray(positionFilter) && positionFilter.length === 1 ? positionFilter[0] : ''),
         employee_type: params.employee_type !== undefined ? params.employee_type : employeeTypeFilter,
         show_deleted: params.show_deleted !== undefined ? params.show_deleted : showDeleted,
         sort_by: params.sort_by || filters?.sort_by || 'created_at',
@@ -406,7 +349,6 @@ export default function Index() {
       };
 
       // Only add advanced_filters if there are valid filters
-      // Filter out incomplete filters (no field selected or no value)
       const validFilters = (advancedFilters || []).filter(f => {
         if (!f || !f.field) return false;
         if (['is_null', 'is_not_null'].includes(f.operator)) return true;
@@ -415,15 +357,8 @@ export default function Index() {
         return true;
       });
       
-      // CRITICAL: Only add advanced_filters if we have valid filters
-      // If empty, explicitly DO NOT include it in queryParams
       if (validFilters.length > 0) {
         queryParams.advanced_filters = JSON.stringify(validFilters);
-      }
-
-      // Request dropdowns if filters are active
-      if (statusFilter || (departmentFilter && departmentFilter.length > 0) || (positionFilter && positionFilter.length > 0) || employeeTypeFilter || params.need_dropdowns) {
-        queryParams.need_dropdowns = true;
       }
 
       // Remove empty filters
@@ -444,7 +379,7 @@ export default function Index() {
         }
       );
     },
-    [searchTerm, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, perPage, visibleColumns, searchMode, employees?.meta?.current_page, advancedFilters]
+    [searchTerm, statusFilter, employeeTypeFilter, showDeleted, perPage, visibleColumns, searchMode, employees?.meta?.current_page, advancedFilters]
   );
 
   // Debounced search
@@ -651,35 +586,7 @@ export default function Index() {
     }
   };
 
-  const updateDepartmentFilter = (value: string[]) => {
-    setDepartmentFilter(value);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('employees_filter_department', JSON.stringify(value));
-    }
-  };
-
-  const updatePositionFilter = (value: string[]) => {
-    setPositionFilter(value);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('employees_filter_position', JSON.stringify(value));
-    }
-  };
-
-  const toggleDepartmentFilter = (deptId: string) => {
-    const current = departmentFilter || [];
-    const updated = current.includes(deptId)
-      ? current.filter(id => id !== deptId)
-      : [...current, deptId];
-    updateDepartmentFilter(updated);
-  };
-
-  const togglePositionFilter = (posId: string) => {
-    const current = positionFilter || [];
-    const updated = current.includes(posId)
-      ? current.filter(id => id !== posId)
-      : [...current, posId];
-    updatePositionFilter(updated);
-  };
+  // Legacy department/position filter functions removed
 
   const updateEmployeeTypeFilter = (value: string) => {
     setEmployeeTypeFilter(value);
@@ -698,8 +605,6 @@ export default function Index() {
   // Clear all filters
   const clearFilters = () => {
     updateStatusFilter('');
-    updateDepartmentFilter([]);
-    updatePositionFilter([]);
     updateEmployeeTypeFilter('');
     updateShowDeleted(false);
     setAdvancedFilters([]);
@@ -708,8 +613,6 @@ export default function Index() {
     }
     triggerFetch({
       status: '',
-      department_ids: [],
-      position_ids: [],
       employee_type: '',
       show_deleted: false,
       page: 1,
@@ -757,14 +660,6 @@ export default function Index() {
       visible_columns: JSON.stringify(visibleColumns),
     };
     
-    // Add department/position filters if they exist
-    if (Array.isArray(departmentFilter) && departmentFilter.length > 0) {
-      queryParams.department_ids = departmentFilter;
-    }
-    if (Array.isArray(positionFilter) && positionFilter.length > 0) {
-      queryParams.position_ids = positionFilter;
-    }
-    
     // Only add advanced_filters if there are valid filters
     const validFilters = (filtersToApply || []).filter(f => {
       if (!f || !f.field) return false;
@@ -801,7 +696,7 @@ export default function Index() {
         onFinish: () => setIsLoading(false),
       }
     );
-  }, [advancedFilters, perPage, searchTerm, searchMode, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
+  }, [advancedFilters, perPage, searchTerm, searchMode, statusFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
 
   const handleClearAdvancedFilters = useCallback(() => {
     // Clear filters in state FIRST
@@ -826,14 +721,6 @@ export default function Index() {
       visible_columns: JSON.stringify(visibleColumns),
     };
     
-    // Add department/position filters if they exist
-    if (Array.isArray(departmentFilter) && departmentFilter.length > 0) {
-      cleanQueryParams.department_ids = departmentFilter;
-    }
-    if (Array.isArray(positionFilter) && positionFilter.length > 0) {
-      cleanQueryParams.position_ids = positionFilter;
-    }
-    
     // Remove empty values
     Object.keys(cleanQueryParams).forEach((key) => {
       if (cleanQueryParams[key] === '' || cleanQueryParams[key] === null || cleanQueryParams[key] === undefined || 
@@ -842,20 +729,17 @@ export default function Index() {
       }
     });
     
-    // CRITICAL: Do NOT include advanced_filters at all
-    // This ensures the backend doesn't process any filters
-    
     router.get(
       route('employees.index'),
       cleanQueryParams,
       {
-        preserveState: false, // Don't preserve state to get fresh data
+        preserveState: false,
         preserveScroll: false,
-        replace: true, // Replace URL to remove advanced_filters from query string
+        replace: true,
         onFinish: () => setIsLoading(false),
       }
     );
-  }, [perPage, searchTerm, searchMode, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
+  }, [perPage, searchTerm, searchMode, statusFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
 
   const removeAdvancedFilter = useCallback((filterId: string) => {
     // Filter out the removed filter
@@ -887,14 +771,6 @@ export default function Index() {
       sort_order: sortOrder,
       visible_columns: JSON.stringify(visibleColumns),
     };
-    
-    // Add department/position filters if they exist
-    if (Array.isArray(departmentFilter) && departmentFilter.length > 0) {
-      queryParams.department_ids = departmentFilter;
-    }
-    if (Array.isArray(positionFilter) && positionFilter.length > 0) {
-      queryParams.position_ids = positionFilter;
-    }
     
     // Only add advanced_filters if there are valid filters remaining
     const validFilters = updated.filter(f => {
@@ -932,7 +808,7 @@ export default function Index() {
         onFinish: () => setIsLoading(false),
       }
     );
-  }, [advancedFilters, perPage, searchTerm, searchMode, statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
+  }, [advancedFilters, perPage, searchTerm, searchMode, statusFilter, employeeTypeFilter, showDeleted, sortBy, sortOrder, visibleColumns]);
 
   // Remove individual filters
   const removeStatusFilter = () => {
@@ -940,15 +816,7 @@ export default function Index() {
     triggerFetch({ status: '', page: 1 });
   };
 
-  const removeDepartmentFilter = () => {
-    updateDepartmentFilter([]);
-    triggerFetch({ department_ids: [], page: 1 });
-  };
-
-  const removePositionFilter = () => {
-    updatePositionFilter([]);
-    triggerFetch({ position_ids: [], page: 1 });
-  };
+  // Legacy removeDepartmentFilter and removePositionFilter removed
 
   const removeEmployeeTypeFilter = () => {
     updateEmployeeTypeFilter('');
@@ -1006,13 +874,11 @@ export default function Index() {
   const activeFiltersCount = useMemo(() => {
     return (
       (statusFilter ? 1 : 0) +
-      (departmentFilter && departmentFilter.length > 0 ? 1 : 0) +
-      (positionFilter && positionFilter.length > 0 ? 1 : 0) +
       (employeeTypeFilter ? 1 : 0) +
       (showDeleted ? 1 : 0) +
       (advancedFilters && advancedFilters.length > 0 ? advancedFilters.filter(f => f.field).length : 0)
     );
-  }, [statusFilter, departmentFilter, positionFilter, employeeTypeFilter, showDeleted, advancedFilters]);
+  }, [statusFilter, employeeTypeFilter, showDeleted, advancedFilters]);
 
   // Pagination data
   const currentPage = employees?.meta?.current_page || 1;
@@ -1032,7 +898,7 @@ export default function Index() {
               <div>
                 <h1 className="text-xl md:text-2xl font-semibold text-foreground mb-1">Employee Records</h1>
                 <p className="text-xs md:text-sm text-muted-foreground">
-                  {showDeleted ? "Viewing deleted employee records. You can restore or permanently delete them." : "Manage employee information and track organizational assignments."}
+                  {showDeleted ? "Viewing deleted employee records. You can restore or permanently delete them." : "Manage employee information and track organizational designations."}
                 </p>
               </div>
               {hasPermission(permissions, 'create-employee') && (
@@ -1328,39 +1194,6 @@ export default function Index() {
                     Status: {statusFilter}
                     <button
                       onClick={removeStatusFilter}
-                      className="ml-1 hover:bg-muted rounded-full p-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                )}
-                {departmentFilter && departmentFilter.length > 0 && (
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    Department{departmentFilter.length > 1 ? 's' : ''}:{' '}
-                    {departmentFilter.length === 1
-                      ? (departments.find((d) => d.id.toString() === departmentFilter[0]) as any)
-                          ?.faculty_name ||
-                        departments.find((d) => d.id.toString() === departmentFilter[0])?.name ||
-                        departmentFilter[0]
-                      : `${departmentFilter.length} selected`}
-                    <button
-                      onClick={removeDepartmentFilter}
-                      className="ml-1 hover:bg-muted rounded-full p-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                )}
-                {positionFilter && positionFilter.length > 0 && (
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    Position{positionFilter.length > 1 ? 's' : ''}:{' '}
-                      {positionFilter.length === 1
-                      ? (positions.find((p) => p.id.toString() === positionFilter[0]) as any)?.pos_name ||
-                        positions.find((p) => p.id.toString() === positionFilter[0])?.name ||
-                        String(positionFilter[0])
-                      : `${positionFilter.length} selected`}
-                    <button
-                      onClick={removePositionFilter}
                       className="ml-1 hover:bg-muted rounded-full p-0.5"
                     >
                       <X className="h-3 w-3" />

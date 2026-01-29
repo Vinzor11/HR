@@ -3,14 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\TrainingRequest;
-use App\Models\Department;
 use App\Models\Employee;
-use App\Models\Faculty;
 use App\Models\Position;
 use App\Models\RequestSubmission;
 use App\Models\RequestType;
+use App\Models\Sector;
 use App\Models\Training;
 use App\Models\TrainingApplication;
+use App\Models\Unit;
 use App\Services\AuditLogService;
 use App\Services\TrainingRequestBuilderService;
 use App\Services\TrainingEligibilityService;
@@ -80,8 +80,8 @@ class TrainingController extends Controller
         $sortOrder = strtolower($sortOrder) === 'desc' ? 'desc' : 'asc';
 
         $trainings = Training::with([
-            'allowedFaculties:id,name',
-            'allowedDepartments:id,faculty_name',
+            'allowedSectors:id,name',
+            'allowedUnits:id,name',
             'allowedPositions:id,pos_name',
         ])
             ->when($showDeleted, function ($query) {
@@ -108,61 +108,40 @@ class TrainingController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        $faculties = Faculty::orderBy('name')
+        $sectors = Sector::orderBy('name')
             ->get(['id', 'name', 'code'])
-            ->map(fn ($faculty) => [
-                'id' => $faculty->id,
-                'label' => $faculty->name,
-                'name' => $faculty->name,
-                'value' => (string) $faculty->id,
-                'code' => $faculty->code,
+            ->map(fn ($sector) => [
+                'id' => $sector->id,
+                'label' => $sector->name,
+                'name' => $sector->name,
+                'value' => (string) $sector->id,
+                'code' => $sector->code,
             ]);
 
-        $departments = Department::with('faculty:id,name')
-            ->orderBy('faculty_name')
-            ->get(['id', 'faculty_name', 'faculty_id', 'name', 'type'])
-            ->map(fn ($department) => [
-                'id' => $department->id,
-                'label' => $department->faculty_name,
-                'name' => $department->faculty_name,
-                'value' => (string) $department->id,
-                'faculty_id' => $department->faculty_id,
-                'type' => $department->type ?? 'academic',
+        $units = Unit::with('sector:id,name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'sector_id', 'unit_type'])
+            ->map(fn ($unit) => [
+                'id' => $unit->id,
+                'label' => $unit->name,
+                'name' => $unit->name,
+                'value' => (string) $unit->id,
+                'sector_id' => $unit->sector_id,
+                'unit_type' => $unit->unit_type ?? 'office',
             ]);
 
         // Get scoped positions based on user's access
-        $manageableDeptIds = $this->scopeService->getManageableDepartmentIds($request->user());
-        $manageableFacultyIds = $this->scopeService->getManageableFacultyIds($request->user());
-        $positionsQuery = Position::with('department:id,name')
+        // Note: This may need to be updated based on new scope service methods
+        $positionsQuery = Position::with('sector:id,name')
             ->orderBy('pos_name');
         
-        if ($manageableDeptIds === null && $manageableFacultyIds === null) {
-            // Super admin/admin - no filter
-        } elseif (!empty($manageableDeptIds) || !empty($manageableFacultyIds)) {
-            $positionsQuery->where(function ($q) use ($manageableDeptIds, $manageableFacultyIds) {
-                if (!empty($manageableDeptIds)) {
-                    $q->whereIn('department_id', $manageableDeptIds);
-                }
-                if (!empty($manageableFacultyIds)) {
-                    $q->orWhere(function ($q2) use ($manageableFacultyIds) {
-                        $q2->whereIn('faculty_id', $manageableFacultyIds)
-                           ->whereNull('department_id');
-                    });
-                }
-            });
-        } else {
-            // No access - return empty
-            $positionsQuery->whereRaw('1 = 0');
-        }
-        
-        $positions = $positionsQuery->get(['id', 'pos_name', 'department_id', 'faculty_id'])
+        $positions = $positionsQuery->get(['id', 'pos_name', 'sector_id'])
             ->map(fn ($position) => [
                 'id' => $position->id,
                 'label' => $position->pos_name,
                 'name' => $position->pos_name,
                 'value' => (string) $position->id,
-                'department_id' => $position->department_id,
-                'faculty_id' => $position->faculty_id,
+                'sector_id' => $position->sector_id,
             ]);
 
         $requestTypes = RequestType::where('is_published', true)
@@ -178,8 +157,8 @@ class TrainingController extends Controller
         return Inertia::render('trainings/index', [
             'trainings' => $trainings,
             'formOptions' => [
-                'faculties' => $faculties->values(),
-                'departments' => $departments->values(),
+                'sectors' => $sectors->values(),
+                'units' => $units->values(),
                 'positions' => $positions->values(),
                 'requestTypes' => $requestTypes->values(),
             ],
@@ -197,11 +176,11 @@ class TrainingController extends Controller
         abort_unless($request->user()->can('create-training'), 403, 'Unauthorized action.');
         
         $validated = $request->validated();
-        $facultyIds = $validated['faculty_ids'] ?? [];
-        $departmentIds = $validated['department_ids'] ?? [];
+        $sectorIds = $validated['sector_ids'] ?? [];
+        $unitIds = $validated['unit_ids'] ?? [];
         $positionIds = $validated['position_ids'] ?? [];
 
-        $trainingData = collect($validated)->except(['faculty_ids', 'department_ids', 'position_ids'])->toArray();
+        $trainingData = collect($validated)->except(['sector_ids', 'unit_ids', 'position_ids'])->toArray();
 
         $trainingData['requires_approval'] = $request->boolean('requires_approval', false);
         $trainingData['request_type_id'] = $request->input('request_type_id');
@@ -213,8 +192,8 @@ class TrainingController extends Controller
             $training->reference_number = $this->generateReferenceNumber($training);
             $training->save();
         }
-        $training->allowedFaculties()->sync($facultyIds);
-        $training->allowedDepartments()->sync($departmentIds);
+        $training->allowedSectors()->sync($sectorIds);
+        $training->allowedUnits()->sync($unitIds);
         $training->allowedPositions()->sync($positionIds);
 
         // Log training creation
@@ -239,11 +218,11 @@ class TrainingController extends Controller
         abort_unless($request->user()->can('edit-training'), 403, 'Unauthorized action.');
         
         $validated = $request->validated();
-        $facultyIds = $validated['faculty_ids'] ?? [];
-        $departmentIds = $validated['department_ids'] ?? [];
+        $sectorIds = $validated['sector_ids'] ?? [];
+        $unitIds = $validated['unit_ids'] ?? [];
         $positionIds = $validated['position_ids'] ?? [];
 
-        $trainingData = collect($validated)->except(['faculty_ids', 'department_ids', 'position_ids'])->toArray();
+        $trainingData = collect($validated)->except(['sector_ids', 'unit_ids', 'position_ids'])->toArray();
 
         $trainingData['requires_approval'] = $request->boolean('requires_approval', false) ?? false;
         $trainingData['request_type_id'] = $request->input('request_type_id');
@@ -258,19 +237,19 @@ class TrainingController extends Controller
         $original = $training->getOriginal();
         
         // Get current relationships BEFORE sync
-        $oldFacultyIds = $training->allowedFaculties()->pluck('faculties.id')->toArray();
-        $oldDepartmentIds = $training->allowedDepartments()->pluck('departments.id')->toArray();
+        $oldSectorIds = $training->allowedSectors()->pluck('sectors.id')->toArray();
+        $oldUnitIds = $training->allowedUnits()->pluck('units.id')->toArray();
         $oldPositionIds = $training->allowedPositions()->pluck('positions.id')->toArray();
         
         $training->update($trainingData);
         $training->refresh(); // Refresh to get updated request_type_id value
-        $training->allowedFaculties()->sync($facultyIds);
-        $training->allowedDepartments()->sync($departmentIds);
+        $training->allowedSectors()->sync($sectorIds);
+        $training->allowedUnits()->sync($unitIds);
         $training->allowedPositions()->sync($positionIds);
         
         // Refresh to get updated relationships
         $training->refresh();
-        $training->load(['allowedFaculties', 'allowedDepartments', 'allowedPositions']);
+        $training->load(['allowedSectors', 'allowedUnits', 'allowedPositions']);
 
         // Collect all changes for a single audit log entry
         $oldValues = [];
@@ -325,25 +304,24 @@ class TrainingController extends Controller
             }
         }
         
-        // Also track changes to relationships (faculties, departments, positions)
-        $newFacultyIds = $training->allowedFaculties->pluck('id')->toArray();
-        $newDepartmentIds = $training->allowedDepartments->pluck('id')->toArray();
+        // Also track changes to relationships (sectors, units, positions)
+        $newSectorIds = $training->allowedSectors->pluck('id')->toArray();
+        $newUnitIds = $training->allowedUnits->pluck('id')->toArray();
         $newPositionIds = $training->allowedPositions->pluck('id')->toArray();
         
-        // Log faculty changes - show added/removed
-        if ($oldFacultyIds !== $newFacultyIds) {
+        // Log sector changes - show added/removed
+        if ($oldSectorIds !== $newSectorIds) {
             try {
-                // Get faculty names
-                $oldFacultyNames = !empty($oldFacultyIds) 
-                    ? Faculty::whereIn('id', $oldFacultyIds)->pluck('name')->toArray()
+                $oldSectorNames = !empty($oldSectorIds) 
+                    ? Sector::whereIn('id', $oldSectorIds)->pluck('name')->toArray()
                     : [];
-                $newFacultyNames = !empty($newFacultyIds)
-                    ? Faculty::whereIn('id', $newFacultyIds)->pluck('name')->toArray()
+                $newSectorNames = !empty($newSectorIds)
+                    ? Sector::whereIn('id', $newSectorIds)->pluck('name')->toArray()
                     : [];
                 
                 // Calculate added and removed
-                $added = array_diff($newFacultyNames, $oldFacultyNames);
-                $removed = array_diff($oldFacultyNames, $newFacultyNames);
+                $added = array_diff($newSectorNames, $oldSectorNames);
+                $removed = array_diff($oldSectorNames, $newSectorNames);
                 
                 $changeParts = [];
                 if (!empty($added)) {
@@ -354,29 +332,28 @@ class TrainingController extends Controller
                 }
                 
                 if (!empty($changeParts)) {
-                    $oldValues['allowed_faculties'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
-                    $newValues['allowed_faculties'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
-                    $changeDescriptions[] = "Allowed Faculties: " . implode('; ', $changeParts);
+                    $oldValues['allowed_sectors'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $newValues['allowed_sectors'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $changeDescriptions[] = "Allowed Sectors: " . implode('; ', $changeParts);
                 }
             } catch (\Exception $e) {
-                \Log::error('Failed to process faculty changes: ' . $e->getMessage());
+                \Log::error('Failed to process sector changes: ' . $e->getMessage());
             }
         }
         
-        // Log department changes - show added/removed
-        if ($oldDepartmentIds !== $newDepartmentIds) {
+        // Log unit changes - show added/removed
+        if ($oldUnitIds !== $newUnitIds) {
             try {
-                // Get department names
-                $oldDepartmentNames = !empty($oldDepartmentIds)
-                    ? Department::whereIn('id', $oldDepartmentIds)->pluck('faculty_name')->toArray()
+                $oldUnitNames = !empty($oldUnitIds) 
+                    ? Unit::whereIn('id', $oldUnitIds)->pluck('name')->toArray()
                     : [];
-                $newDepartmentNames = !empty($newDepartmentIds)
-                    ? Department::whereIn('id', $newDepartmentIds)->pluck('faculty_name')->toArray()
+                $newUnitNames = !empty($newUnitIds)
+                    ? Unit::whereIn('id', $newUnitIds)->pluck('name')->toArray()
                     : [];
                 
                 // Calculate added and removed
-                $added = array_diff($newDepartmentNames, $oldDepartmentNames);
-                $removed = array_diff($oldDepartmentNames, $newDepartmentNames);
+                $added = array_diff($newUnitNames, $oldUnitNames);
+                $removed = array_diff($oldUnitNames, $newUnitNames);
                 
                 $changeParts = [];
                 if (!empty($added)) {
@@ -387,12 +364,12 @@ class TrainingController extends Controller
                 }
                 
                 if (!empty($changeParts)) {
-                    $oldValues['allowed_departments'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
-                    $newValues['allowed_departments'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
-                    $changeDescriptions[] = "Allowed Departments: " . implode('; ', $changeParts);
+                    $oldValues['allowed_units'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $newValues['allowed_units'] = ['_change_type' => 'array_diff', '_added' => array_values($added), '_removed' => array_values($removed)];
+                    $changeDescriptions[] = "Allowed Units: " . implode('; ', $changeParts);
                 }
             } catch (\Exception $e) {
-                \Log::error('Failed to process department changes: ' . $e->getMessage());
+                \Log::error('Failed to process unit changes: ' . $e->getMessage());
             }
         }
         
@@ -535,7 +512,7 @@ class TrainingController extends Controller
         $employee = null;
 
         if ($user && $user->employee_id) {
-            $employee = Employee::with(['department:id,faculty_name,faculty_id', 'position:id,pos_name,faculty_id'])
+            $employee = Employee::with(['primaryDesignation.unit', 'primaryDesignation.position'])
                 ->find($user->employee_id);
         }
 
@@ -544,8 +521,8 @@ class TrainingController extends Controller
             : [];
 
         $trainings = Training::with([
-            'allowedFaculties:id,name',
-            'allowedDepartments:id,faculty_name',
+            'allowedSectors:id,name',
+            'allowedUnits:id,name',
             'allowedPositions:id,pos_name',
             'applications' => function ($query) {
                 $query->whereIn('status', ['Signed Up', 'Approved']);
@@ -574,13 +551,13 @@ class TrainingController extends Controller
                     'capacity' => $training->capacity,
                     'available_spots' => $availableSpots,
                     'has_capacity' => $hasCapacity,
-                    'allowed_faculties' => $training->allowedFaculties->map(fn ($faculty) => [
-                        'id' => $faculty->id,
-                        'name' => $faculty->name,
+                    'allowed_sectors' => $training->allowedSectors->map(fn ($sector) => [
+                        'id' => $sector->id,
+                        'name' => $sector->name,
                     ]),
-                    'allowed_departments' => $training->allowedDepartments->map(fn ($dept) => [
-                        'id' => $dept->id,
-                        'faculty_name' => $dept->faculty_name,
+                    'allowed_units' => $training->allowedUnits->map(fn ($unit) => [
+                        'id' => $unit->id,
+                        'name' => $unit->name,
                     ]),
                     'allowed_positions' => $training->allowedPositions->map(fn ($pos) => [
                         'id' => $pos->id,
@@ -599,10 +576,10 @@ class TrainingController extends Controller
                 ? [
                     'id' => $employee->id,
                     'name' => trim("{$employee->first_name} {$employee->surname}"),
-                    'department' => $employee->department?->faculty_name,
-                    'position' => $employee->position?->pos_name,
-                    'department_id' => $employee->department_id,
-                    'position_id' => $employee->position_id,
+                    'unit' => $employee->primaryDesignation?->unit?->name,
+                    'position' => $employee->primaryDesignation?->position?->pos_name,
+                    'unit_id' => $employee->primaryDesignation?->unit_id,
+                    'position_id' => $employee->primaryDesignation?->position_id,
                 ]
                 : null,
         ]);
@@ -619,11 +596,11 @@ class TrainingController extends Controller
 
         if ($user) {
             if ($user->employee_id) {
-                $employee = Employee::with(['department:id,faculty_id', 'position:id,faculty_id'])->find($user->employee_id);
+                $employee = Employee::with(['primaryDesignation.unit', 'primaryDesignation.position'])->find($user->employee_id);
             }
 
             if (!$employee) {
-                $employee = Employee::with(['department:id,faculty_id', 'position:id,faculty_id'])
+                $employee = Employee::with(['primaryDesignation.unit', 'primaryDesignation.position'])
                     ->where('email_address', $user->email)->first();
 
                 if ($employee && !$user->employee_id) {
@@ -638,8 +615,8 @@ class TrainingController extends Controller
         }
 
         $training = Training::with([
-            'allowedFaculties:id',
-            'allowedDepartments:id',
+            'allowedSectors:id',
+            'allowedUnits:id',
             'allowedPositions:id',
             'applications' => function ($query) {
                 $query->whereIn('status', ['Signed Up', 'Approved']);
@@ -838,7 +815,7 @@ class TrainingController extends Controller
     protected function initializeApprovalFlow(RequestSubmission $submission, RequestType $requestType, Training $training): void
     {
         $steps = $requestType->approvalSteps();
-        $hierarchicalService = new \App\Services\HierarchicalApproverService();
+        $hierarchicalService = app(\App\Services\HierarchicalApproverService::class);
         
         // Get requester employee for hierarchical resolution
         $requesterEmployee = null;
@@ -846,10 +823,10 @@ class TrainingController extends Controller
             $requesterEmployee = Employee::with(['position', 'department.faculty'])->find($submission->user->employee_id);
         }
 
-        // Get training's allowed faculties and departments for position filtering
-        $training->load(['allowedFaculties:id', 'allowedDepartments:id']);
-        $allowedFacultyIds = $training->allowedFaculties->pluck('id')->toArray();
-        $allowedDepartmentIds = $training->allowedDepartments->pluck('id')->toArray();
+        // Get training's allowed sectors and units for position filtering
+        $training->load(['allowedSectors:id', 'allowedUnits:id']);
+        $allowedSectorIds = $training->allowedSectors->pluck('id')->toArray();
+        $allowedUnitIds = $training->allowedUnits->pluck('id')->toArray();
 
         foreach ($steps as $index => $step) {
             $approvers = collect(data_get($step, 'approvers', []));
@@ -864,8 +841,8 @@ class TrainingController extends Controller
                 ? $hierarchicalService->resolveApprovers(
                     $approvers->toArray(), 
                     $requesterEmployee,
-                    !empty($allowedFacultyIds) ? $allowedFacultyIds : null,
-                    !empty($allowedDepartmentIds) ? $allowedDepartmentIds : null
+                    !empty($allowedSectorIds) ? $allowedSectorIds : null,
+                    !empty($allowedUnitIds) ? $allowedUnitIds : null
                 )
                 : $approvers->toArray();
 
@@ -1127,8 +1104,8 @@ class TrainingController extends Controller
 
         // Get overview data (trainings with participants)
         $trainings = Training::with([
-            'applications.employee.department',
-            'applications.employee.position',
+            'applications.employee.primaryDesignation.unit',
+            'applications.employee.primaryDesignation.position',
         ])
             ->orderByDesc('date_from')
             ->get()
@@ -1151,8 +1128,8 @@ class TrainingController extends Controller
                     $employee = $application->employee;
                     return [
                         'name' => $employee ? trim("{$employee->first_name} {$employee->surname}") : 'Unknown',
-                        'department' => $employee?->department?->faculty_name ?? '-',
-                        'position' => $employee?->position?->pos_name ?? '-',
+                        'unit' => $employee?->primaryDesignation?->unit?->name ?? '-',
+                        'position' => $employee?->primaryDesignation?->position?->pos_name ?? '-',
                     ];
                 });
 
@@ -1217,7 +1194,7 @@ class TrainingController extends Controller
             ->values();
 
         // Get logs data (all training applications)
-        $logsQuery = TrainingApplication::with(['training', 'employee.department', 'employee.position']);
+        $logsQuery = TrainingApplication::with(['training', 'employee.primaryDesignation.unit', 'employee.primaryDesignation.position']);
         
         // Apply scope filter for logs
         if ($scopeQuery !== null) {
@@ -1288,8 +1265,8 @@ class TrainingController extends Controller
                     'updated_at' => optional($application->updated_at)->toDateTimeString(),
                     'created_at' => optional($application->created_at)->toDateTimeString(),
                     'employee_name' => $employee ? trim("{$employee->first_name} {$employee->surname}") : 'Unknown',
-                    'employee_department' => $employee?->department?->faculty_name ?? '-',
-                    'employee_position' => $employee?->position?->pos_name ?? '-',
+                    'employee_unit' => $employee?->primaryDesignation?->unit?->name ?? '-',
+                    'employee_position' => $employee?->primaryDesignation?->position?->pos_name ?? '-',
                 ];
             })
             ->when($statusFilter === 'Ongoing' || $statusFilter === 'Completed', function ($collection) use ($statusFilter) {

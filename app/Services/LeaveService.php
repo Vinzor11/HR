@@ -228,7 +228,7 @@ class LeaveService
     /**
      * Get leave requests for calendar view
      */
-    public function getLeaveCalendar(Carbon $startDate, Carbon $endDate, ?string $employeeId = null, ?int $departmentId = null): array
+    public function getLeaveCalendar(Carbon $startDate, Carbon $endDate, ?string $employeeId = null, ?int $unitId = null): array
     {
         $query = LeaveRequest::with(['employee', 'leaveType', 'requestSubmission'])
             ->approved()
@@ -238,9 +238,11 @@ class LeaveService
             $query->where('employee_id', $employeeId);
         }
 
-        if ($departmentId) {
-            $query->whereHas('employee', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
+        if ($unitId) {
+            $query->whereHas('employee', function ($q) use ($unitId) {
+                $q->whereHas('primaryDesignation', function ($d) use ($unitId) {
+                    $d->where('unit_id', $unitId);
+                });
             });
         }
 

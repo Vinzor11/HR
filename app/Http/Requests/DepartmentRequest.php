@@ -5,6 +5,9 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+/**
+ * @deprecated Department controller removed. Use Unit/Sector (new org structure) and UnitController/SectorController instead.
+ */
 class DepartmentRequest extends FormRequest
 {
     public function authorize(): bool

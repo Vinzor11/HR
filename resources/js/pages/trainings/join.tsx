@@ -26,8 +26,8 @@ interface TrainingSummary {
     capacity?: number | null;
     available_spots?: number | null;
     has_capacity?: boolean;
-    allowed_faculties?: { id: number; name: string }[];
-    allowed_departments: { id: number; faculty_name: string }[];
+    allowed_sectors?: { id: number; name: string }[];
+    allowed_units?: { id: number; name: string }[];
     allowed_positions: { id: number; pos_name: string }[];
     is_eligible: boolean;
     already_applied: boolean;
@@ -36,7 +36,7 @@ interface TrainingSummary {
 interface EmployeeSummary {
     id: string;
     name: string;
-    department?: string;
+    unit?: string;
     position?: string;
 }
 
@@ -163,29 +163,29 @@ export default function JoinTraining({ trainings, employee }: JoinProps) {
                                     </div>
 
                                     <div className="grid gap-2 text-xs text-muted-foreground">
-                                        {training.allowed_faculties && training.allowed_faculties.length > 0 && (
+                                        {training.allowed_sectors && training.allowed_sectors.length > 0 && (
                                             <div>
-                                                <p className="font-semibold text-foreground">Allowed Faculties</p>
+                                                <p className="font-semibold text-foreground">Allowed Sectors</p>
                                                 <div className="mt-1 flex flex-wrap gap-1">
-                                                    {training.allowed_faculties.map((faculty) => (
-                                                        <Badge key={faculty.id} className="bg-primary/20 text-black border border-primary/30 dark:bg-primary/30 dark:text-black">
-                                                            {faculty.name}
+                                                    {training.allowed_sectors.map((sector) => (
+                                                        <Badge key={sector.id} className="bg-primary/20 text-black border border-primary/30 dark:bg-primary/30 dark:text-black">
+                                                            {sector.name}
                                                         </Badge>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
                                         <div>
-                                            <p className="font-semibold text-foreground">Allowed Departments</p>
+                                            <p className="font-semibold text-foreground">Allowed Units</p>
                                             <div className="mt-1 flex flex-wrap gap-1">
-                                                {training.allowed_departments.length ? (
-                                                    training.allowed_departments.map((dept) => (
-                                                        <Badge key={dept.id} className="bg-primary/20 text-black border border-primary/30 dark:bg-primary/30 dark:text-black">
-                                                            {dept.faculty_name}
+                                                {training.allowed_units && training.allowed_units.length ? (
+                                                    training.allowed_units.map((unit) => (
+                                                        <Badge key={unit.id} className="bg-primary/20 text-black border border-primary/30 dark:bg-primary/30 dark:text-black">
+                                                            {unit.name}
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span>Open to all departments</span>
+                                                    <span>Open to all units</span>
                                                 )}
                                             </div>
                                         </div>
@@ -247,4 +247,3 @@ export default function JoinTraining({ trainings, employee }: JoinProps) {
         </AppLayout>
     );
 }
-

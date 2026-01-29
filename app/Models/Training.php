@@ -53,20 +53,26 @@ class Training extends Model
         return 'training_id';
     }
 
-    public function allowedFaculties()
+    /**
+     * New org structure relationships (Sector/Unit/Position)
+     */
+    public function allowedSectors()
     {
-        return $this->belongsToMany(Faculty::class, 'training_allowed_faculties', 'training_id', 'faculty_id')->withTimestamps();
+        return $this->belongsToMany(Sector::class, 'training_allowed_sectors', 'training_id', 'sector_id')->withTimestamps();
     }
 
-    public function allowedDepartments()
+    public function allowedUnits()
     {
-        return $this->belongsToMany(Department::class, 'training_allowed_departments', 'training_id', 'department_id')->withTimestamps();
+        return $this->belongsToMany(Unit::class, 'training_allowed_units', 'training_id', 'unit_id')->withTimestamps();
     }
 
     public function allowedPositions()
     {
         return $this->belongsToMany(Position::class, 'training_allowed_positions', 'training_id', 'position_id')->withTimestamps();
     }
+
+    // Legacy relationships - kept for backward compatibility during transition
+    // These can be removed once migration is complete
 
     public function applications()
     {

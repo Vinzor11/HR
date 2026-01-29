@@ -12,9 +12,8 @@ use App\Models\EmployeeLearningDevelopment;
 use App\Models\EmployeeOtherInformation;
 use App\Models\EmployeeVoluntaryWork;
 use App\Models\EmployeeWorkExperience;
-use App\Models\Department;
-use App\Models\Faculty;
-use App\Models\Position;
+// Legacy Department and Faculty models removed - use new org structure (Sector/Unit/Position) instead
+use App\Models\Position; // Still used in new structure with sector_id
 use App\Models\Questionnaire;
 use App\Models\Reference;
 use App\Services\AuditLogService;
@@ -57,16 +56,24 @@ class EmployeeController extends Controller
         $search = $request->input('search', '');
         $searchMode = $request->input('search_mode', 'any');
         $status = $request->input('status', '');
-        // Handle both single value and array for department_id
-        $departmentId = $request->input('department_id', '');
-        $departmentIds = $request->input('department_ids', []);
-        if (is_string($departmentIds)) {
-            $departmentIds = json_decode($departmentIds, true) ?? [];
+        // Unit/sector filters (new org structure)
+        $unitId = $request->input('unit_id', '');
+        $unitIds = $request->input('unit_ids', []);
+        if (is_string($unitIds)) {
+            $unitIds = json_decode($unitIds, true) ?? [];
         }
-        if (!empty($departmentId) && empty($departmentIds)) {
-            $departmentIds = [$departmentId];
+        if (!empty($unitId) && empty($unitIds)) {
+            $unitIds = [$unitId];
         }
-        // Handle both single value and array for position_id
+        $sectorId = $request->input('sector_id', '');
+        $sectorIds = $request->input('sector_ids', []);
+        if (is_string($sectorIds)) {
+            $sectorIds = json_decode($sectorIds, true) ?? [];
+        }
+        if (!empty($sectorId) && empty($sectorIds)) {
+            $sectorIds = [$sectorId];
+        }
+        // Position filter (via primary designation)
         $positionId = $request->input('position_id', '');
         $positionIds = $request->input('position_ids', []);
         if (is_string($positionIds)) {
@@ -136,8 +143,12 @@ class EmployeeController extends Controller
 
         // Map frontend column keys to backend relationships
         $relationshipMap = [
-            'department.faculty_name' => 'department',
-            'position.pos_name' => 'position',
+            'primary_designation.unit.name' => 'primaryDesignation.unit.sector',
+            'primary_designation.unit.unit_type' => 'primaryDesignation.unit',
+            'primary_designation.unit.sector.name' => 'primaryDesignation.unit.sector',
+            'primary_designation.position.pos_name' => 'primaryDesignation.position',
+            'primary_designation.academic_rank.name' => 'primaryDesignation.academicRank',
+            'primary_designation.staff_grade.name' => 'primaryDesignation.staffGrade',
             'family_background' => 'familyBackground',
             'children' => 'children',
             'educational_background' => 'educationalBackground',
@@ -152,9 +163,11 @@ class EmployeeController extends Controller
 
         // Build relationships array based on visible columns
         $relationshipsToLoad = [];
-        // Always load department and position as they're commonly used
-        $relationshipsToLoad[] = 'department';
-        $relationshipsToLoad[] = 'position';
+        // Always load primary designation with related data for the new org structure
+        $relationshipsToLoad[] = 'primaryDesignation.unit.sector';
+        $relationshipsToLoad[] = 'primaryDesignation.position';
+        $relationshipsToLoad[] = 'primaryDesignation.academicRank';
+        $relationshipsToLoad[] = 'primaryDesignation.staffGrade';
         
         foreach ($visibleColumns as $columnKey) {
             if (isset($relationshipMap[$columnKey])) {
@@ -170,7 +183,7 @@ class EmployeeController extends Controller
             'id', 'surname', 'first_name', 'middle_name', 'status',
             'employment_status', 'employee_type', 'birth_date',
             'date_hired', 'date_regularized', 'created_at', 'updated_at',
-            'department.faculty_name', 'position.pos_name'
+            'primary_designation.unit.name', 'primary_designation.position.pos_name'
         ];
         if (!in_array($sortBy, $allowedSortColumns)) {
             $sortBy = 'created_at';
@@ -207,13 +220,15 @@ class EmployeeController extends Controller
                         });
                         break;
                     case 'position':
-                        $q->whereHas('position', function ($posQuery) use ($search) {
+                        // Search in primary designation's position
+                        $q->whereHas('primaryDesignation.position', function ($posQuery) use ($search) {
                             $posQuery->where('pos_name', 'like', "%{$search}%");
                         });
                         break;
                     case 'department':
-                        $q->whereHas('department', function ($deptQuery) use ($search) {
-                            $deptQuery->where('faculty_name', 'like', "%{$search}%");
+                        // Search in primary designation's unit (replaces department)
+                        $q->whereHas('primaryDesignation.unit', function ($unitQuery) use ($search) {
+                            $unitQuery->where('name', 'like', "%{$search}%");
                         });
                         break;
                     default: // 'any'
@@ -223,11 +238,11 @@ class EmployeeController extends Controller
                           ->orWhere('middle_name', 'like', "%{$search}%")
                           ->orWhere('email_address', 'like', "%{$search}%")
                           ->orWhere('mobile_no', 'like', "%{$search}%")
-                          ->orWhereHas('position', function ($posQuery) use ($search) {
+                          ->orWhereHas('primaryDesignation.position', function ($posQuery) use ($search) {
                               $posQuery->where('pos_name', 'like', "%{$search}%");
                           })
-                          ->orWhereHas('department', function ($deptQuery) use ($search) {
-                              $deptQuery->where('faculty_name', 'like', "%{$search}%");
+                          ->orWhereHas('primaryDesignation.unit', function ($unitQuery) use ($search) {
+                              $unitQuery->where('name', 'like', "%{$search}%");
                           });
                         break;
                 }
@@ -236,17 +251,20 @@ class EmployeeController extends Controller
         ->when($status && in_array($status, ['active', 'inactive', 'on-leave']), function ($query) use ($status) {
             $query->where('status', $status);
         })
-        ->when(!empty($departmentIds) && is_array($departmentIds), function ($query) use ($departmentIds) {
-            $query->whereIn('department_id', array_filter($departmentIds));
+        ->when(!empty($unitIds), function ($query) use ($unitIds) {
+            $query->whereHas('primaryDesignation', function ($q) use ($unitIds) {
+                $q->whereIn('unit_id', $unitIds);
+            });
         })
-        ->when(!empty($departmentId) && empty($departmentIds), function ($query) use ($departmentId) {
-            $query->where('department_id', $departmentId);
+        ->when(!empty($sectorIds), function ($query) use ($sectorIds) {
+            $query->whereHas('primaryDesignation.unit', function ($q) use ($sectorIds) {
+                $q->whereIn('sector_id', $sectorIds);
+            });
         })
-        ->when(!empty($positionIds) && is_array($positionIds), function ($query) use ($positionIds) {
-            $query->whereIn('position_id', array_filter($positionIds));
-        })
-        ->when(!empty($positionId) && empty($positionIds), function ($query) use ($positionId) {
-            $query->where('position_id', $positionId);
+        ->when(!empty($positionIds), function ($query) use ($positionIds) {
+            $query->whereHas('primaryDesignation', function ($q) use ($positionIds) {
+                $q->whereIn('position_id', $positionIds);
+            });
         })
         ->when($employeeType && in_array($employeeType, ['Teaching', 'Non-Teaching']), function ($query) use ($employeeType) {
             $query->where('employee_type', $employeeType);
@@ -255,19 +273,25 @@ class EmployeeController extends Controller
         ->when(!empty($advancedFilters) && is_array($advancedFilters) && count($advancedFilters) > 0, function ($query) use ($filterService, $advancedFilters) {
             $filterService->applyFilters($query, $advancedFilters);
         })
-        ->when($sortBy === 'department.faculty_name' || $sortBy === 'department', function ($query) use ($sortOrder) {
-            $query->join('departments', 'employees.department_id', '=', 'departments.id')
-                  ->orderBy('departments.faculty_name', $sortOrder)
-                  ->select('employees.*')
-                  ->distinct();
+        ->when($sortBy === 'primary_designation.unit.name', function ($query) use ($sortOrder) {
+            $query->leftJoin('employee_designations as ed', function ($join) {
+                $join->on('employees.primary_designation_id', '=', 'ed.id');
+            })
+            ->leftJoin('units', 'ed.unit_id', '=', 'units.id')
+            ->orderBy('units.name', $sortOrder)
+            ->select('employees.*')
+            ->distinct();
         })
-        ->when($sortBy === 'position.pos_name' || $sortBy === 'position', function ($query) use ($sortOrder) {
-            $query->join('positions', 'employees.position_id', '=', 'positions.id')
-                  ->orderBy('positions.pos_name', $sortOrder)
-                  ->select('employees.*')
-                  ->distinct();
+        ->when($sortBy === 'primary_designation.position.pos_name', function ($query) use ($sortOrder) {
+            $query->leftJoin('employee_designations as ed', function ($join) {
+                $join->on('employees.primary_designation_id', '=', 'ed.id');
+            })
+            ->leftJoin('positions', 'ed.position_id', '=', 'positions.id')
+            ->orderBy('positions.pos_name', $sortOrder)
+            ->select('employees.*')
+            ->distinct();
         })
-        ->when(!in_array($sortBy, ['department.faculty_name', 'department', 'position.pos_name', 'position']), function ($query) use ($sortBy, $sortOrder) {
+        ->when(!in_array($sortBy, ['primary_designation.unit.name', 'primary_designation.position.pos_name']), function ($query) use ($sortBy, $sortOrder) {
             $query->orderBy($sortBy, $sortOrder);
         })
         ->paginate($perPage)
@@ -278,7 +302,7 @@ class EmployeeController extends Controller
                 if ($value === null) {
                     $employee->setRelation(
                         $relation,
-                        in_array($relation, ['department', 'position', 'otherInformation'])
+                        in_array($relation, ['primaryDesignation', 'otherInformation'])
                             ? (object)[]
                             : []
                     );
@@ -305,9 +329,11 @@ class EmployeeController extends Controller
                 'search_mode' => $searchMode,
                 'per_page' => $perPage,
                 'status' => $status,
-                'department_id' => !empty($departmentIds) ? (count($departmentIds) === 1 ? $departmentIds[0] : '') : $departmentId,
-                'department_ids' => $departmentIds,
-                'position_id' => !empty($positionIds) ? (count($positionIds) === 1 ? $positionIds[0] : '') : $positionId,
+                'unit_id' => $unitId,
+                'unit_ids' => $unitIds,
+                'sector_id' => $sectorId,
+                'sector_ids' => $sectorIds,
+                'position_id' => $positionId,
                 'position_ids' => $positionIds,
                 'employee_type' => $employeeType,
                 'sort_by' => $sortBy,
@@ -316,9 +342,6 @@ class EmployeeController extends Controller
                 'advanced_filters' => $advancedFilters,
             ],
             'filter_fields_config' => AdvancedEmployeeFilterService::getFilterFieldsConfig(),
-            // Load departments/positions for filter dropdowns - filtered by scope
-            'departments' => $this->getScopedDepartments($request->user()),
-            'positions' => $this->getScopedPositions($request->user()),
         ]);
     }
 
@@ -332,14 +355,8 @@ class EmployeeController extends Controller
     {
         abort_unless($request->user()->can('create-employee'), 403, 'Unauthorized action.');
         
-        return Inertia::render('employees/Create', [
-            'departments' => $this->getScopedDepartments($request->user()),
-            'positions' => $this->getScopedPositions($request->user()),
-            'faculties' => Faculty::active()
-                ->select('id', 'name', 'code')
-                ->orderBy('name')
-                ->get(),
-        ]);
+        // Designation management is now handled separately via /employees/{id}/designations/manage
+        return Inertia::render('employees/Create', []);
     }
 
     public function importCsForm212(Request $request, CsForm212Importer $importer)
@@ -1124,6 +1141,12 @@ class EmployeeController extends Controller
             $this->employeeValidationMessages()
         );
         
+        // Conditional validation based on employment_status
+        $conditionalErrors = $this->validateConditionalDateFields($request);
+        if (!empty($conditionalErrors)) {
+            return back()->withErrors($conditionalErrors)->withInput();
+        }
+        
         // Validate related data
         $relatedErrors = $this->validateRelatedData($request);
         if (!empty($relatedErrors)) {
@@ -1131,13 +1154,14 @@ class EmployeeController extends Controller
         }
 
         DB::transaction(function () use ($request, $validated) {
-            // Normalize empty department_id to null for faculty-level positions
-            if (isset($validated['department_id']) && $validated['department_id'] === '') {
-                $validated['department_id'] = null;
-            }
+            // Remove legacy fields from validated data if they exist
+            unset($validated['department_id'], $validated['position_id'], $validated['faculty_id'], $validated['organization_type']);
             
             $employee = Employee::create($validated);
             $this->handleRelatedData($request, $employee);
+            
+            // Note: Designation is now managed separately via /employees/{id}/designations/manage
+            // After creating an employee, user should be redirected to manage designations
             
             // Log employee creation
             $employeeName = $this->getEmployeeFullName($employee);
@@ -1149,9 +1173,6 @@ class EmployeeController extends Controller
                 null,
                 $employee
             );
-            
-            // Don't log position assignment during creation - it's already part of the CREATE log
-            // Position assignment logging only happens during updates
 
             // Initialize leave balances for new employee
             $this->initializeLeaveBalances($employee);
@@ -1160,65 +1181,8 @@ class EmployeeController extends Controller
         return redirect()->route('employees.index')->with('success', 'Employee created successfully.');
     }
 
-     /**
-     * Get scoped departments based on user's access level.
-     */
-    protected function getScopedDepartments(User $user)
-    {
-        $manageableDeptIds = $this->scopeService->getManageableDepartmentIds($user);
-        
-        $query = Department::select('id', 'faculty_name as name', 'type', 'faculty_id')
-            ->orderBy('faculty_name');
-        
-        // null means no restrictions (super admin/admin) - return all
-        // array with values means filter by those IDs
-        // empty array means no access
-        if ($manageableDeptIds === null) {
-            // Super admin/admin - return all departments
-            // No filter needed
-        } elseif (!empty($manageableDeptIds)) {
-            $query->whereIn('id', $manageableDeptIds);
-        } else {
-            // Empty array - no access
-            return collect();
-        }
-        
-        return $query->get();
-    }
-
-    /**
-     * Get scoped positions based on user's access level.
-     */
-    protected function getScopedPositions(User $user)
-    {
-        $manageableDeptIds = $this->scopeService->getManageableDepartmentIds($user);
-        $manageableFacultyIds = $this->scopeService->getManageableFacultyIds($user);
-        
-        $query = Position::select('id', 'pos_name', 'pos_name as name', 'department_id', 'faculty_id')
-            ->orderBy('pos_name');
-        
-        // Super admin/admin get all positions (null means no restrictions)
-        if ($manageableDeptIds === null && $manageableFacultyIds === null) {
-            // Return all - no filter needed
-        } elseif (!empty($manageableDeptIds) || !empty($manageableFacultyIds)) {
-            $query->where(function ($q) use ($manageableDeptIds, $manageableFacultyIds) {
-                if (!empty($manageableDeptIds)) {
-                    $q->whereIn('department_id', $manageableDeptIds);
-                }
-                if (!empty($manageableFacultyIds)) {
-                    $q->orWhere(function ($q2) use ($manageableFacultyIds) {
-                        $q2->whereIn('faculty_id', $manageableFacultyIds)
-                           ->whereNull('department_id'); // Faculty-level positions
-                    });
-                }
-            });
-        } else {
-            // No access - return empty
-            return collect();
-        }
-        
-        return $query->get();
-    }
+    // Legacy getScopedDepartments() and getScopedPositions() methods removed
+    // Use new org structure (Sector/Unit/Position) via EmployeeScopeService instead
 
     public function show(Request $request, Employee $employee)
     {
@@ -1240,8 +1204,10 @@ class EmployeeController extends Controller
             'otherInformation',
             'questionnaire',
             'references',
-            'department',
-            'position'
+            'primaryDesignation.unit.sector',
+            'primaryDesignation.position',
+            'primaryDesignation.academicRank',
+            'primaryDesignation.staffGrade',
         ]);
 
         $employeeData = [
@@ -1290,12 +1256,6 @@ class EmployeeController extends Controller
 
         return Inertia::render('employees/Create', [
             'employee' => $employeeData,
-            'departments' => $this->getScopedDepartments($request->user()),
-            'positions' => $this->getScopedPositions($request->user()),
-            'faculties' => Faculty::active()
-                ->select('id', 'name', 'code')
-                ->orderBy('name')
-                ->get(),
             'mode' => 'view' // Pass view mode to component
         ]);
     }
@@ -1309,10 +1269,10 @@ class EmployeeController extends Controller
         }
 
         $employee = Employee::findOrFail($user->employee_id);
-        return $this->profile($employee);
+        return $this->profile($request, $employee);
     }
 
-    public function profile(Employee $employee)
+    public function profile(Request $request, Employee $employee)
     {
         // Use with() instead of load() to ensure relationships are eager loaded
         $employee = Employee::with([
@@ -1326,14 +1286,16 @@ class EmployeeController extends Controller
             'otherInformation',
             'questionnaire',
             'references',
-            'department',
-            'position'
+            'primaryDesignation.unit.sector',
+            'primaryDesignation.position',
+            'primaryDesignation.academicRank',
+            'primaryDesignation.staffGrade',
         ])->findOrFail($employee->id);
 
         // Get base employee data without relationships
         $baseData = $employee->only([
             'id', 'surname', 'first_name', 'middle_name', 'name_extension', 'status', 'employment_status', 'employee_type', 'salary',
-            'department_id', 'position_id', 'birth_date', 'birth_place', 'sex', 'civil_status',
+            'birth_date', 'birth_place', 'sex', 'civil_status',
             'height_m', 'weight_kg', 'blood_type', 'gsis_id_no', 'pagibig_id_no', 'philhealth_no',
             'sss_no', 'tin_no', 'agency_employee_no', 'citizenship', 'dual_citizenship', 'citizenship_type',
             'dual_citizenship_country', 'res_house_no', 'res_street', 'res_subdivision', 'res_barangay',
@@ -1345,15 +1307,26 @@ class EmployeeController extends Controller
         ]);
 
         $employeeData = array_merge($baseData, [
-            'department' => $employee->department ? [
-                'id' => $employee->department->id,
-                'name' => $employee->department->faculty_name ?? $employee->department->name,
-                'faculty_name' => $employee->department->faculty_name,
-            ] : null,
-            'position' => $employee->position ? [
-                'id' => $employee->position->id,
-                'name' => $employee->position->pos_name ?? $employee->position->name,
-                'pos_name' => $employee->position->pos_name,
+            // Legacy department/position removed - use primary_designation instead
+            'primary_designation' => $employee->primaryDesignation ? [
+                'id' => $employee->primaryDesignation->id,
+                'unit' => $employee->primaryDesignation->unit ? [
+                    'id' => $employee->primaryDesignation->unit->id,
+                    'name' => $employee->primaryDesignation->unit->name,
+                    'unit_type' => $employee->primaryDesignation->unit->unit_type,
+                ] : null,
+                'position' => $employee->primaryDesignation->position ? [
+                    'id' => $employee->primaryDesignation->position->id,
+                    'pos_name' => $employee->primaryDesignation->position->pos_name,
+                ] : null,
+                'academic_rank' => $employee->primaryDesignation->academicRank ? [
+                    'id' => $employee->primaryDesignation->academicRank->id,
+                    'name' => $employee->primaryDesignation->academicRank->name,
+                ] : null,
+                'staff_grade' => $employee->primaryDesignation->staffGrade ? [
+                    'id' => $employee->primaryDesignation->staffGrade->id,
+                    'name' => $employee->primaryDesignation->staffGrade->name,
+                ] : null,
             ] : null,
             'family_background' => $employee->familyBackground->isEmpty() ? [
                 [ 'relation' => 'Father', 'surname' => '', 'first_name' => '', 'middle_name' => '', 'name_extension' => '', 'occupation' => '', 'employer' => '', 'business_address' => '', 'telephone_no' => '' ],
@@ -1486,8 +1459,9 @@ class EmployeeController extends Controller
             ]
         ]);
 
-        // Get employment history from unified audit logs (position, department, salary changes)
-        $historyFields = ['position_id', 'department_id', 'salary', 'employee_type', 'employment_status'];
+        // Get employment history from unified audit logs (salary, employee_type, employment_status changes)
+        // Note: position_id and department_id are legacy fields, now tracked via designations
+        $historyFields = ['salary', 'employee_type', 'employment_status'];
         $employmentHistory = AuditLog::with('user:id,name')
             ->where('module', 'employees')
             ->where('entity_type', 'Employee')
@@ -1497,8 +1471,6 @@ class EmployeeController extends Controller
             ->get()
             ->map(function ($log) use ($historyFields) {
                 $fieldLabels = [
-                    'position_id' => 'Position',
-                    'department_id' => 'Department/Office',
                     'salary' => 'Salary',
                     'employee_type' => 'Employee Type',
                     'employment_status' => 'Employment Status',
@@ -1536,32 +1508,9 @@ class EmployeeController extends Controller
                 $oldValue = $oldValues[$fieldChanged] ?? null;
                 $newValue = $newValues[$fieldChanged] ?? null;
                 
-                // For position and department, try to get the actual names
-                if ($fieldChanged === 'position_id') {
-                    if ($oldValue === null || (is_string($oldValue) && trim($oldValue) === '')) {
-                        $oldValue = 'Unknown Position';
-                    } elseif (is_numeric($oldValue)) {
-                        $oldPos = Position::withTrashed()->find((int) $oldValue);
-                        $oldValue = $oldPos ? (trim($oldPos->pos_name ?? $oldPos->name ?? '') ?: 'Unknown Position') : 'Unknown Position';
-                    }
-                    
-                    if ($newValue === null || (is_string($newValue) && trim($newValue) === '')) {
-                        $newValue = 'Unknown Position';
-                    } elseif (is_numeric($newValue)) {
-                        $newPos = Position::withTrashed()->find((int) $newValue);
-                        $newValue = $newPos ? (trim($newPos->pos_name ?? $newPos->name ?? '') ?: 'Unknown Position') : 'Unknown Position';
-                    }
-                }
-                
-                if ($fieldChanged === 'department_id') {
-                    if ($oldValue) {
-                        $oldDept = Department::withTrashed()->find($oldValue);
-                        $oldValue = $oldDept ? ($oldDept->faculty_name ?? $oldDept->name ?? 'Unknown') : 'Unknown';
-                    }
-                    if ($newValue) {
-                        $newDept = Department::withTrashed()->find($newValue);
-                        $newValue = $newDept ? ($newDept->faculty_name ?? $newDept->name ?? 'Unknown') : 'Unknown';
-                    }
+                // Skip legacy fields that are no longer used
+                if (in_array($fieldChanged, ['position_id', 'department_id', 'faculty_id', 'organization_type'])) {
+                    return null; // Skip this field
                 }
                 
                 if ($fieldChanged === 'salary') {
@@ -1586,6 +1535,8 @@ class EmployeeController extends Controller
         return Inertia::render('employees/Profile', [
             'employee' => $employeeData,
             'employmentHistory' => $employmentHistory,
+            'canEdit' => $request->user()->can('edit-employee'),
+            'canPromote' => $request->user()->can('promote-employee'),
         ]);
     }
 
@@ -1613,22 +1564,8 @@ class EmployeeController extends Controller
             'otherInformation',
         ]);
 
-        // Get faculty_id from department if it exists
-        $facultyId = null;
-        if ($employee->department && $employee->department->faculty_id) {
-            $facultyId = $employee->department->faculty_id;
-        }
-        
-        // Determine organization_type based on department type
-        $organizationType = null;
-        if ($employee->department) {
-            $organizationType = $employee->department->type === 'administrative' ? 'administrative' : 'academic';
-        }
-
         $employeeData = [
             ...$employee->toArray(),
-            'faculty_id' => $facultyId,
-            'organization_type' => $organizationType,
             'family_background' => $employee->familyBackground->isEmpty() ? [
                 [ 'relation' => 'Father', 'surname' => '', 'first_name' => '', 'middle_name' => '', 'name_extension' => '', 'occupation' => '', 'employer' => '', 'business_address' => '', 'telephone_no' => '' ],
                 [ 'relation' => 'Mother', 'surname' => '', 'first_name' => '', 'middle_name' => '', 'name_extension' => '', 'occupation' => '', 'employer' => '', 'business_address' => '', 'telephone_no' => '' ]
@@ -1671,14 +1608,9 @@ class EmployeeController extends Controller
             'other_information' => $employee->otherInformation ?? (object)['skill_or_hobby' => '', 'non_academic_distinctions' => '', 'memberships' => '']
         ];
 
+        // Designation management is now handled separately via /employees/{id}/designations/manage
         return Inertia::render('employees/Create', [
             'employee' => $employeeData,
-            'departments' => $this->getScopedDepartments($request->user()),
-            'positions' => $this->getScopedPositions($request->user()),
-            'faculties' => Faculty::active()
-                ->select('id', 'name', 'code')
-                ->orderBy('name')
-                ->get(),
         ]);
     }
 
@@ -1695,6 +1627,12 @@ class EmployeeController extends Controller
             $this->employeeValidationRules(false, $request),
             $this->employeeValidationMessages()
         );
+        
+        // Conditional validation based on employment_status
+        $conditionalErrors = $this->validateConditionalDateFields($request);
+        if (!empty($conditionalErrors)) {
+            return back()->withErrors($conditionalErrors)->withInput();
+        }
         
         // Validate related data
         $relatedErrors = $this->validateRelatedData($request);
@@ -1730,23 +1668,12 @@ class EmployeeController extends Controller
                 }
             }
             
-            // Normalize empty department_id to null for faculty-level positions
-            if (isset($validated['department_id']) && $validated['department_id'] === '') {
-                $validated['department_id'] = null;
-            }
+            // Remove legacy fields from validated data if they exist
+            unset($validated['department_id'], $validated['position_id'], $validated['faculty_id'], $validated['organization_type']);
             
             // Update the employee
             $employee->update($validated);
             $this->handleRelatedData($request, $employee, true);
-            
-            // Log position assignment if position_id changed (exclude from regular field logging)
-            if (isset($changes['position_id'])) {
-                $oldPositionId = $changes['position_id']['old'] ?? null;
-                $newPositionId = $changes['position_id']['new'] ?? null;
-                $this->logPositionAssignment($employee, $oldPositionId, $newPositionId);
-                // Remove position_id from changes to avoid duplicate logging
-                unset($changes['position_id']);
-            }
             
             // Collect all changes for a single audit log entry
             $oldValues = [];
@@ -1758,17 +1685,12 @@ class EmployeeController extends Controller
                     $oldValue = $change['old'];
                     $newValue = $change['new'];
                     
-                    // Resolve foreign key names for better readability
-                    if ($field === 'department_id') {
-                        if ($oldValue) {
-                            $oldDept = Department::find($oldValue);
-                            $oldValue = $oldDept ? $oldDept->faculty_name : $oldValue;
-                        }
-                        if ($newValue) {
-                            $newDept = Department::find($newValue);
-                            $newValue = $newDept ? $newDept->faculty_name : $newValue;
-                        }
+                    // Skip legacy fields that are no longer used
+                    if (in_array($field, ['department_id', 'position_id', 'faculty_id', 'organization_type'])) {
+                        continue;
                     }
+                    
+                    // Resolve foreign key names for better readability (for other fields)
                     
                     $fieldName = str_replace('_', ' ', $field);
                     $fieldName = ucwords($fieldName);
@@ -2212,15 +2134,6 @@ class EmployeeController extends Controller
 
     protected function employeeValidationRules(bool $isCreate = true, ?Request $request = null): array
     {
-        // Check if the selected position is faculty-level (has faculty_id but no department_id)
-        $isFacultyLevelPosition = false;
-        if ($request && $request->has('position_id')) {
-            $position = \App\Models\Position::find($request->input('position_id'));
-            if ($position && $position->faculty_id && !$position->department_id) {
-                $isFacultyLevelPosition = true;
-            }
-        }
-
         $rules = array_merge([
             // Personal Information - Required Fields
             'surname' => ['required', 'string', new NameField(100)],
@@ -2236,58 +2149,12 @@ class EmployeeController extends Controller
             'status' => 'required|in:active,inactive,on-leave',
             'employment_status' => 'required|in:Regular,Contractual,Job-Order,Probationary',
             'employee_type' => 'required|in:Teaching,Non-Teaching',
-            'faculty_id' => [
-                function ($attribute, $value, $fail) use ($request) {
-                    $departmentId = $request->input('department_id');
-                    if ($departmentId) {
-                        $department = \App\Models\Department::find($departmentId);
-                        if ($department) {
-                            // Faculty ID is only required for academic departments
-                            if ($department->type === 'academic' && empty($value)) {
-                                $fail('Faculty is required for academic departments.');
-                            }
-                            // For administrative departments, faculty_id should be null
-                            if ($department->type === 'administrative' && !empty($value)) {
-                                $fail('Faculty must not be selected for administrative offices.');
-                            }
-                        }
-                    }
-                },
-                'nullable',
-                'integer',
-                'exists:faculties,id',
-            ],
-            'department_id' => $isFacultyLevelPosition ? 'nullable|exists:departments,id' : 'required|exists:departments,id',
-            'position_id' => [
-                'required',
-                'exists:positions,id',
-                function ($attribute, $value, $fail) use ($isCreate, $request) {
-                    if ($value) {
-                        $position = \App\Models\Position::find($value);
-                        if ($position && $position->capacity !== null) {
-                            $query = \App\Models\Employee::where('position_id', $value)
-                                ->where('status', 'active');
-                            
-                            // If updating, exclude the current employee from the count
-                            if (!$isCreate && $request && $request->route('employee')) {
-                                $employeeId = $request->route('employee')->id ?? null;
-                                if ($employeeId) {
-                                    $query->where('id', '!=', $employeeId);
-                                }
-                            }
-                            
-                            $currentCount = $query->count();
-                            
-                            if ($currentCount >= $position->capacity) {
-                                $fail("The position '{$position->pos_name}' has reached its capacity limit of {$position->capacity}.");
-                            }
-                        }
-                    }
-                },
-            ],
             'salary' => ['required', 'numeric', 'between:0,9999999999.99'],
-            'date_hired' => ['required', 'date', new DateNotFuture()],
-            'date_regularized' => ['required', 'date', 'after_or_equal:date_hired', new DateNotFuture()],
+            // Date fields are conditionally required based on employment_status
+            'date_hired' => ['nullable', 'date', new DateNotFuture()],
+            'date_regularized' => ['nullable', 'date', 'after_or_equal:date_hired', new DateNotFuture()],
+            'start_date' => ['nullable', 'date', new DateNotFuture()],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date', new DateNotFuture()],
             
             // Physical Attributes
             'height_m' => 'required|numeric|between:0,999.99',
@@ -2352,7 +2219,46 @@ class EmployeeController extends Controller
     {
         return [
             'date_regularized.after_or_equal' => 'Date of regularization must be the same as or later than the date hired.',
+            'end_date.after_or_equal' => 'End date must be on or after start date.',
         ];
+    }
+
+    /**
+     * Validate date fields conditionally based on employment_status
+     */
+    protected function validateConditionalDateFields(Request $request): array
+    {
+        $errors = [];
+        $employmentStatus = $request->input('employment_status');
+
+        if ($employmentStatus === 'Regular') {
+            if (!$request->has('date_hired') || empty($request->input('date_hired'))) {
+                $errors['date_hired'] = 'Date hired is required for Regular employment status.';
+            }
+            if (!$request->has('date_regularized') || empty($request->input('date_regularized'))) {
+                $errors['date_regularized'] = 'Date regularized is required for Regular employment status.';
+            }
+        } elseif ($employmentStatus === 'Job-Order') {
+            if (!$request->has('start_date') || empty($request->input('start_date'))) {
+                $errors['start_date'] = 'Start date is required for Job-Order employment status.';
+            }
+            if (!$request->has('end_date') || empty($request->input('end_date'))) {
+                $errors['end_date'] = 'End date is required for Job-Order employment status.';
+            }
+        } elseif ($employmentStatus === 'Contractual') {
+            if (!$request->has('date_hired') || empty($request->input('date_hired'))) {
+                $errors['date_hired'] = 'Date hired is required for Contractual employment status.';
+            }
+            if (!$request->has('start_date') || empty($request->input('start_date'))) {
+                $errors['start_date'] = 'Start date is required for Contractual employment status.';
+            }
+            if (!$request->has('end_date') || empty($request->input('end_date'))) {
+                $errors['end_date'] = 'End date is required for Contractual employment status.';
+            }
+        }
+        // Probationary: date_hired is optional, no validation needed
+
+        return $errors;
     }
 
     /**

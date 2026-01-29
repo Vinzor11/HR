@@ -4,10 +4,14 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\User;
-use App\Models\Department;
-use App\Models\Position;
+use App\Models\Unit;
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Employee Scope Service - Updated for new org structure (Sector/Unit/Position)
+ * 
+ * Uses authority_level on Position and unit hierarchy for scoping.
+ */
 class EmployeeScopeService
 {
     /**
@@ -15,8 +19,8 @@ class EmployeeScopeService
      * 
      * Logic:
      * - Super Admin/Admin: Can view all employees
-     * - Dean (hierarchy_level 9-10): Can view all employees in their faculty
-     * - Department Head (hierarchy_level 8): Can view all employees in their department
+     * - High authority level (8+): Can view all employees in their sector
+     * - Mid authority level (5-7): Can view all employees in their unit and sub-units
      * - Others: Can only view themselves
      * 
      * @param User $user The authenticated user
@@ -31,24 +35,40 @@ class EmployeeScopeService
 
         // Get user's employee record
         if (!$user->employee_id) {
-            // User has no employee record, can only see themselves (which they don't have)
             return Employee::whereRaw('1 = 0'); // Empty result
         }
 
-        $employee = Employee::with(['position', 'department.faculty'])->find($user->employee_id);
+        $employee = Employee::with(['primaryDesignation.position', 'primaryDesignation.unit.sector'])->find($user->employee_id);
         
-        if (!$employee || !$employee->position) {
-            // Employee or position not found, no access
+        if (!$employee) {
             return Employee::whereRaw('1 = 0');
         }
 
-        // Permission-based faculty/department access
-        if ($user->can('view-faculty-employees')) {
-            return $this->getFacultyScope($employee);
+        // Permission-based sector/unit access
+        if ($user->can('view-sector-employees')) {
+            return $this->getSectorScope($employee);
         }
 
-        if ($user->can('view-department-employees')) {
-            return $this->getDepartmentScope($employee);
+        if ($user->can('view-unit-employees')) {
+            return $this->getUnitScope($employee);
+        }
+
+        // Check based on authority level
+        $primaryDesignation = $employee->primaryDesignation;
+        if ($primaryDesignation && $primaryDesignation->position) {
+            $authorityLevel = $primaryDesignation->position->authority_level 
+                ?? $primaryDesignation->position->hierarchy_level 
+                ?? 1;
+            
+            // High authority (8+) - sector scope
+            if ($authorityLevel >= 8) {
+                return $this->getSectorScope($employee);
+            }
+            
+            // Mid authority (5-7) - unit scope
+            if ($authorityLevel >= 5) {
+                return $this->getUnitScope($employee);
+            }
         }
 
         // Regular employees: can only view themselves
@@ -56,64 +76,65 @@ class EmployeeScopeService
     }
 
     /**
-     * Get scope for faculty-level access (Dean, Associate Dean).
-     * Returns all employees in the same faculty (ACADEMIC departments only).
-     * 
-     * Note: Deans can only view employees in ACADEMIC departments.
-     * Administrative departments are not under faculty management.
+     * Get scope for sector-level access.
+     * Returns all employees with designations in the same sector.
      * 
      * @param Employee $employee
      * @return Builder
      */
-    protected function getFacultyScope(Employee $employee): Builder
+    protected function getSectorScope(Employee $employee): Builder
     {
-        $facultyId = null;
+        $sectorId = $employee->primaryDesignation?->unit?->sector_id;
 
-        // Get faculty ID from employee's department or position
-        if ($employee->department && $employee->department->faculty_id) {
-            $facultyId = $employee->department->faculty_id;
-        } elseif ($employee->position && $employee->position->faculty_id) {
-            $facultyId = $employee->position->faculty_id;
-        }
-
-        if (!$facultyId) {
-            // No faculty found (could be administrative), return empty
+        if (!$sectorId) {
             return Employee::whereRaw('1 = 0');
         }
 
-        // Return employees in ACADEMIC departments that belong to this faculty
-        // OR employees with faculty-level positions in this faculty
-        // Note: Administrative departments (type='administrative') are excluded
-        return Employee::where(function ($query) use ($facultyId) {
-            $query->whereHas('department', function ($q) use ($facultyId) {
-                $q->where('faculty_id', $facultyId)
-                  ->where('type', 'academic'); // Only academic departments
-            })->orWhereHas('position', function ($q) use ($facultyId) {
-                $q->where('faculty_id', $facultyId)
-                  ->whereNull('department_id'); // Faculty-level positions
-            });
+        // Return employees with designations in units belonging to this sector
+        return Employee::whereHas('designations.unit', function ($query) use ($sectorId) {
+            $query->where('sector_id', $sectorId);
         });
     }
 
     /**
-     * Get scope for department-level access (Department Head).
-     * Returns all employees in the same department.
-     * 
-     * Works for BOTH academic and administrative departments.
+     * Get scope for unit-level access.
+     * Returns all employees with designations in the same unit or child units.
      * 
      * @param Employee $employee
      * @return Builder
      */
-    protected function getDepartmentScope(Employee $employee): Builder
+    protected function getUnitScope(Employee $employee): Builder
     {
-        if (!$employee->department_id) {
-            // Employee has no department, return empty
+        $unitId = $employee->primaryDesignation?->unit_id;
+        
+        if (!$unitId) {
             return Employee::whereRaw('1 = 0');
         }
 
-        // Return all employees in the same department
-        // This works for both academic and administrative departments
-        return Employee::where('department_id', $employee->department_id);
+        // Get the unit and all its child units
+        $unitIds = $this->getUnitAndChildIds($unitId);
+
+        // Return all employees with designations in these units
+        return Employee::whereHas('designations', function ($query) use ($unitIds) {
+            $query->whereIn('unit_id', $unitIds);
+        });
+    }
+
+    /**
+     * Get a unit and all its child unit IDs recursively.
+     */
+    protected function getUnitAndChildIds(int $unitId): array
+    {
+        $ids = [$unitId];
+        
+        // Get direct children
+        $children = Unit::where('parent_unit_id', $unitId)->pluck('id')->toArray();
+        
+        foreach ($children as $childId) {
+            $ids = array_merge($ids, $this->getUnitAndChildIds($childId));
+        }
+        
+        return $ids;
     }
 
     /**
@@ -128,96 +149,89 @@ class EmployeeScopeService
         $scope = $this->getEmployeeScope($user);
         
         if ($scope === null) {
-            // No restrictions (super admin/admin)
             return true;
         }
 
-        // Check if target employee is in the scope
         return $scope->where('id', $targetEmployee->id)->exists();
     }
 
     /**
-     * Get a list of department IDs that the user can manage.
+     * Get a list of unit IDs that the user can manage.
      * 
      * @param User $user
-     * @return array Array of department IDs
+     * @return array|null Array of unit IDs, or null for all access
      */
-    public function getManageableDepartmentIds(User $user): ?array
+    public function getManageableUnitIds(User $user): ?array
     {
-        // Use permission-based check instead of role names (more flexible)
         if ($user->can('view-all-employees')) {
-            // Return null to indicate no restrictions (all departments)
-            return null;
+            return null; // No restrictions
         }
 
         if (!$user->employee_id) {
             return [];
         }
 
-        $employee = Employee::with(['position', 'department.faculty'])->find($user->employee_id);
+        $employee = Employee::with(['primaryDesignation.position', 'primaryDesignation.unit.sector'])->find($user->employee_id);
         
-        if (!$employee || !$employee->position) {
+        if (!$employee || !$employee->primaryDesignation) {
             return [];
         }
 
-        $position = $employee->position;
-        $hierarchyLevel = $position->hierarchy_level ?? 1;
+        $primaryDesignation = $employee->primaryDesignation;
+        $position = $primaryDesignation->position;
+        $authorityLevel = $position?->authority_level ?? $position?->hierarchy_level ?? 1;
 
-        // Dean: All ACADEMIC departments in their faculty (administrative departments excluded)
-        if ($hierarchyLevel >= 9 && $hierarchyLevel <= 10) {
-            $facultyId = $employee->department?->faculty_id ?? $employee->position->faculty_id;
-            if ($facultyId) {
-                return Department::where('faculty_id', $facultyId)
-                    ->where('type', 'academic') // Only academic departments
-                    ->pluck('id')
-                    ->toArray();
+        // High authority (8+) - all units in their sector
+        if ($authorityLevel >= 8) {
+            $sectorId = $primaryDesignation->unit?->sector_id;
+            if ($sectorId) {
+                return Unit::where('sector_id', $sectorId)->pluck('id')->toArray();
             }
         }
 
-        // Department Head: Only their department
-        if ($hierarchyLevel === 8 || 
-            ($employee->department_id && 
-             $employee->department?->head_position_id === $employee->position_id)) {
-            return $employee->department_id ? [$employee->department_id] : [];
+        // Mid authority (5-7) - their unit and child units
+        if ($authorityLevel >= 5) {
+            $unitId = $primaryDesignation->unit_id;
+            if ($unitId) {
+                return $this->getUnitAndChildIds($unitId);
+            }
         }
 
         return [];
     }
 
     /**
-     * Get a list of faculty IDs that the user can manage.
+     * Get a list of sector IDs that the user can manage.
      * 
      * @param User $user
-     * @return array Array of faculty IDs
+     * @return array|null Array of sector IDs, or null for all access
      */
-    public function getManageableFacultyIds(User $user): ?array
+    public function getManageableSectorIds(User $user): ?array
     {
-        // Use permission-based check instead of role names (more flexible)
         if ($user->can('view-all-employees')) {
-            // Return null to indicate no restrictions (all faculties)
-            return null;
+            return null; // No restrictions
         }
 
         if (!$user->employee_id) {
             return [];
         }
 
-        $employee = Employee::with(['position', 'department.faculty'])->find($user->employee_id);
+        $employee = Employee::with(['primaryDesignation.position', 'primaryDesignation.unit.sector'])->find($user->employee_id);
         
-        if (!$employee || !$employee->position) {
+        if (!$employee || !$employee->primaryDesignation) {
             return [];
         }
 
-        $position = $employee->position;
-        $hierarchyLevel = $position->hierarchy_level ?? 1;
+        $authorityLevel = $employee->primaryDesignation->position?->authority_level 
+            ?? $employee->primaryDesignation->position?->hierarchy_level 
+            ?? 1;
 
-        // Dean: Their faculty only
-        if ($hierarchyLevel >= 9 && $hierarchyLevel <= 10) {
-            $facultyId = $employee->department?->faculty_id ?? $employee->position->faculty_id;
-            return $facultyId ? [$facultyId] : [];
+        // High authority (8+) - their sector only
+        if ($authorityLevel >= 8) {
+            $sectorId = $employee->primaryDesignation->unit?->sector_id;
+            return $sectorId ? [$sectorId] : [];
         }
 
         return [];
     }
 }
-

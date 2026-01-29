@@ -19,22 +19,26 @@ import { useEffect, useState } from 'react';
 type BuilderField = RequestFieldDefinition & { clientKey: string };
 type StepApprover = {
     clientKey: string;
-    approver_type: 'user' | 'role' | 'position';
+    approver_type: 'user' | 'role' | 'position' | 'hierarchical';
     approver_id?: number | null;
     approver_role_id?: number | null;
     approver_position_id?: number | null;
+    min_authority_level?: number | null;
 };
+type ApprovalMode = 'any' | 'all' | 'majority';
 type BuilderApprovalStep = {
     clientKey: string;
     id?: string;
     name: string;
     description?: string | null;
     approvers: StepApprover[];
+    approval_mode?: ApprovalMode;
+    sla_hours?: number | null;
 };
 
 interface FormOptions {
     fieldTypes: Array<{ value: RequestFieldType; label: string; description: string }>;
-    approvalModes: Array<{ value: 'user' | 'role' | 'position'; label: string }>;
+    approvalModes: Array<{ value: 'user' | 'role' | 'position' | 'hierarchical'; label: string; description?: string }>;
     roles: Array<{ id: number; name: string; label?: string | null }>;
     users: Array<{ id: number; name: string; email: string }>;
     positions: Array<{ 
@@ -48,8 +52,16 @@ interface FormOptions {
     faculties: Array<{ id: number; name: string }>;
     departments: Array<{ id: number; name: string; faculty_id?: number | null; faculty?: { id: number; name: string } | null }>;
     offices: Array<{ id: number; name: string }>;
-    certificateTemplates: Array<{ id: number; name: string; description?: string | null }>;
+    certificateTemplates: Array<{
+        id: number;
+        name: string;
+        description?: string | null;
+        text_layers?: Array<{ id: number; name: string }>;
+    }>;
 }
+
+/** Layer name → data key (request field key or system field key) */
+type CertificateFieldMappings = Record<string, string>;
 
 interface BuilderProps {
     mode: 'create' | 'edit';
@@ -61,12 +73,15 @@ interface BuilderProps {
         is_published?: boolean;
         certificate_template_id?: number | null;
         certificate_config?: {
-            field_mappings?: Record<string, string>;
+            field_mappings?: CertificateFieldMappings;
         } | null;
         fields: RequestFieldDefinition[];
         approval_steps?: ApprovalStepDefinition[];
     } | null;
     formOptions: FormOptions;
+    /** Passed from backend; unused when resolving from layer.field_key. Kept for backward compat. */
+    selectedCertificateTemplate?: { id: number; name: string; text_layers: Array<{ id: number; name: string }> } | null;
+    systemFieldKeys?: string[];
 }
 
 const breadcrumbs = (mode: 'create' | 'edit', name?: string | null): BreadcrumbItem[] => [
@@ -125,6 +140,8 @@ const initialApprovalStep = (): BuilderApprovalStep => {
         name: 'Supervisor Approval',
         description: '',
         approvers: [createStepApprover()],
+        approval_mode: 'any',
+        sla_hours: null,
     };
 };
 
@@ -163,6 +180,8 @@ const buildApprovalStepFromDefinition = (step?: ApprovalStepDefinition): Builder
             approver_role_id: approver.approver_role_id ?? undefined,
             approver_position_id: approver.approver_position_id ?? undefined,
         })),
+        approval_mode: (step as any)?.approval_mode ?? 'any',
+        sla_hours: (step as any)?.sla_hours ?? null,
     };
 };
 
@@ -196,7 +215,7 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
         has_fulfillment: requestType?.has_fulfillment ?? false,
         is_published: requestType?.is_published ?? false,
         certificate_template_id: requestType?.certificate_template_id ?? null,
-        certificate_config: requestType?.certificate_config ?? { field_mappings: {} },
+        certificate_config: requestType?.certificate_config ?? { field_mappings: {} as CertificateFieldMappings },
         fields: requestType?.fields ?? [],
         approval_steps: requestType?.approval_steps ?? [],
     });
@@ -222,7 +241,10 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
                     approver_id: approver.approver_type === 'user' ? approver.approver_id : null,
                     approver_role_id: approver.approver_type === 'role' ? approver.approver_role_id : null,
                     approver_position_id: approver.approver_type === 'position' ? approver.approver_position_id : null,
+                    min_authority_level: approver.approver_type === 'hierarchical' ? approver.min_authority_level : null,
                 })),
+                approval_mode: step.approval_mode ?? 'any',
+                sla_hours: step.sla_hours ?? null,
                 sort_order: index,
             };
         });
@@ -370,6 +392,13 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
             if (patch.approver_type === 'position') {
                 updatedApprover.approver_id = undefined;
                 updatedApprover.approver_role_id = undefined;
+                updatedApprover.min_authority_level = undefined;
+            }
+
+            if (patch.approver_type === 'hierarchical') {
+                updatedApprover.approver_id = undefined;
+                updatedApprover.approver_role_id = undefined;
+                updatedApprover.approver_position_id = undefined;
             }
 
             approvers[approverIndex] = updatedApprover;
@@ -468,107 +497,56 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
                             </label>
                         </Card>
 
-                        <Card className="p-5 space-y-4">
-                            <div>
-                                <h2 className="text-base font-semibold text-foreground">Certificate Generation</h2>
-                                <p className="text-sm text-muted-foreground">
-                                    Automatically generate certificates when requests are completed. Map your request fields to certificate text layers.
-                                </p>
-                            </div>
-
-                            <div className="space-y-3">
+                        {data.has_fulfillment && (
+                            <Card className="p-5 space-y-4">
                                 <div>
-                                    <Label htmlFor="certificate_template_id" className="text-sm font-medium">
-                                        Certificate Template
-                                    </Label>
-                                    <Select
-                                        value={data.certificate_template_id?.toString() || undefined}
-                                        onValueChange={(value) => {
-                                            if (value === 'none') {
-                                                setData('certificate_template_id', null);
-                                                setData('certificate_config', { field_mappings: {} });
-                                            } else {
-                                                setData('certificate_template_id', parseInt(value));
-                                            }
-                                        }}
-                                    >
-                                        <SelectTrigger className="mt-1">
-                                            <SelectValue placeholder="Select a certificate template (optional)" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">None - No certificate generation</SelectItem>
-                                            {formOptions.certificateTemplates?.map((template) => (
-                                                <SelectItem key={template.id} value={template.id.toString()}>
-                                                    {template.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    {errors.certificate_template_id && (
-                                        <p className="mt-1 text-xs text-destructive">{errors.certificate_template_id}</p>
-                                    )}
+                                    <h2 className="text-base font-semibold text-foreground">Certificate Generation</h2>
+                                    <p className="text-sm text-muted-foreground">
+                                        Automatically generate certificates when requests are completed. Text is filled from each layer&apos;s field key set in the certificate template.
+                                    </p>
                                 </div>
 
-                                {data.certificate_template_id && (
-                                    <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
-                                        <div>
-                                            <Label className="text-sm font-medium">Field Mappings</Label>
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                Map your request field keys to certificate text layer names. Leave empty to use default placeholders.
-                                            </p>
-                                        </div>
-
-                                        {fields.length > 0 ? (
-                                            <div className="space-y-3">
-                                                {fields.map((field) => {
-                                                    const fieldKey = field.field_key || `field-${field.id || field.clientKey}`;
-                                                    const currentMapping = data.certificate_config?.field_mappings?.[fieldKey] || '';
-                                                    
-                                                    return (
-                                                        <div key={field.clientKey} className="flex items-center gap-3">
-                                                            <div className="flex-1">
-                                                                <Label className="text-xs text-muted-foreground">
-                                                                    {field.label} ({fieldKey})
-                                                                </Label>
-                                                                <Input
-                                                                    className="mt-1"
-                                                                    placeholder="Certificate layer name (e.g., recipient_name)"
-                                                                    value={currentMapping}
-                                                                    onChange={(e) => {
-                                                                        const mappings = { ...(data.certificate_config?.field_mappings || {}) };
-                                                                        if (e.target.value) {
-                                                                            mappings[fieldKey] = e.target.value;
-                                                                        } else {
-                                                                            delete mappings[fieldKey];
-                                                                        }
-                                                                        setData('certificate_config', {
-                                                                            ...data.certificate_config,
-                                                                            field_mappings: mappings,
-                                                                        });
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-muted-foreground">
-                                                Add fields to your request type first, then map them to certificate layers.
-                                            </p>
+                                <div className="space-y-3">
+                                    <div>
+                                        <Label htmlFor="certificate_template_id" className="text-sm font-medium">
+                                            Certificate Template
+                                        </Label>
+                                        <Select
+                                            value={data.certificate_template_id?.toString() || undefined}
+                                            onValueChange={(value) => {
+                                                if (value === 'none') {
+                                                    setData('certificate_template_id', null);
+                                                    setData('certificate_config', { field_mappings: {} });
+                                                } else {
+                                                    setData('certificate_template_id', parseInt(value));
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger className="mt-1">
+                                                <SelectValue placeholder="Select a certificate template (optional)" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">None - No certificate generation</SelectItem>
+                                                {formOptions.certificateTemplates?.map((template) => (
+                                                    <SelectItem key={template.id} value={template.id.toString()}>
+                                                        {template.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.certificate_template_id && (
+                                            <p className="mt-1 text-xs text-destructive">{errors.certificate_template_id}</p>
                                         )}
-
-                                        <div className="rounded-md bg-blue-50 dark:bg-blue-950 p-3 text-xs text-blue-900 dark:text-blue-100">
-                                            <p className="font-medium mb-1">💡 Tip:</p>
-                                            <p>
-                                                The certificate template has text layers with names like <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">recipient_name</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">course_title</code>, etc.
-                                                Enter the layer name here to map your request field to it.
-                                            </p>
-                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        </Card>
+
+                                    {data.certificate_template_id && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Edit the certificate template to set which data (system or request fields) fills each layer.
+                                        </p>
+                                    )}
+                                </div>
+                            </Card>
+                        )}
 
                         <Card className="p-5 space-y-4">
                             <div className="flex items-center justify-between">
@@ -590,34 +568,79 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
                                 </div>
                             )}
 
-                            <div className="space-y-3">
-                                {approvalSteps.map((step, index) => (
-                                    <div key={step.clientKey} className="rounded-lg border p-3 space-y-3">
-                                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                                            <span>Step {index + 1}</span>
-                                            <button
-                                                type="button"
-                                                className="text-destructive transition hover:text-destructive/80"
-                                                onClick={() => removeApprovalStep(index)}
-                                            >
-                                                Remove
-                                            </button>
-                                        </div>
-                                        <FloatingInput
-                                            label="Step name"
-                                            value={step.name}
-                                            onChange={(event) => updateApprovalStep(index, { name: event.target.value })}
-                                            required
-                                            error={fieldError(`approval_steps.${index}.name`)}
-                                        />
-                                        <div>
-                                            <Label className="text-sm font-medium text-foreground">Instructions / Description</Label>
-                                            <CustomTextarea
-                                                className="mt-1 text-sm"
-                                                value={step.description ?? ''}
-                                                onChange={(event) => updateApprovalStep(index, { description: event.target.value })}
-                                            />
-                                        </div>
+                                    <div className="space-y-3">
+                                                {approvalSteps.map((step, index) => (
+                                                    <div key={step.clientKey} className="rounded-lg border p-3 space-y-3">
+                                                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                                            <span>Step {index + 1}</span>
+                                                            <button
+                                                                type="button"
+                                                                className="text-destructive transition hover:text-destructive/80"
+                                                                onClick={() => removeApprovalStep(index)}
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                        <FloatingInput
+                                                            label="Step name"
+                                                            value={step.name}
+                                                            onChange={(event) => updateApprovalStep(index, { name: event.target.value })}
+                                                            required
+                                                            error={fieldError(`approval_steps.${index}.name`)}
+                                                        />
+                                                        <div>
+                                                            <Label className="text-sm font-medium text-foreground">Instructions / Description</Label>
+                                                            <CustomTextarea
+                                                                className="mt-1 text-sm"
+                                                                value={step.description ?? ''}
+                                                                onChange={(event) => updateApprovalStep(index, { description: event.target.value })}
+                                                            />
+                                                        </div>
+                                                        
+                                                        {/* Approval Mode and SLA Settings */}
+                                                        <div className="grid gap-3 md:grid-cols-2">
+                                                            <div>
+                                                                <Label className="text-sm font-medium text-foreground">Approval Mode</Label>
+                                                                <Select
+                                                                    value={step.approval_mode ?? 'any'}
+                                                                    onValueChange={(value: ApprovalMode) => updateApprovalStep(index, { approval_mode: value })}
+                                                                >
+                                                                    <SelectTrigger className="mt-1">
+                                                                        <SelectValue placeholder="Select mode" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="any">Any (One approver is sufficient)</SelectItem>
+                                                                        <SelectItem value="all">All (All approvers must approve)</SelectItem>
+                                                                        <SelectItem value="majority">Majority (More than half must approve)</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <p className="text-xs text-muted-foreground mt-1">
+                                                                    {step.approval_mode === 'all' 
+                                                                        ? 'All approvers in this step must approve for the request to proceed.'
+                                                                        : step.approval_mode === 'majority'
+                                                                        ? 'More than half of the approvers must approve.'
+                                                                        : 'Any single approver can approve the request.'}
+                                                                </p>
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-sm font-medium text-foreground">SLA (Hours)</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    placeholder="No deadline"
+                                                                    value={step.sla_hours ?? ''}
+                                                                    onChange={(e) => updateApprovalStep(index, { 
+                                                                        sla_hours: e.target.value ? Number(e.target.value) : null 
+                                                                    })}
+                                                                    className="mt-1"
+                                                                />
+                                                                <p className="text-xs text-muted-foreground mt-1">
+                                                                    {step.sla_hours 
+                                                                        ? `Approvers have ${step.sla_hours} hours to act. Reminders will be sent.`
+                                                                        : 'No deadline. Leave empty for unlimited time.'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
                                         <div className="space-y-3">
                                             {step.approvers.map((approver, approverIndex) => (
                                                 <div key={approver.clientKey} className="rounded-lg border border-dashed p-3 space-y-3">
@@ -639,7 +662,7 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
                                                             <Label className="text-sm font-medium text-foreground">Approver type</Label>
                                                             <Select
                                                                 value={approver.approver_type}
-                                                                onValueChange={(value: 'user' | 'role' | 'position') =>
+                                                                onValueChange={(value: 'user' | 'role' | 'position' | 'hierarchical') =>
                                                                     updateStepApprover(index, approverIndex, { approver_type: value })
                                                                 }
                                                             >
@@ -959,6 +982,49 @@ export default function RequestTypeBuilder({ mode, requestType, formOptions }: B
                                                                 </div>
                                                             );
                                                         })()}
+
+                                                        {approver.approver_type === 'hierarchical' && (
+                                                            <div className="md:col-span-2 space-y-3">
+                                                                <div className="p-3 bg-muted/50 rounded-lg border border-dashed">
+                                                                    <div className="flex items-start gap-2">
+                                                                        <div className="flex-1">
+                                                                            <h4 className="text-sm font-medium text-foreground">Hierarchical Approval (Authority Level Based)</h4>
+                                                                            <p className="text-xs text-muted-foreground mt-1">
+                                                                                Approval will be automatically routed to someone with higher authority based on the requester's position authority_level and unit hierarchy.
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <Label className="text-sm font-medium text-foreground">Minimum Authority Level (Optional)</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        max={100}
+                                                                        placeholder="Auto (requester's level + 1)"
+                                                                        value={approver.min_authority_level ?? ''}
+                                                                        onChange={(e) =>
+                                                                            updateStepApprover(index, approverIndex, { 
+                                                                                min_authority_level: e.target.value ? Number(e.target.value) : null 
+                                                                            })
+                                                                        }
+                                                                        className="mt-1"
+                                                                    />
+                                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                                        Leave empty to auto-calculate (requester's authority level + 1). The system will find the nearest approver in the hierarchy.
+                                                                    </p>
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 p-2 rounded">
+                                                                    <strong>Routing Order:</strong>
+                                                                    <ol className="list-decimal list-inside mt-1 space-y-0.5">
+                                                                        <li>Same unit (Program/College/Office)</li>
+                                                                        <li>Parent unit (Program → College)</li>
+                                                                        <li>System-wide positions (VP, President)</li>
+                                                                        <li>Same sector positions</li>
+                                                                    </ol>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}

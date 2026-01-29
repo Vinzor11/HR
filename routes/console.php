@@ -72,3 +72,37 @@ Schedule::command('sessions:log-expired')
         \Log::error('Log expired sessions failed');
     })
     ->description('Log expired sessions to user activities and clean up');
+
+// ============================================================================
+// APPROVAL WORKFLOW SCHEDULED TASKS
+// ============================================================================
+
+// Send approval reminders for pending and overdue approvals
+// Runs every hour during business hours (8 AM - 6 PM)
+Schedule::command('approvals:send-reminders')
+    ->hourlyAt(0)
+    ->between('08:00', '18:00')
+    ->weekdays()
+    ->timezone('Asia/Manila')
+    ->withoutOverlapping()
+    ->onSuccess(function () {
+        \Log::info('Approval reminders sent successfully');
+    })
+    ->onFailure(function () {
+        \Log::error('Approval reminders failed');
+    })
+    ->description('Send reminders for pending approval requests');
+
+// Escalate overdue approvals (runs once daily at 9 AM)
+Schedule::command('approvals:send-reminders --escalate')
+    ->dailyAt('09:00')
+    ->weekdays()
+    ->timezone('Asia/Manila')
+    ->withoutOverlapping()
+    ->onSuccess(function () {
+        \Log::info('Approval escalations processed successfully');
+    })
+    ->onFailure(function () {
+        \Log::error('Approval escalations failed');
+    })
+    ->description('Escalate overdue approval requests to higher authority');

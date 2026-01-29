@@ -41,8 +41,8 @@ interface Training {
     venue?: string;
     capacity?: number;
     remarks?: string;
-    allowed_faculties?: { id: number; name: string }[];
-    allowed_departments: { id: number; faculty_name: string }[];
+    allowed_sectors?: { id: number; name: string }[];
+    allowed_units?: { id: number; name: string }[];
     allowed_positions: { id: number; pos_name: string }[];
     schedule?: string;
     requires_approval?: boolean;
@@ -71,6 +71,8 @@ interface OptionItem {
     label: string;
     name?: string;
     value?: string;
+    sector_id?: number;
+    unit_type?: string;
 }
 
 interface FormDataShape {
@@ -82,9 +84,8 @@ interface FormDataShape {
     venue: string;
     capacity: string;
     remarks: string;
-    organization_type: string;
-    faculty_ids: string[];
-    department_ids: string[];
+    sector_ids: string[];
+    unit_ids: string[];
     position_ids: string[];
     requires_approval: boolean;
     request_type_id: string | null;
@@ -94,8 +95,8 @@ interface FormDataShape {
 interface IndexProps {
     trainings: Pagination<Training>;
     formOptions: {
-        faculties: OptionItem[];
-        departments: OptionItem[];
+        sectors: OptionItem[];
+        units: OptionItem[];
         positions: OptionItem[];
         requestTypes: OptionItem[];
     };
@@ -140,8 +141,8 @@ const normalizeTrainingForView = (training: any) => {
 
     return {
         ...training,
-        allowed_faculties: normalizeCollection(training.allowed_faculties, ['faculty_name', 'name']),
-        allowed_departments: normalizeCollection(training.allowed_departments, ['faculty_name', 'name', 'department_name']),
+        allowed_sectors: normalizeCollection(training.allowed_sectors, ['name']),
+        allowed_units: normalizeCollection(training.allowed_units, ['name']),
         allowed_positions: normalizeCollection(training.allowed_positions, ['pos_name', 'name']),
     };
 };
@@ -203,172 +204,63 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         venue: '',
         capacity: '',
         remarks: '',
-        organization_type: 'academic', // Default to academic
-        faculty_ids: [],
-        department_ids: [],
+        sector_ids: [],
+        unit_ids: [],
         position_ids: [],
-        requires_approval: false, // Default to false
+        requires_approval: false,
         request_type_id: null,
         _method: 'POST',
     });
 
-    // Organization type helpers
-    const isAcademic = data.organization_type === 'academic';
-    const isAdministrative = data.organization_type === 'administrative';
-    const facultySelected = data.faculty_ids && data.faculty_ids.length > 0;
-
-    // Create department lookup for efficient filtering
-    const departmentLookup = useMemo(() => {
-        const lookup = new Map();
-        (formOptions.departments || []).forEach((dept: any) => {
-            lookup.set(String(dept.id), dept);
+    // Filter units based on selected sectors
+    const filteredUnits = useMemo(() => {
+        const allUnits = formOptions.units || [];
+        const selectedSectorIds = data.sector_ids || [];
+        
+        // If no sectors selected, show all units
+        if (selectedSectorIds.length === 0) {
+            return allUnits;
+        }
+        
+        // Filter units by selected sectors
+        return allUnits.filter((unit: OptionItem) => {
+            return unit.sector_id && selectedSectorIds.includes(String(unit.sector_id));
         });
-        return lookup;
-    }, [formOptions.departments]);
+    }, [data.sector_ids, formOptions.units]);
 
-    // Filter departments based on organization type and selected faculties
-    const filteredDepartments = useMemo(() => {
-        const allDepartments = formOptions.departments || [];
-        
-        // For academic: require faculty selection first
-        if (isAcademic) {
-            if (!facultySelected) {
-                return []; // No departments available until faculty is selected
-            }
-            // Filter by organization type and selected faculties
-            const selectedFacultyIds = data.faculty_ids.map(id => Number(id));
-            return allDepartments.filter((dept: any) => {
-                const deptType = dept.type || 'academic';
-                return deptType === 'academic' && 
-                       dept.faculty_id && 
-                       selectedFacultyIds.includes(dept.faculty_id);
-            });
-        }
-        
-        // For administrative: show only administrative departments (offices)
-        if (isAdministrative) {
-            return allDepartments.filter((dept: any) => {
-                const deptType = dept.type || 'academic';
-                return deptType === 'administrative';
-            });
-        }
-
-        return [];
-    }, [data.organization_type, data.faculty_ids, formOptions.departments, isAcademic, isAdministrative, facultySelected]);
-
-    // Filter positions based on organization type, selected departments, and faculties
+    // Filter positions based on selected sectors
     const filteredPositions = useMemo(() => {
-        const availablePositions = formOptions.positions || [];
-        const selectedDepartments = data.department_ids || [];
-        const selectedFaculties = data.faculty_ids || [];
-        const departmentSelected = selectedDepartments.length > 0;
-
-        // For academic: require faculty selection first
-        if (isAcademic) {
-            if (!facultySelected) {
-                return []; // No positions available until faculty is selected
-            }
-
-            const selectedFacultyIds = selectedFaculties.map(id => Number(id));
-
-            // If departments are selected, show positions from those departments AND faculty-level positions
-            if (departmentSelected) {
-                return availablePositions.filter((position: any) => {
-                    const departmentId = position.department_id ? String(position.department_id) : null;
-                    const facultyId = position.faculty_id ? Number(position.faculty_id) : null;
-
-                    // Check if position belongs to a selected department
-                    if (departmentId && selectedDepartments.includes(departmentId)) {
-                        // Verify the department is academic
-                        const dept = departmentLookup.get(departmentId);
-                        if (dept && dept.type === 'academic') {
-                            return true;
-                        }
-                    }
-
-                    // Check if position is faculty-level (no department) and matches selected faculties
-                    if (!departmentId && facultyId && selectedFacultyIds.includes(facultyId)) {
-                        return true;
-                    }
-
-                    return false;
-                });
-            }
-
-            // If only faculty is selected (no departments), show only faculty-level positions
-            return availablePositions.filter((position: any) => {
-                // Must be faculty-level (no department_id) and match selected faculties
-                return !position.department_id && 
-                       position.faculty_id && 
-                       selectedFacultyIds.includes(Number(position.faculty_id));
-            });
-        }
-
-        // For administrative: show positions from administrative departments
-        if (isAdministrative) {
-            if (departmentSelected) {
-                // Show positions from selected administrative departments
-                return availablePositions.filter((position: any) => {
-                    if (!position.department_id) {
-                        return false; // Administrative positions must have a department
-                    }
-                    const departmentId = String(position.department_id);
-                    if (!selectedDepartments.includes(departmentId)) {
-                        return false;
-                    }
-                    // Verify the department is administrative
-                    const dept = departmentLookup.get(departmentId);
-                    return dept && dept.type === 'administrative';
-                });
-            }
-
-            // If no departments selected, show all positions from administrative departments
-            return availablePositions.filter((position: any) => {
-                if (!position.department_id) {
-                    return false; // Administrative positions must have a department
-                }
-                const dept = departmentLookup.get(String(position.department_id));
-                return dept && dept.type === 'administrative';
-            });
-        }
-
-        return [];
-    }, [data.organization_type, data.department_ids, data.faculty_ids, formOptions.positions, isAcademic, isAdministrative, facultySelected, departmentLookup]);
-
-    // Handle organization type change
-    const handleOrganizationTypeChange = (value: string) => {
-        if (data.organization_type === value) {
-            return;
-        }
-        setData('organization_type', value);
-        // Clear related fields when switching types
-        setData('faculty_ids', []);
-        setData('department_ids', []);
-        setData('position_ids', []);
-    };
-
-    // Clear invalid departments when organization type or faculties change
-    useEffect(() => {
-        if (data.department_ids && data.department_ids.length > 0) {
-            const validDepartmentIds = filteredDepartments.map((dept: any) => String(dept.id));
-            const invalidDepartments = data.department_ids.filter((deptId: string) => !validDepartmentIds.includes(deptId));
-            
-            if (invalidDepartments.length > 0) {
-                const updatedDepartmentIds = data.department_ids.filter((deptId: string) => validDepartmentIds.includes(deptId));
-                setData('department_ids', updatedDepartmentIds);
-            }
+        const allPositions = formOptions.positions || [];
+        const selectedSectorIds = data.sector_ids || [];
+        
+        // If no sectors selected, show all positions
+        if (selectedSectorIds.length === 0) {
+            return allPositions;
         }
         
-        // For academic, clear departments if no faculties selected
-        if (isAcademic && !facultySelected && data.department_ids && data.department_ids.length > 0) {
-            setData('department_ids', []);
-        }
-    }, [data.organization_type, data.faculty_ids, filteredDepartments, isAcademic, facultySelected]);
+        // Filter positions by selected sectors
+        return allPositions.filter((position: OptionItem) => {
+            return position.sector_id && selectedSectorIds.includes(String(position.sector_id));
+        });
+    }, [data.sector_ids, formOptions.positions]);
 
-    // Clear invalid positions when departments or faculties change
+    // Clear invalid units when sectors change
     useEffect(() => {
-        if (data.position_ids && data.position_ids.length > 0) {
-            const validPositionIds = filteredPositions.map((pos: any) => String(pos.id));
+        if (data.unit_ids && data.unit_ids.length > 0 && data.sector_ids.length > 0) {
+            const validUnitIds = filteredUnits.map((unit: OptionItem) => String(unit.id));
+            const invalidUnits = data.unit_ids.filter((unitId: string) => !validUnitIds.includes(unitId));
+            
+            if (invalidUnits.length > 0) {
+                const updatedUnitIds = data.unit_ids.filter((unitId: string) => validUnitIds.includes(unitId));
+                setData('unit_ids', updatedUnitIds);
+            }
+        }
+    }, [data.sector_ids, filteredUnits]);
+
+    // Clear invalid positions when sectors change
+    useEffect(() => {
+        if (data.position_ids && data.position_ids.length > 0 && data.sector_ids.length > 0) {
+            const validPositionIds = filteredPositions.map((pos: OptionItem) => String(pos.id));
             const invalidPositions = data.position_ids.filter((posId: string) => !validPositionIds.includes(posId));
             
             if (invalidPositions.length > 0) {
@@ -376,12 +268,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                 setData('position_ids', updatedPositionIds);
             }
         }
-
-        // For academic: clear positions if no faculty selected
-        if (isAcademic && !facultySelected && data.position_ids && data.position_ids.length > 0) {
-            setData('position_ids', []);
-        }
-    }, [data.department_ids, data.faculty_ids, filteredPositions, isAcademic, facultySelected]);
+    }, [data.sector_ids, filteredPositions]);
 
     const formatDate = (date: string) => {
         if (!date) return '';
@@ -482,15 +369,6 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
 
         if (training) {
             setSelectedTraining(training);
-            // Determine organization type from selected departments
-            const selectedDeptIds = toStringArray(training.allowed_departments);
-            const selectedDepts = (formOptions.departments || []).filter((dept: any) => 
-                selectedDeptIds.includes(String(dept.id))
-            );
-            // If any department is administrative, set to administrative, otherwise academic
-            const orgType = selectedDepts.some((dept: any) => dept.type === 'administrative') 
-                ? 'administrative' 
-                : 'academic';
             
             setData(() => ({
                 training_title: training.training_title ?? '',
@@ -501,9 +379,8 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                 venue: training.venue ?? '',
                 capacity: training.capacity?.toString() ?? '',
                 remarks: training.remarks ?? '',
-                organization_type: orgType,
-                faculty_ids: toStringArray(training.allowed_faculties || []),
-                department_ids: toStringArray(training.allowed_departments),
+                sector_ids: toStringArray(training.allowed_sectors || []),
+                unit_ids: toStringArray(training.allowed_units || []),
                 position_ids: toStringArray(training.allowed_positions),
                 requires_approval: training.requires_approval ?? false,
                 request_type_id: training.request_type_id ? String(training.request_type_id) : null,
@@ -832,13 +709,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                 fields={TrainingsModalFormConfig.fields}
                 buttons={TrainingsModalFormConfig.buttons}
                 data={data}
-                setData={(name: string, value: any) => {
-                    if (name === 'organization_type') {
-                        handleOrganizationTypeChange(value);
-                    } else {
-                        setData(name, value);
-                    }
-                }}
+                setData={setData}
                 errors={errors}
                 processing={processing}
                 handleSubmit={handleSubmit}
@@ -846,8 +717,8 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                 onOpenChange={handleModalToggle}
                 mode={mode}
                 extraData={{
-                    faculties: formOptions.faculties || [],
-                    departments: filteredDepartments,
+                    sectors: formOptions.sectors || [],
+                    units: filteredUnits,
                     positions: filteredPositions,
                 }}
             />
@@ -863,8 +734,8 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                     subtitleKey="id"
                     subtitleLabel="Training ID"
                     extraData={{
-                        faculties: formOptions.faculties?.map((f: any) => ({ id: f.id, name: f.name, label: f.name, value: f.id.toString() })) || [],
-                        departments: formOptions.departments?.map((d: any) => ({ id: d.id, name: d.name, label: d.name, value: d.id.toString() })) || [],
+                        sectors: formOptions.sectors?.map((s: any) => ({ id: s.id, name: s.name, label: s.name, value: s.id.toString() })) || [],
+                        units: formOptions.units?.map((u: any) => ({ id: u.id, name: u.name, label: u.name, value: u.id.toString() })) || [],
                         positions: formOptions.positions?.map((p: any) => ({ id: p.id, name: p.name || p.pos_name, label: p.name || p.pos_name, value: p.id.toString() })) || [],
                         requestTypes: formOptions.requestTypes?.map((rt: any) => ({ id: rt.id, name: rt.name, label: rt.name, value: rt.id.toString() })) || []
                     }}
@@ -873,4 +744,3 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         </AppLayout>
     );
 }
-

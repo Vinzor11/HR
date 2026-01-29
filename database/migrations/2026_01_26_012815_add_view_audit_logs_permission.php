@@ -23,7 +23,7 @@ return new class extends Migration
         );
 
         // Assign this permission to Super Admin role if it exists
-        $superAdminRole = \Spatie\Permission\Models\Role::where('name', 'Super Admin')->first();
+        $superAdminRole = \App\Models\Role::where('name', 'super-admin')->where('guard_name', 'web')->first();
         if ($superAdminRole) {
             $permission = Permission::where('name', 'view-audit-logs')->first();
             if ($permission && !$superAdminRole->hasPermissionTo($permission)) {
@@ -38,7 +38,7 @@ return new class extends Migration
     public function down(): void
     {
         // Remove permission from Super Admin role
-        $superAdminRole = \Spatie\Permission\Models\Role::where('name', 'Super Admin')->first();
+        $superAdminRole = \App\Models\Role::where('name', 'super-admin')->where('guard_name', 'web')->first();
         if ($superAdminRole) {
             $permission = Permission::where('name', 'view-audit-logs')->first();
             if ($permission) {

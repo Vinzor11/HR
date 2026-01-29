@@ -98,8 +98,10 @@ interface Employee {
   first_name: string
   middle_name: string | null
   surname: string
-  department: { name: string } | null
-  position: { title: string } | null
+  primary_designation?: {
+    unit?: { name: string }
+    position?: { pos_name: string }
+  } | null
 }
 
 interface Props {
@@ -288,16 +290,16 @@ export default function LeaveBalanceShow({
                   <User className="h-4 w-4" />
                   {employee.id}
                 </span>
-                {employee.department && (
+                {employee.primary_designation?.unit && (
                   <span className="flex items-center gap-1">
                     <Building className="h-4 w-4" />
-                    {employee.department.name}
+                    {employee.primary_designation.unit.name}
                   </span>
                 )}
-                {employee.position && (
+                {employee.primary_designation?.position?.pos_name && (
                   <span className="flex items-center gap-1">
                     <Briefcase className="h-4 w-4" />
-                    {employee.position.title}
+                    {employee.primary_designation.position.pos_name}
                   </span>
                 )}
               </div>

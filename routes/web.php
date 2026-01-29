@@ -18,6 +18,15 @@ use App\Http\Controllers\OrganizationalLogController;
 use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\CertificateTemplateController;
 use App\Http\Controllers\EmployeeDocumentController;
+use App\Http\Controllers\SectorController;
+use App\Http\Controllers\UnitController;
+use App\Http\Controllers\EmployeeDesignationController;
+use App\Http\Controllers\EmployeePromotionController;
+use App\Http\Controllers\EmployeeRankPromotionController;
+use App\Http\Controllers\EmployeeGradeChangeController;
+use App\Http\Controllers\UnitPositionController;
+use App\Http\Controllers\AcademicRankController;
+use App\Http\Controllers\StaffGradeController;
 
 // Simple test route to check if Laravel is working
 Route::get('/test', function () {
@@ -79,30 +88,58 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/users/activities', [App\Http\Controllers\UserActivitiesController::class, 'activities'])->name('users.activities')->middleware('permission:view-user-activities');
     Route::post('/employees/{id}/restore', [EmployeeController::class, 'restore'])->name('employees.restore')->middleware('permission:restore-employee');
     Route::delete('/employees/{id}/force-delete', [EmployeeController::class, 'forceDelete'])->name('employees.force-delete')->middleware('permission:force-delete-employee');
-    Route::resource('faculties', FacultyController::class)->middleware('permission:access-faculty');
-    Route::post('/faculties/{id}/restore', [FacultyController::class, 'restore'])->name('faculties.restore')->middleware('permission:restore-faculty');
-    Route::delete('/faculties/{id}/force-delete', [FacultyController::class, 'forceDelete'])->name('faculties.force-delete')->middleware('permission:force-delete-faculty');
-    // Redirect all office routes to departments (offices are now managed through departments)
-    Route::get('/offices', function () {
-        return redirect()->route('departments.index', ['type' => 'administrative']);
-    })->name('offices.index')->middleware('permission:access-office');
+    // Legacy Faculty routes removed - use new org structure (Sectors/Units) instead
     
-    Route::get('/offices/create', function () {
-        return redirect()->route('departments.index', ['type' => 'administrative']);
-    })->name('offices.create')->middleware('permission:create-office');
+    // New Organizational Structure Routes (Sectors and Units)
+    Route::resource('sectors', SectorController::class)->middleware('permission:access-sector');
+    Route::post('/sectors/{id}/restore', [SectorController::class, 'restore'])->name('sectors.restore')->middleware('permission:restore-sector');
+    Route::delete('/sectors/{id}/force-delete', [SectorController::class, 'forceDelete'])->name('sectors.force-delete')->middleware('permission:force-delete-sector');
     
-    Route::get('/offices/{office}', function ($office) {
-        return redirect()->route('departments.show', $office);
-    })->name('offices.show')->middleware('permission:view-office');
+    Route::resource('units', UnitController::class)->middleware('permission:access-unit');
+    Route::post('/units/{id}/restore', [UnitController::class, 'restore'])->name('units.restore')->middleware('permission:restore-unit');
+    Route::delete('/units/{id}/force-delete', [UnitController::class, 'forceDelete'])->name('units.force-delete')->middleware('permission:force-delete-unit');
     
-    Route::get('/offices/{office}/edit', function ($office) {
-        return redirect()->route('departments.edit', $office);
-    })->name('offices.edit')->middleware('permission:edit-office');
-    Route::post('/offices/{id}/restore', [OfficeController::class, 'restore'])->name('offices.restore')->middleware('permission:restore-office');
-    Route::delete('/offices/{id}/force-delete', [OfficeController::class, 'forceDelete'])->name('offices.force-delete')->middleware('permission:force-delete-office');
-    Route::resource('departments', DepartmentController::class)->middleware('permission:access-department');
-    Route::post('/departments/{id}/restore', [DepartmentController::class, 'restore'])->name('departments.restore')->middleware('permission:restore-department');
-    Route::delete('/departments/{id}/force-delete', [DepartmentController::class, 'forceDelete'])->name('departments.force-delete')->middleware('permission:force-delete-department');
+    // Unit-Position Whitelist Management
+    Route::resource('unit-positions', UnitPositionController::class)->middleware('permission:access-unit-position');
+    Route::post('/unit-positions/{id}/restore', [UnitPositionController::class, 'restore'])->name('unit-positions.restore')->middleware('permission:restore-unit-position');
+    Route::delete('/unit-positions/{id}/force-delete', [UnitPositionController::class, 'forceDelete'])->name('unit-positions.force-delete')->middleware('permission:force-delete-unit-position');
+    Route::post('/unit-positions/bulk', [UnitPositionController::class, 'bulkStore'])->name('unit-positions.bulk-store')->middleware('permission:create-unit-position');
+    
+    // Academic Ranks Management
+    Route::resource('academic-ranks', AcademicRankController::class)->middleware('permission:access-academic-rank');
+    Route::post('/academic-ranks/{id}/restore', [AcademicRankController::class, 'restore'])->name('academic-ranks.restore')->middleware('permission:restore-academic-rank');
+    Route::delete('/academic-ranks/{id}/force-delete', [AcademicRankController::class, 'forceDelete'])->name('academic-ranks.force-delete')->middleware('permission:force-delete-academic-rank');
+    
+    // Staff Grades Management
+    Route::resource('staff-grades', StaffGradeController::class)->middleware('permission:access-staff-grade');
+    Route::post('/staff-grades/{id}/restore', [StaffGradeController::class, 'restore'])->name('staff-grades.restore')->middleware('permission:restore-staff-grade');
+    Route::delete('/staff-grades/{id}/force-delete', [StaffGradeController::class, 'forceDelete'])->name('staff-grades.force-delete')->middleware('permission:force-delete-staff-grade');
+    
+    // Employee Designations Management
+    Route::get('/employees/{employee}/designations/manage', [EmployeeDesignationController::class, 'page'])->name('employees.designations.page')->middleware('permission:access-employees-module');
+    Route::get('/employees/{employee}/designations', [EmployeeDesignationController::class, 'index'])->name('employees.designations.index')->middleware('permission:access-employees-module');
+    Route::post('/employees/{employee}/designations', [EmployeeDesignationController::class, 'store'])->name('employees.designations.store')->middleware('permission:edit-employee');
+    Route::put('/employees/{employee}/designations/{designation}', [EmployeeDesignationController::class, 'update'])->name('employees.designations.update')->middleware('permission:edit-employee');
+    Route::delete('/employees/{employee}/designations/{designation}', [EmployeeDesignationController::class, 'destroy'])->name('employees.designations.destroy')->middleware('permission:edit-employee');
+    Route::post('/employees/{employee}/designations/{designation}/set-primary', [EmployeeDesignationController::class, 'setPrimary'])->name('employees.designations.set-primary')->middleware('permission:edit-employee');
+    Route::get('/employees/{employee}/designations/form-options', [EmployeeDesignationController::class, 'getFormOptions'])->name('employees.designations.form-options')->middleware('permission:access-employees-module');
+    
+    // Employee Grade/Rank Change Management (Promotion & Correction)
+    Route::get('/employees/{employee}/designations/{designation}/grade-history', [EmployeeGradeChangeController::class, 'history'])->name('employees.designations.grade-history')->middleware('permission:access-employees-module');
+    Route::post('/employees/{employee}/designations/{designation}/promote', [EmployeeGradeChangeController::class, 'promote'])->name('employees.designations.promote')->middleware('permission:promote-grade');
+    Route::post('/employees/{employee}/designations/{designation}/correct', [EmployeeGradeChangeController::class, 'correct'])->name('employees.designations.correct')->middleware('permission:correct-grade');
+    Route::get('/employees/{employee}/designations/{designation}/grade-form-options', [EmployeeGradeChangeController::class, 'getFormOptions'])->name('employees.designations.grade-form-options')->middleware('permission:access-employees-module');
+    
+    // Employee Promotions Management (Staff Grade)
+    Route::get('/employees/{employee}/promotions', [EmployeePromotionController::class, 'index'])->name('employees.promotions.index')->middleware('permission:access-employees-module');
+    Route::post('/employees/{employee}/promotions', [EmployeePromotionController::class, 'store'])->name('employees.promotions.store')->middleware('permission:promote-employee');
+    Route::get('/employees/{employee}/promotions/form-options', [EmployeePromotionController::class, 'getFormOptions'])->name('employees.promotions.form-options')->middleware('permission:access-employees-module');
+    
+    // Employee Rank Promotions Management (Academic Rank)
+    Route::get('/employees/{employee}/rank-promotions', [EmployeeRankPromotionController::class, 'index'])->name('employees.rank-promotions.index')->middleware('permission:access-employees-module');
+    Route::post('/employees/{employee}/rank-promotions', [EmployeeRankPromotionController::class, 'store'])->name('employees.rank-promotions.store')->middleware('permission:promote-employee');
+    Route::get('/employees/{employee}/rank-promotions/form-options', [EmployeeRankPromotionController::class, 'getFormOptions'])->name('employees.rank-promotions.form-options')->middleware('permission:access-employees-module');
+    // Legacy Department, Faculty, and Office routes removed - use new org structure (Sectors/Units) instead
     Route::resource('positions', PositionController::class)->middleware('permission:access-position');
     Route::post('/positions/{id}/restore', [PositionController::class, 'restore'])->name('positions.restore')->middleware('permission:restore-position');
     Route::delete('/positions/{id}/force-delete', [PositionController::class, 'forceDelete'])->name('positions.force-delete')->middleware('permission:force-delete-position');
@@ -129,8 +166,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('requests/{submission}', [RequestSubmissionController::class, 'show'])->name('requests.show');
     Route::post('requests/{submission}/approve', [RequestSubmissionController::class, 'approve'])->name('requests.approve');
     Route::post('requests/{submission}/reject', [RequestSubmissionController::class, 'reject'])->name('requests.reject');
+    Route::post('requests/{submission}/withdraw', [RequestSubmissionController::class, 'withdraw'])->name('requests.withdraw');
+    Route::post('requests/{submission}/comment', [RequestSubmissionController::class, 'addComment'])->name('requests.comment');
     Route::post('requests/{submission}/fulfill', [RequestSubmissionController::class, 'fulfill'])->name('requests.fulfill');
     Route::get('requests/{submission}/fulfillment/download', [RequestSubmissionController::class, 'downloadFulfillment'])->name('requests.fulfillment.download');
+    
+    // Approval Delegations (in Settings)
+    Route::get('settings/delegations', [App\Http\Controllers\ApprovalDelegationController::class, 'index'])->name('settings.delegations');
+    Route::post('settings/delegations', [App\Http\Controllers\ApprovalDelegationController::class, 'store'])->name('settings.delegations.store');
+    Route::delete('settings/delegations/{delegation}', [App\Http\Controllers\ApprovalDelegationController::class, 'destroy'])->name('settings.delegations.destroy');
+    Route::get('api/delegations/active', [App\Http\Controllers\ApprovalDelegationController::class, 'getActiveDelegation'])->name('api.delegations.active');
+    Route::get('api/delegations/to-me', [App\Http\Controllers\ApprovalDelegationController::class, 'getDelegationsToMe'])->name('api.delegations.to-me');
+    
     Route::get('trainings/join', [TrainingController::class, 'join'])->name('trainings.join');
     Route::post('trainings/join', [TrainingController::class, 'apply'])->name('trainings.apply');
     Route::get('trainings/logs', [TrainingController::class, 'logs'])->name('trainings.logs');
@@ -188,13 +235,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Log Viewer Routes (Super Admin only)
     Route::get('admin/logs', [App\Http\Controllers\LogViewController::class, 'index'])
         ->name('admin.logs.view')
-        ->middleware('role:Super Admin');
+        ->middleware('role:super-admin');
     Route::post('admin/logs/clear', [App\Http\Controllers\LogViewController::class, 'clear'])
         ->name('admin.logs.clear')
-        ->middleware('role:Super Admin');
+        ->middleware('role:super-admin');
     Route::get('admin/logs/download', [App\Http\Controllers\LogViewController::class, 'download'])
         ->name('admin.logs.download')
-        ->middleware('role:Super Admin');
+        ->middleware('role:super-admin');
 
 });
 

@@ -50,8 +50,12 @@ export const EmployeeTableConfig = {
     { label: 'Full Name', key: 'fullname', className: 'min-w-[250px] p-4', group: 'identification', visible: true, format: formatFullName },
 
     // ========== Employment ==========
-    { label: 'Position', key: 'position.pos_name', className: 'min-w-[180px] p-4', group: 'employment', visible: true },
-    { label: 'Department', key: 'department.faculty_name', className: 'min-w-[200px] p-4', group: 'employment', visible: true },
+    { label: 'Position', key: 'primary_designation.position.pos_name', className: 'min-w-[180px] p-4', group: 'employment', visible: true },
+    { label: 'Unit', key: 'primary_designation.unit.name', className: 'min-w-[200px] p-4', group: 'employment', visible: true },
+    { label: 'Unit Type', key: 'primary_designation.unit.unit_type', className: 'min-w-[100px] capitalize p-4', group: 'employment', visible: false },
+    { label: 'Sector', key: 'primary_designation.unit.sector.name', className: 'min-w-[150px] p-4', group: 'employment', visible: false },
+    { label: 'Academic Rank', key: 'primary_designation.academic_rank.name', className: 'min-w-[150px] p-4', group: 'employment', visible: false },
+    { label: 'Staff Grade', key: 'primary_designation.staff_grade.name', className: 'min-w-[150px] p-4', group: 'employment', visible: false },
     { label: 'Status', key: 'status', className: 'min-w-[100px] capitalize p-4', group: 'employment', visible: true },
     { label: 'Employee Type', key: 'employee_type', className: 'min-w-[120px] p-4', group: 'employment', visible: true },
     { label: 'Employment Status', key: 'employment_status', className: 'min-w-[150px] p-4', group: 'employment', visible: true },

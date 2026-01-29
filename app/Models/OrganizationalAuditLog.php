@@ -43,13 +43,15 @@ class OrganizationalAuditLog extends Model
     public static function generateReferenceNumber(string $unitType): string
     {
         $prefix = match($unitType) {
-            'faculty' => 'FAC',
-            'department' => 'DEPT',
-            'office' => 'OFF',
+            'sector' => 'SEC',
+            'unit' => 'UNIT',
+            'faculty' => 'FAC',   // legacy, maps to sector
+            'department' => 'DEPT', // legacy, maps to unit
+            'office' => 'OFF',     // legacy, maps to unit
             'position' => 'POS',
             default => 'ORG',
         };
-        
+
         return $prefix . '-' . now()->format('Ymd') . '-' . strtoupper(Str::random(5));
     }
 
@@ -94,14 +96,13 @@ class OrganizationalAuditLog extends Model
     }
 
     /**
-     * Get the related unit (faculty, department, office, or position)
+     * Get the related unit (sector, unit, or position). Legacy types faculty/department/office map to Sector/Unit.
      */
     public function unit()
     {
         return match($this->unit_type) {
-            'faculty' => $this->belongsTo(Faculty::class, 'unit_id'),
-            'department' => $this->belongsTo(Department::class, 'unit_id'),
-            'office' => $this->belongsTo(Department::class, 'unit_id'), // Offices are departments with type='administrative'
+            'sector', 'faculty' => $this->belongsTo(Sector::class, 'unit_id'),
+            'unit', 'department', 'office' => $this->belongsTo(Unit::class, 'unit_id'),
             'position' => $this->belongsTo(Position::class, 'unit_id'),
             default => null,
         };
@@ -121,13 +122,13 @@ class OrganizationalAuditLog extends Model
     }
 
     /**
-    * Build a snapshot for the given unit type/id.
-    */
+     * Build a snapshot for the given unit type/id. New structure: sector, unit, position. Legacy: faculty->sector, department/office->unit.
+     */
     protected static function buildSnapshot(string $unitType, int|string $unitId): ?array
     {
         $model = match($unitType) {
-            'faculty' => Faculty::withTrashed()->find($unitId),
-            'department', 'office' => Department::withTrashed()->find($unitId),
+            'sector', 'faculty' => Sector::withTrashed()->find($unitId),
+            'unit', 'department', 'office' => Unit::withTrashed()->find($unitId),
             'position' => Position::withTrashed()->find($unitId),
             default => null,
         };

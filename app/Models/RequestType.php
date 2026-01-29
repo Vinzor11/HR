@@ -50,15 +50,20 @@ class RequestType extends Model
         return $this->hasMany(RequestSubmission::class);
     }
 
-    public function allowedFaculties()
+    /**
+     * New org structure relationships (Sector/Unit)
+     */
+    public function allowedSectors()
     {
-        return $this->belongsToMany(Faculty::class, 'request_type_allowed_faculties', 'request_type_id', 'faculty_id')->withTimestamps();
+        return $this->belongsToMany(Sector::class, 'request_type_allowed_sectors', 'request_type_id', 'sector_id')->withTimestamps();
     }
 
-    public function allowedDepartments()
+    public function allowedUnits()
     {
-        return $this->belongsToMany(Department::class, 'request_type_allowed_departments', 'request_type_id', 'department_id')->withTimestamps();
+        return $this->belongsToMany(Unit::class, 'request_type_allowed_units', 'request_type_id', 'unit_id')->withTimestamps();
     }
+
+    // Legacy relationships removed - use allowedSectors/allowedUnits instead
 
     public function trainings()
     {
@@ -79,6 +84,11 @@ class RequestType extends Model
     {
         return $query->where('is_published', true);
     }
+
+    // Approval modes for steps
+    public const APPROVAL_MODE_ANY = 'any';       // Any one approver can approve (OR logic)
+    public const APPROVAL_MODE_ALL = 'all';       // All approvers must approve (AND logic)
+    public const APPROVAL_MODE_MAJORITY = 'majority'; // Majority must approve
 
     public function approvalSteps(): Collection
     {
@@ -112,8 +122,26 @@ class RequestType extends Model
                     ->filter(fn ($approver) => $approver['approver_type'] && ($approver['approver_id'] || $approver['approver_role_id'] || $approver['approver_position_id']))
                     ->values();
 
+                // Ensure approval_mode is set (default to 'any' for backward compatibility)
+                $step['approval_mode'] = data_get($step, 'approval_mode', self::APPROVAL_MODE_ANY);
+                
+                // Ensure sla_hours is set (default to null for no deadline)
+                $step['sla_hours'] = data_get($step, 'sla_hours');
+
                 return $step;
             });
+    }
+
+    /**
+     * Get available approval modes.
+     */
+    public static function getApprovalModes(): array
+    {
+        return [
+            self::APPROVAL_MODE_ANY => 'Any (One approver is sufficient)',
+            self::APPROVAL_MODE_ALL => 'All (All approvers must approve)',
+            self::APPROVAL_MODE_MAJORITY => 'Majority (More than half must approve)',
+        ];
     }
 
     public function isPublished(): bool

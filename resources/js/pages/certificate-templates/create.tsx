@@ -6,6 +6,20 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { router } from '@inertiajs/react';
 import { CertificateTemplateEditor } from '@/components/certificate-template-editor';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useMemo, useState } from 'react';
+
+interface RequestTypeOption {
+    id: number;
+    name: string;
+    fields: Array<{ field_key: string; label: string }>;
+}
+
+interface CertificateTemplateCreateProps {
+    requestTypes?: RequestTypeOption[];
+    systemFieldKeys?: string[];
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -37,7 +51,22 @@ interface TextLayer {
     sort_order: number;
 }
 
-export default function CertificateTemplateCreate() {
+export default function CertificateTemplateCreate({ requestTypes = [], systemFieldKeys = [] }: CertificateTemplateCreateProps) {
+    const [selectedRequestTypeId, setSelectedRequestTypeId] = useState<number | ''>('');
+
+    const availableFieldKeys = useMemo(() => {
+        const system = systemFieldKeys.length > 0 ? systemFieldKeys : [
+            'user_name', 'user_email', 'employee_full_name', 'employee_first_name', 'employee_last_name',
+            'employee_position', 'employee_unit', 'employee_department', 'reference_code',
+            'submitted_date', 'completed_date', 'current_date', 'current_year',
+        ];
+        if (!selectedRequestTypeId) return system;
+        const rt = requestTypes.find((r) => r.id === selectedRequestTypeId);
+        if (!rt) return system;
+        const requestKeys = rt.fields.map((f) => f.field_key).filter(Boolean);
+        return [...system, ...requestKeys];
+    }, [systemFieldKeys, selectedRequestTypeId, requestTypes]);
+
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         description: '',
@@ -46,6 +75,7 @@ export default function CertificateTemplateCreate() {
         height: 800,
         is_active: true,
         text_layers: [] as TextLayer[],
+        request_type_id: null as number | null,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -88,10 +118,37 @@ export default function CertificateTemplateCreate() {
                                 Design a certificate template that can be reused for multiple request types
                             </p>
                         </div>
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium">Show fields for request type (optional)</Label>
+                            <Select
+                                value={selectedRequestTypeId === '' ? 'none' : String(selectedRequestTypeId)}
+                                onValueChange={(v) => {
+                                    const id = v === 'none' ? '' : Number(v);
+                                    setSelectedRequestTypeId(id);
+                                    setData('request_type_id', id === '' ? null : id);
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a request type to see its form fields" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">— System fields only —</SelectItem>
+                                    {requestTypes.map((rt) => (
+                                        <SelectItem key={rt.id} value={String(rt.id)}>
+                                            {rt.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                Choosing a request type adds its form field keys below. When you create this template, that request type will be set to require fulfillment and will use this certificate for generation.
+                            </p>
+                        </div>
                     </Card>
 
                     <Card className="p-5 space-y-6">
                         <CertificateTemplateEditor
+                            availableFieldKeys={availableFieldKeys}
                             name={data.name}
                             description={data.description}
                             backgroundImage={data.background_image}

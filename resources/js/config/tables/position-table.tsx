@@ -25,41 +25,16 @@ export const PositionTableConfig = {
       },
     },
     { 
-      label: 'Faculty', 
-      key: 'faculty.name', 
-      className: 'min-w-[200px] p-4',
-      format: (value: string, row: any) => row?.faculty?.name || '-',
+      label: 'Sector', 
+      key: 'sector.name', 
+      className: 'min-w-[120px] p-4',
+      format: (value: string, row: any) => row?.sector?.name || 'System-wide',
     },
     { 
-      label: 'Department', 
-      key: 'department.name', 
-      className: 'min-w-[200px] p-4',
-      format: (value: string, row: any) => row?.department?.name || '-',
-    },
-    { 
-      label: 'Position Category', 
-      key: 'position_category', 
-      className: 'min-w-[200px] p-4',
-      format: (value: string) => {
-        if (!value) return '-'
-        const categoryLabels: Record<string, string> = {
-          'executive': 'Executive Positions',
-          'academic_teaching': 'Academic (Teaching)',
-          'academic_support': 'Academic Support',
-          'administrative_non_teaching': 'Administrative (Non-Teaching)',
-          'technical_skilled': 'Technical / Skilled',
-          'support_utility': 'Support / Utility',
-          'specialized_compliance': 'Specialized / Compliance',
-        }
-        return categoryLabels[value] || value.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-      },
-    },
-    { label: 'Hierarchy Level', key: 'hierarchy_level', className: 'min-w-[140px] p-4 text-center' },
-    {
-      label: 'Capacity',
-      key: 'capacity',
-      className: 'min-w-[120px] p-4 text-center',
-      format: (value: number | null) => value !== null && value !== undefined ? String(value) : 'Unlimited',
+      label: 'Authority Level', 
+      key: 'authority_level', 
+      className: 'min-w-[100px] p-4 text-center',
+      format: (value: number | null) => value !== null && value !== undefined ? String(value) : '-',
     },
     {
       label: 'Description',

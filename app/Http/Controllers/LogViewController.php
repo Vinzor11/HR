@@ -15,7 +15,7 @@ class LogViewController extends Controller
     public function index(Request $request)
     {
         // Only allow Super Admin to access logs
-        if (!auth()->user()->hasRole('Super Admin')) {
+        if (!auth()->user()->hasRole('super-admin')) {
             abort(403, 'Unauthorized access. Only Super Admins can view logs.');
         }
 
@@ -124,7 +124,7 @@ class LogViewController extends Controller
     public function clear(Request $request)
     {
         // Only allow Super Admin
-        if (!auth()->user()->hasRole('Super Admin')) {
+        if (!auth()->user()->hasRole('super-admin')) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -160,7 +160,7 @@ class LogViewController extends Controller
     public function download()
     {
         // Only allow Super Admin
-        if (!auth()->user()->hasRole('Super Admin')) {
+        if (!auth()->user()->hasRole('super-admin')) {
             abort(403, 'Unauthorized access.');
         }
 

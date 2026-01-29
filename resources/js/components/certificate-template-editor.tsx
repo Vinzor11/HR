@@ -53,7 +53,7 @@ interface CertificateTemplateEditorProps {
     errors?: Record<string, string>;
 }
 
-// Available field keys that can be dragged
+// Default system field keys when backend does not pass them
 const DEFAULT_FIELD_KEYS = [
     'user_name',
     'user_email',
@@ -61,6 +61,7 @@ const DEFAULT_FIELD_KEYS = [
     'employee_first_name',
     'employee_last_name',
     'employee_position',
+    'employee_unit',
     'employee_department',
     'reference_code',
     'submitted_date',

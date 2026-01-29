@@ -20,6 +20,7 @@ class RequestSubmission extends Model
     public const STATUS_FULFILLMENT = 'fulfillment';
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_REJECTED = 'rejected';
+    public const STATUS_WITHDRAWN = 'withdrawn';
 
     protected $fillable = [
         'request_type_id',
@@ -30,6 +31,8 @@ class RequestSubmission extends Model
         'approval_state',
         'submitted_at',
         'fulfilled_at',
+        'withdrawn_at',
+        'withdrawal_reason',
         'certificate_path',
     ];
 
@@ -37,6 +40,7 @@ class RequestSubmission extends Model
         'approval_state' => 'array',
         'submitted_at' => 'datetime',
         'fulfilled_at' => 'datetime',
+        'withdrawn_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -76,6 +80,24 @@ class RequestSubmission extends Model
         return $this->hasOne(RequestFulfillment::class, 'submission_id');
     }
 
+    /**
+     * Comments/discussion thread for this submission.
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ApprovalComment::class, 'submission_id')->orderBy('created_at');
+    }
+
+    /**
+     * Public comments visible to the requester.
+     */
+    public function publicComments(): HasMany
+    {
+        return $this->hasMany(ApprovalComment::class, 'submission_id')
+            ->where('is_internal', false)
+            ->orderBy('created_at');
+    }
+
     public function hasCertificate(): bool
     {
         return !is_null($this->certificate_path);
@@ -109,6 +131,51 @@ class RequestSubmission extends Model
     public function isCompleted(): bool
     {
         return $this->status === self::STATUS_COMPLETED || (!$this->requiresFulfillment() && $this->status === self::STATUS_APPROVED);
+    }
+
+    /**
+     * Check if the submission is withdrawn.
+     */
+    public function isWithdrawn(): bool
+    {
+        return $this->status === self::STATUS_WITHDRAWN;
+    }
+
+    /**
+     * Check if the submission can be withdrawn.
+     * Can only withdraw if still pending approval.
+     */
+    public function canBeWithdrawn(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
+    /**
+     * Withdraw the submission.
+     */
+    public function withdraw(string $reason = null): bool
+    {
+        if (!$this->canBeWithdrawn()) {
+            return false;
+        }
+
+        $this->update([
+            'status' => self::STATUS_WITHDRAWN,
+            'withdrawn_at' => now(),
+            'withdrawal_reason' => $reason,
+            'current_step_index' => null,
+        ]);
+
+        // Create a system comment for the withdrawal
+        ApprovalComment::create([
+            'submission_id' => $this->id,
+            'user_id' => $this->user_id,
+            'content' => $reason ? "Request withdrawn: {$reason}" : 'Request withdrawn by requester.',
+            'type' => ApprovalComment::TYPE_WITHDRAWAL,
+            'is_internal' => false,
+        ]);
+
+        return true;
     }
 
     public static function generateReferenceCode(): string

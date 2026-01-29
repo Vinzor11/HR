@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Employee;
 
 class RequestApprovalAction extends Model
@@ -25,10 +26,21 @@ class RequestApprovalAction extends Model
         'notes',
         'acted_at',
         'meta',
+        'due_at',
+        'reminded_at',
+        'reminder_count',
+        'is_escalated',
+        'escalated_at',
+        'escalated_from_user_id',
+        'delegated_from_user_id',
     ];
 
     protected $casts = [
         'acted_at' => 'datetime',
+        'due_at' => 'datetime',
+        'reminded_at' => 'datetime',
+        'escalated_at' => 'datetime',
+        'is_escalated' => 'boolean',
         'meta' => 'array',
     ];
 
@@ -52,9 +64,75 @@ class RequestApprovalAction extends Model
         return $this->belongsTo(Position::class, 'approver_position_id');
     }
 
+    /**
+     * The user this action was escalated from.
+     */
+    public function escalatedFromUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'escalated_from_user_id');
+    }
+
+    /**
+     * The user this action was delegated from.
+     */
+    public function delegatedFromUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'delegated_from_user_id');
+    }
+
+    /**
+     * Comments associated with this approval action.
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ApprovalComment::class, 'approval_action_id');
+    }
+
     public function scopePending($query)
     {
         return $query->where('status', self::STATUS_PENDING);
+    }
+
+    /**
+     * Scope to get overdue approval actions.
+     */
+    public function scopeOverdue($query)
+    {
+        return $query->where('status', self::STATUS_PENDING)
+            ->whereNotNull('due_at')
+            ->where('due_at', '<', now());
+    }
+
+    /**
+     * Scope to get actions due soon (within specified hours).
+     */
+    public function scopeDueSoon($query, int $hours = 24)
+    {
+        return $query->where('status', self::STATUS_PENDING)
+            ->whereNotNull('due_at')
+            ->where('due_at', '>', now())
+            ->where('due_at', '<=', now()->addHours($hours));
+    }
+
+    /**
+     * Check if this action is overdue.
+     */
+    public function isOverdue(): bool
+    {
+        return $this->status === self::STATUS_PENDING 
+            && $this->due_at 
+            && $this->due_at->isPast();
+    }
+
+    /**
+     * Check if this action is due soon.
+     */
+    public function isDueSoon(int $hours = 24): bool
+    {
+        return $this->status === self::STATUS_PENDING 
+            && $this->due_at 
+            && $this->due_at->isFuture()
+            && $this->due_at->lte(now()->addHours($hours));
     }
 
     public function canUserAct(User $user): bool
@@ -114,7 +192,7 @@ class RequestApprovalAction extends Model
                 return false;
             }
             
-            $employee = Employee::with(['department.faculty', 'position'])->find($user->employee_id);
+            $employee = Employee::with(['primaryDesignation.unit.sector', 'primaryDesignation.position'])->find($user->employee_id);
             if (!$employee) {
                 \Log::warning('canUserAct - Employee not found', [
                     'action_id' => $this->id,
@@ -124,19 +202,20 @@ class RequestApprovalAction extends Model
                 return false;
             }
             
+            $employeePositionId = $employee->primaryDesignation?->position_id;
             \Log::info('canUserAct - Employee found', [
                 'action_id' => $this->id,
                 'employee_id' => $employee->id,
-                'employee_position_id' => $employee->position_id,
+                'employee_position_id' => $employeePositionId,
                 'required_position_id' => $this->approver_position_id,
-                'employee_department_id' => $employee->department_id,
+                'employee_unit_id' => $employee->primaryDesignation?->unit_id,
             ]);
             
             // Check if employee has the position
-            if ($employee->position_id !== $this->approver_position_id) {
+            if ($employeePositionId !== $this->approver_position_id) {
                 \Log::warning('canUserAct - Position mismatch', [
                     'action_id' => $this->id,
-                    'employee_position_id' => $employee->position_id,
+                    'employee_position_id' => $employeePositionId,
                     'required_position_id' => $this->approver_position_id,
                 ]);
                 return false;
@@ -157,51 +236,48 @@ class RequestApprovalAction extends Model
             }
             
             // For position-based approvers that weren't resolved to users,
-            // verify that the approver is in the same faculty/department as the requester
+            // verify that the approver is in the same sector as the requester
             // Get requester from submission
             $requester = $this->submission->user->employee ?? null;
             if ($requester) {
-                $requester->load(['department.faculty', 'position']);
+                $requester->load(['primaryDesignation.unit.sector', 'primaryDesignation.position']);
+                
+                $requesterSectorId = $requester->primaryDesignation?->unit?->sector_id;
+                $approverSectorId = $employee->primaryDesignation?->unit?->sector_id;
                 
                 \Log::info('canUserAct - Checking requester context', [
                     'action_id' => $this->id,
-                    'requester_department_id' => $requester->department_id,
-                    'requester_faculty_id' => $requester->department?->faculty_id ?? $requester->position?->faculty_id,
-                    'approver_department_id' => $employee->department_id,
-                    'approver_faculty_id' => $employee->department?->faculty_id ?? $employee->position?->faculty_id,
+                    'requester_unit_id' => $requester->primaryDesignation?->unit_id,
+                    'requester_sector_id' => $requesterSectorId,
+                    'approver_unit_id' => $employee->primaryDesignation?->unit_id,
+                    'approver_sector_id' => $approverSectorId,
                 ]);
                 
-                // Check if approver's faculty matches requester's faculty
+                // Check if approver's sector matches requester's sector
                 // Since positions are filtered by training requirements and are unique,
-                // we only need to check faculty match, not exact department match
-                $requesterFacultyId = $requester->department?->faculty_id ?? $requester->position?->faculty_id;
-                $approverFacultyId = $employee->department?->faculty_id ?? $employee->position?->faculty_id;
-                
-                // If both have faculty IDs, they must match
-                if ($requesterFacultyId && $approverFacultyId) {
-                    if ($approverFacultyId !== $requesterFacultyId) {
-                        \Log::warning('canUserAct - Faculty mismatch', [
+                // we only need to check sector match
+                if ($requesterSectorId && $approverSectorId) {
+                    if ($approverSectorId !== $requesterSectorId) {
+                        \Log::warning('canUserAct - Sector mismatch', [
                             'action_id' => $this->id,
-                            'requester_faculty_id' => $requesterFacultyId,
-                            'approver_faculty_id' => $approverFacultyId,
+                            'requester_sector_id' => $requesterSectorId,
+                            'approver_sector_id' => $approverSectorId,
                         ]);
                         return false;
                     }
                     
-                    // Faculty matches, allow approval
-                    \Log::info('canUserAct - Faculty match, allowing approval', [
+                    \Log::info('canUserAct - Sector match, allowing approval', [
                         'action_id' => $this->id,
-                        'faculty_id' => $requesterFacultyId,
+                        'sector_id' => $requesterSectorId,
                     ]);
                     return true;
                 }
                 
-                // If one or both don't have faculty IDs, allow it
-                // (positions are already filtered by training requirements)
-                \Log::info('canUserAct - No faculty check needed, allowing approval', [
+                // If one or both don't have sector IDs, allow it
+                \Log::info('canUserAct - No sector check needed, allowing approval', [
                     'action_id' => $this->id,
-                    'requester_faculty_id' => $requesterFacultyId,
-                    'approver_faculty_id' => $approverFacultyId,
+                    'requester_sector_id' => $requesterSectorId,
+                    'approver_sector_id' => $approverSectorId,
                 ]);
                 return true;
             }

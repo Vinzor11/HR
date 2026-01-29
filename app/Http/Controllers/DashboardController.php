@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
-use App\Models\Department;
+use App\Models\Unit;
 use App\Models\Position;
 use App\Models\RequestSubmission;
 use App\Models\RequestType;
@@ -290,14 +290,15 @@ class DashboardController extends Controller
 
     private function getEmployeeInsights(): array
     {
-        // Top 5 departments
-        $topDepartments = Department::withCount('employees')
+        // Top 5 units by employee designation count
+        $topUnits = Unit::withCount(['employeeDesignations as employees_count'])
+            ->where('is_active', true)
             ->orderByDesc('employees_count')
             ->limit(5)
             ->get()
-            ->map(fn ($dept) => [
-                'name' => $dept->faculty_name,
-                'count' => $dept->employees_count,
+            ->map(fn ($unit) => [
+                'name' => $unit->name,
+                'count' => $unit->employees_count,
             ]);
 
         // Employees on leave today
@@ -311,7 +312,7 @@ class DashboardController extends Controller
             ->toArray();
 
         return [
-            'top_departments' => $topDepartments,
+            'top_units' => $topUnits,
             'on_leave_today' => $onLeaveToday,
             'status_summary' => $statusSummary,
             'total_active' => $statusSummary['active'] ?? 0,
@@ -533,6 +534,43 @@ class DashboardController extends Controller
                 'link' => route('trainings.index'),
                 'icon' => 'GraduationCap',
             ];
+        }
+
+        // Contract end date notifications (1 week ahead)
+        $oneWeekFromNow = Carbon::now()->addWeek();
+        $today = Carbon::now();
+        
+        // Check if user has employee access permission or is an employee
+        $hasEmployeeAccess = $user->can('access-employees-module');
+        $isEmployee = $user->employee_id !== null;
+        
+        if ($hasEmployeeAccess || $isEmployee) {
+            $query = Employee::whereIn('employment_status', ['Contractual', 'Job-Order'])
+                ->whereNotNull('end_date')
+                ->whereBetween('end_date', [$today->toDateString(), $oneWeekFromNow->toDateString()])
+                ->where('status', 'active');
+            
+            // If user has employee access, show all employees
+            // If user is just an employee, only show their own contract
+            if (!$hasEmployeeAccess && $isEmployee) {
+                $query->where('id', $user->employee_id);
+            }
+            
+            $expiringContracts = $query->count();
+            
+            if ($expiringContracts > 0) {
+                $notifications[] = [
+                    'type' => 'warning',
+                    'title' => "{$expiringContracts} contract(s) expiring within 1 week",
+                    'message' => $hasEmployeeAccess 
+                        ? 'Review and take necessary action for these employees.'
+                        : 'Your contract is expiring soon. Please contact HR.',
+                    'link' => $hasEmployeeAccess 
+                        ? route('employees.index', ['employment_status' => 'Contractual,Job-Order'])
+                        : route('employees.my-profile'),
+                    'icon' => 'Calendar',
+                ];
+            }
         }
 
         return $notifications;

@@ -6,10 +6,13 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @deprecated New structure uses training_allowed_sectors and training_allowed_units. Run migrations instead.
+ */
 class CreateTrainingAllowedFacultiesTable extends Command
 {
     protected $signature = 'training:create-faculties-table';
-    protected $description = 'Create training_allowed_faculties table if it does not exist';
+    protected $description = '[Deprecated] Create training_allowed_faculties table. Use training_allowed_sectors/units (new org structure) instead.';
 
     public function handle()
     {

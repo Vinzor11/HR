@@ -20,7 +20,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 interface Participant {
     name: string;
-    department: string;
+    unit: string;
     position: string;
 }
 
@@ -54,7 +54,7 @@ interface LogEntry {
     updated_at?: string;
     created_at?: string;
     employee_name?: string;
-    employee_department?: string;
+    employee_unit?: string;
     employee_position?: string;
 }
 
@@ -170,7 +170,7 @@ export default function TrainingsOverview() {
     const [overviewStatusFilter, setOverviewStatusFilter] = useState(filters?.status || 'all');
     const [activeTab, setActiveTab] = useState('logs');
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
-    const [searchMode, setSearchMode] = useState<'any' | 'title' | 'employee' | 'department' | 'position' | 'facilitator' | 'venue'>('any');
+    const [searchMode, setSearchMode] = useState<'any' | 'title' | 'employee' | 'unit' | 'position' | 'facilitator' | 'venue'>('any');
     const [dateFrom, setDateFrom] = useState<string>(formatDateForInput(filters?.date_from));
     const [dateTo, setDateTo] = useState<string>(formatDateForInput(filters?.date_to));
     const [overviewSearchTerm, setOverviewSearchTerm] = useState(filters?.search || '');
@@ -226,7 +226,7 @@ export default function TrainingsOverview() {
                     t.participants.some(
                         (p) =>
                             p.name?.toLowerCase().includes(query) ||
-                            p.department?.toLowerCase().includes(query) ||
+                            p.unit?.toLowerCase().includes(query) ||
                             p.position?.toLowerCase().includes(query)
                     )
                 );
@@ -239,7 +239,7 @@ export default function TrainingsOverview() {
                         t.participants.some(
                             (p) =>
                                 p.name?.toLowerCase().includes(query) ||
-                                p.department?.toLowerCase().includes(query) ||
+                                p.unit?.toLowerCase().includes(query) ||
                                 p.position?.toLowerCase().includes(query)
                         )
                 );
@@ -282,7 +282,7 @@ export default function TrainingsOverview() {
             'Venue',
             'Total Participants',
             'Participant Name',
-            'Department',
+            'Unit',
             'Position'
         ];
 
@@ -303,7 +303,7 @@ export default function TrainingsOverview() {
                     index === 0 ? (training.venue || '') : '',
                     index === 0 ? String(training.total_participants || 0) : '',
                     participant.name || '',
-                    participant.department || '',
+                    participant.unit || '',
                     participant.position || ''
                 ]);
             });
@@ -348,7 +348,7 @@ export default function TrainingsOverview() {
             if (searchTerm) {
                 if (searchMode === 'title') matchesSearch = !!(entry.training_title?.toLowerCase().includes(term));
                 else if (searchMode === 'employee') matchesSearch = !!(entry.employee_name?.toLowerCase().includes(term));
-                else if (searchMode === 'department') matchesSearch = !!(entry.employee_department?.toLowerCase().includes(term));
+                else if (searchMode === 'unit') matchesSearch = !!(entry.employee_unit?.toLowerCase().includes(term));
                 else if (searchMode === 'position') matchesSearch = !!(entry.employee_position?.toLowerCase().includes(term));
                 else if (searchMode === 'facilitator') matchesSearch = !!(entry.facilitator?.toLowerCase().includes(term));
                 else if (searchMode === 'venue') matchesSearch = !!(entry.venue?.toLowerCase().includes(term));
@@ -356,7 +356,7 @@ export default function TrainingsOverview() {
                     matchesSearch = !!(
                         entry.training_title?.toLowerCase().includes(term) ||
                         entry.employee_name?.toLowerCase().includes(term) ||
-                        entry.employee_department?.toLowerCase().includes(term) ||
+                        entry.employee_unit?.toLowerCase().includes(term) ||
                         entry.employee_position?.toLowerCase().includes(term) ||
                         entry.facilitator?.toLowerCase().includes(term) ||
                         entry.venue?.toLowerCase().includes(term)
@@ -422,7 +422,7 @@ export default function TrainingsOverview() {
             'ID',
             'Training Title',
             'Employee Name',
-            'Department',
+            'Unit',
             'Position',
             'Status',
             'Attendance',
@@ -439,7 +439,7 @@ export default function TrainingsOverview() {
             entry.id,
             entry.training_title || '',
             entry.employee_name || '',
-            entry.employee_department || '',
+            entry.employee_unit || '',
             entry.employee_position || '',
             entry.status || '',
             entry.attendance || '',
@@ -514,7 +514,7 @@ export default function TrainingsOverview() {
                                                 <SelectItem value="any">Any</SelectItem>
                                                 <SelectItem value="title">Title</SelectItem>
                                                 <SelectItem value="employee">Employee</SelectItem>
-                                                <SelectItem value="department">Department</SelectItem>
+                                                <SelectItem value="unit">Unit</SelectItem>
                                                 <SelectItem value="position">Position</SelectItem>
                                                 <SelectItem value="facilitator">Facilitator</SelectItem>
                                                 <SelectItem value="venue">Venue</SelectItem>
@@ -524,7 +524,7 @@ export default function TrainingsOverview() {
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                                             <Input
                                                 type="text"
-                                                placeholder={searchMode === 'any' ? 'Search by training, employee, department, venue...' : `Search by ${searchMode}...`}
+                                                placeholder={searchMode === 'any' ? 'Search by training, employee, unit, venue...' : `Search by ${searchMode}...`}
                                                 className="h-10 w-full min-w-0 pl-10 pr-3 border-0 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
                                                 value={searchTerm}
                                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -641,9 +641,9 @@ export default function TrainingsOverview() {
                                                                                             <div className="font-medium text-muted-foreground mb-1">Employee:</div>
                                                                                             <div className="text-foreground">
                                                                                                 {entry.employee_name}
-                                                                                                {entry.employee_department && (
+                                                                                                {entry.employee_unit && (
                                                                                                     <span className="text-muted-foreground ml-2">
-                                                                                                        ({entry.employee_department} - {entry.employee_position})
+                                                                                                        ({entry.employee_unit} - {entry.employee_position})
                                                                                                     </span>
                                                                                                 )}
                                                                                             </div>
@@ -872,7 +872,7 @@ export default function TrainingsOverview() {
                                                     <thead>
                                                         <tr>
                                                             <th className="bg-muted px-3 py-2 text-left font-semibold text-foreground">Participant</th>
-                                                            <th className="bg-muted px-3 py-2 text-left font-semibold text-foreground">Department</th>
+                                                            <th className="bg-muted px-3 py-2 text-left font-semibold text-foreground">Unit</th>
                                                             <th className="bg-muted px-3 py-2 text-left font-semibold text-foreground">Position</th>
                                                         </tr>
                                                     </thead>
@@ -887,7 +887,7 @@ export default function TrainingsOverview() {
                                                             training.participants.map((participant, idx) => (
                                                                 <tr key={`${training.training_id}-${idx}`}>
                                                                     <td className="border-t border-border px-3 py-2 text-foreground">{participant.name}</td>
-                                                                    <td className="border-t border-border px-3 py-2 text-foreground">{participant.department}</td>
+                                                                    <td className="border-t border-border px-3 py-2 text-foreground">{participant.unit}</td>
                                                                     <td className="border-t border-border px-3 py-2 text-foreground">{participant.position}</td>
                                                                 </tr>
                                                             ))

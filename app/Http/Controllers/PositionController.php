@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\PositionRequest;
-use App\Models\Department;
-use App\Models\Faculty;
+// Legacy Department and Faculty models removed - use new org structure (Sector/Unit) instead
+use App\Models\Sector;
 use App\Services\AuditLogService;
 use App\Models\Position;
 use Illuminate\Http\Request;
@@ -20,14 +20,12 @@ class PositionController extends Controller
         $perPage = $request->integer('perPage', 10);
         $search = (string) $request->input('search', '');
         $searchMode = $request->input('search_mode', 'any');
-        $departmentId = $request->input('department_id');
-        $positionCategory = $request->input('position_category');
         $showDeleted = $request->boolean('show_deleted', false);
         $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = $request->input('sort_order', 'asc');
 
         // Validate sort_by to prevent SQL injection
-        $allowedSortColumns = ['pos_name', 'pos_code', 'created_at', 'updated_at', 'hierarchy_level'];
+        $allowedSortColumns = ['pos_name', 'pos_code', 'created_at', 'updated_at', 'authority_level'];
         if (!in_array($sortBy, $allowedSortColumns)) {
             $sortBy = 'created_at';
         }
@@ -35,7 +33,9 @@ class PositionController extends Controller
         // Validate sort_order
         $sortOrder = strtolower($sortOrder) === 'desc' ? 'desc' : 'asc';
 
-        $positions = Position::with(['department:id,name,code', 'faculty:id,name,code'])
+        $sectorId = $request->input('sector_id');
+
+        $positions = Position::with(['sector:id,name,code'])
             ->when($showDeleted, function ($query) {
                 $query->onlyTrashed();
             })
@@ -51,15 +51,9 @@ class PositionController extends Controller
                         case 'description':
                             $q->where('description', 'like', "%{$search}%");
                             break;
-                        case 'department':
-                            $q->whereHas('department', function ($deptQuery) use ($search) {
-                                $deptQuery->where('name', 'like', "%{$search}%")
-                                    ->orWhere('code', 'like', "%{$search}%");
-                            });
-                            break;
-                        case 'faculty':
-                            $q->whereHas('faculty', function ($facultyQuery) use ($search) {
-                                $facultyQuery->where('name', 'like', "%{$search}%")
+                        case 'sector':
+                            $q->whereHas('sector', function ($sectorQuery) use ($search) {
+                                $sectorQuery->where('name', 'like', "%{$search}%")
                                     ->orWhere('code', 'like', "%{$search}%");
                             });
                             break;
@@ -67,43 +61,32 @@ class PositionController extends Controller
                             $q->where('pos_name', 'like', "%{$search}%")
                               ->orWhere('pos_code', 'like', "%{$search}%")
                               ->orWhere('description', 'like', "%{$search}%")
-                              ->orWhereHas('department', function ($deptQuery) use ($search) {
-                                  $deptQuery->where('name', 'like', "%{$search}%")
+                              ->orWhereHas('sector', function ($sectorQuery) use ($search) {
+                                  $sectorQuery->where('name', 'like', "%{$search}%")
                                         ->orWhere('code', 'like', "%{$search}%");
-                              })
-                              ->orWhereHas('faculty', function ($facultyQuery) use ($search) {
-                                  $facultyQuery->where('name', 'like', "%{$search}%")
-                                          ->orWhere('code', 'like', "%{$search}%");
                               });
                     }
                 });
             })
-            ->when($departmentId, function ($query) use ($departmentId) {
-                $query->where('department_id', $departmentId);
-            })
-            ->when($positionCategory, function ($query) use ($positionCategory) {
-                $query->where('position_category', $positionCategory);
+            ->when($sectorId, function ($query) use ($sectorId) {
+                $query->where('sector_id', $sectorId);
             })
             ->orderBy($sortBy, $sortOrder)
             ->paginate($perPage)
             ->withQueryString();
 
-        $departments = Department::orderBy('name')
-            ->get(['id', 'name', 'code', 'type', 'faculty_id']);
-
-        $faculties = Faculty::orderBy('name')
+        $sectors = Sector::where('is_active', true)
+            ->orderBy('name')
             ->get(['id', 'name', 'code']);
 
         return Inertia::render('positions/index', [
             'positions' => $positions,
-            'departments' => $departments,
-            'faculties' => $faculties,
+            'sectors' => $sectors,
             'filters' => [
                 'search' => $search,
                 'search_mode' => $searchMode,
                 'perPage' => $perPage,
-                'department_id' => $departmentId,
-                'position_category' => $positionCategory,
+                'sector_id' => $sectorId,
                 'show_deleted' => $showDeleted,
             ],
         ]);
@@ -116,13 +99,10 @@ class PositionController extends Controller
         $position = Position::create([
             'pos_code' => $request->pos_code,
             'pos_name' => $request->pos_name,
-            'faculty_id' => $request->faculty_id,
-            'department_id' => $request->department_id,
-            'position_category' => $request->position_category,
-            'hierarchy_level' => $request->hierarchy_level,
-            'capacity' => $request->capacity,
             'description' => $request->description,
             'creation_type' => 'manual',
+            'sector_id' => $request->sector_id,
+            'authority_level' => $request->authority_level ?? 1,
         ]);
 
         if ($position) {
@@ -158,12 +138,9 @@ class PositionController extends Controller
             $validated = [
                 'pos_code' => $request->pos_code,
                 'pos_name' => $request->pos_name,
-                'faculty_id' => $request->faculty_id,
-                'department_id' => $request->department_id,
-                'position_category' => $request->position_category,
-                'hierarchy_level' => $request->hierarchy_level,
-                'capacity' => $request->capacity,
                 'description' => $request->description,
+                'sector_id' => $request->sector_id,
+                'authority_level' => $request->authority_level ?? 1,
             ];
             $changes = [];
 

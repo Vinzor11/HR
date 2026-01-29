@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ApprovalComment;
+use App\Models\ApprovalDelegation;
 use App\Models\LeaveBalance;
 use App\Models\LeaveType;
 use App\Models\RequestAnswer;
@@ -11,10 +13,13 @@ use App\Models\RequestSubmission;
 use App\Models\RequestType;
 use App\Models\Employee;
 use App\Models\TrainingApplication;
-use App\Models\Department;
+use App\Models\Unit;
 use App\Models\Position;
 use App\Models\User;
+use App\Notifications\ApprovalRequestedNotification;
+use App\Notifications\RequestApprovedNotification;
 use App\Notifications\RequestFulfilledNotification;
+use App\Notifications\RequestRejectedNotification;
 use App\Services\AuditLogService;
 use App\Services\LeaveService;
 use App\Services\HierarchicalApproverService;
@@ -51,6 +56,7 @@ class RequestSubmissionController extends Controller
                 RequestSubmission::STATUS_FULFILLMENT,
                 RequestSubmission::STATUS_COMPLETED,
                 RequestSubmission::STATUS_REJECTED,
+                RequestSubmission::STATUS_WITHDRAWN,
             ],
             'scopeOptions' => [
                 ['value' => 'mine', 'label' => 'My Requests'],
@@ -118,17 +124,17 @@ class RequestSubmissionController extends Controller
         $leaveBalances = [];
         if ($requestType->name === 'Leave Request') {
             $employee = request()->user()?->employee()
-                ->with(['department', 'position'])
+                ->with(['primaryDesignation.unit', 'primaryDesignation.position'])
                 ->first();
 
             if ($employee) {
                 $fullName = trim("{$employee->first_name} {$employee->middle_name} {$employee->surname}");
-                $departmentName = $employee->department?->faculty_name ?? $employee->department?->name ?? null;
-                $positionName = $employee->position?->pos_name ?? null;
+                $unitName = $employee->primaryDesignation?->unit?->name ?? null;
+                $positionName = $employee->primaryDesignation?->position?->pos_name ?? null;
 
                 $prefill = array_filter([
                     'employee_name' => $fullName ?: null,
-                    'department_office' => $departmentName,
+                    'department_office' => $unitName, // Using unit name for department_office field
                     'position_title' => $positionName,
                     'salary' => $employee->salary !== null ? number_format((float) $employee->salary, 2, '.', '') : null,
                     'date_of_filing' => now()->format('Y-m-d'),
@@ -265,21 +271,37 @@ class RequestSubmissionController extends Controller
             'approvalActions.approver.employee.position',
             'approvalActions.approverRole',
             'approvalActions.approverPosition',
+            'approvalActions.escalatedFromUser',
+            'approvalActions.delegatedFromUser',
             'fulfillment.fulfiller',
             'user:id,name,email,employee_id',
             'user.employee:id,first_name,middle_name,surname',
         ]);
 
+        // Load comments based on user permissions
+        $isRequester = $submission->user_id === $request->user()->id;
+        $canSeeInternalComments = $request->user()->can('access-request-types-module') 
+            || $this->userCanApprove($submission, $request->user());
+
+        if ($canSeeInternalComments) {
+            $submission->load(['comments.user']);
+        } else {
+            $submission->load(['publicComments.user']);
+        }
+
         $this->authorizeView($submission, $request->user());
 
         return Inertia::render('requests/show', [
-            'submission' => $this->formatSubmissionPayload($submission),
+            'submission' => $this->formatSubmissionPayload($submission, $canSeeInternalComments),
             'can' => [
                 'approve' => $this->userCanApprove($submission, $request->user()),
                 'reject' => $this->userCanApprove($submission, $request->user()),
                 'fulfill' => $submission->requiresFulfillment()
                     && $submission->status === RequestSubmission::STATUS_FULFILLMENT
                     && $this->userCanFulfill($submission, $request->user()),
+                'withdraw' => $isRequester && $submission->canBeWithdrawn(),
+                'comment' => true,
+                'internal_comment' => $canSeeInternalComments,
             ],
             'downloadRoutes' => [
                 'fulfillment' => $submission->fulfillment ? route('requests.fulfillment.download', $submission) : null,
@@ -295,7 +317,9 @@ class RequestSubmissionController extends Controller
 
         $this->authorizeApproval($submission, $request->user());
 
-        DB::transaction(function () use ($request, $submission) {
+        $isFinalApproval = false;
+
+        DB::transaction(function () use ($request, $submission, &$isFinalApproval) {
             $action = $this->currentActionFor($submission, $request->user());
 
             if (!$action) {
@@ -304,15 +328,35 @@ class RequestSubmissionController extends Controller
                 ]);
             }
 
+            // Check if acting as delegate
+            $delegatedFromUserId = null;
+            if ($action->approver_id && $action->approver_id !== $request->user()->id) {
+                if (ApprovalDelegation::canActOnBehalfOf($request->user()->id, $action->approver_id)) {
+                    $delegatedFromUserId = $action->approver_id;
+                }
+            }
+
             $action->update([
                 'status' => RequestApprovalAction::STATUS_APPROVED,
                 'notes' => $request->input('notes'),
                 'acted_at' => now(),
-                'approver_id' => $action->approver_id ?: $request->user()->id,
+                'approver_id' => $request->user()->id,
+                'delegated_from_user_id' => $delegatedFromUserId,
             ]);
 
+            // Create approval comment for history
+            if ($request->input('notes')) {
+                ApprovalComment::createApprovalNote(
+                    $submission->id,
+                    $request->user()->id,
+                    $request->input('notes'),
+                    $action->id,
+                    false
+                );
+            }
+
             $this->updateApprovalState($submission, $action);
-            $this->advanceOrComplete($submission);
+            $isFinalApproval = $this->advanceOrComplete($submission, $request->user());
 
             // Log approval action
             app(AuditLogService::class)->logApproved(
@@ -323,6 +367,17 @@ class RequestSubmissionController extends Controller
                 ['notes' => $request->input('notes')]
             );
         });
+
+        // Send notification to requester
+        $submission->load('user', 'requestType');
+        if ($submission->user) {
+            $submission->user->notify(new RequestApprovedNotification(
+                $submission,
+                $request->user(),
+                $request->input('notes'),
+                $isFinalApproval
+            ));
+        }
 
         return back()->with('success', 'Request approved successfully.');
     }
@@ -344,12 +399,30 @@ class RequestSubmissionController extends Controller
                 ]);
             }
 
+            // Check if acting as delegate
+            $delegatedFromUserId = null;
+            if ($action->approver_id && $action->approver_id !== $request->user()->id) {
+                if (ApprovalDelegation::canActOnBehalfOf($request->user()->id, $action->approver_id)) {
+                    $delegatedFromUserId = $action->approver_id;
+                }
+            }
+
             $action->update([
                 'status' => RequestApprovalAction::STATUS_REJECTED,
                 'notes' => $request->input('notes'),
                 'acted_at' => now(),
-                'approver_id' => $action->approver_id ?: $request->user()->id,
+                'approver_id' => $request->user()->id,
+                'delegated_from_user_id' => $delegatedFromUserId,
             ]);
+
+            // Create rejection comment for history
+            ApprovalComment::createApprovalNote(
+                $submission->id,
+                $request->user()->id,
+                $request->input('notes'),
+                $action->id,
+                true
+            );
 
             $submission->update([
                 'status' => RequestSubmission::STATUS_REJECTED,
@@ -371,7 +444,82 @@ class RequestSubmissionController extends Controller
             );
         });
 
+        // Send notification to requester
+        $submission->load('user', 'requestType');
+        if ($submission->user) {
+            $submission->user->notify(new RequestRejectedNotification(
+                $submission,
+                $request->user(),
+                $request->input('notes')
+            ));
+        }
+
         return back()->with('success', 'Request rejected and requester has been notified.');
+    }
+
+    /**
+     * Withdraw a request (recall by requester).
+     */
+    public function withdraw(Request $request, RequestSubmission $submission)
+    {
+        $request->validate([
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        // Only the requester can withdraw their own request
+        if ($submission->user_id !== $request->user()->id) {
+            abort(403, 'You can only withdraw your own requests.');
+        }
+
+        if (!$submission->canBeWithdrawn()) {
+            return back()->with('error', 'This request cannot be withdrawn. Only pending requests can be withdrawn.');
+        }
+
+        DB::transaction(function () use ($request, $submission) {
+            $submission->withdraw($request->input('reason'));
+
+            // Log withdrawal action
+            app(AuditLogService::class)->log(
+                'withdrawn',
+                'requests',
+                'RequestSubmission',
+                (string)$submission->id,
+                "Withdrew Request: {$submission->requestType->name} (Ref: {$submission->reference_code})",
+                null,
+                ['reason' => $request->input('reason')]
+            );
+        });
+
+        return back()->with('success', 'Request has been withdrawn successfully.');
+    }
+
+    /**
+     * Add a comment to a request.
+     */
+    public function addComment(Request $request, RequestSubmission $submission)
+    {
+        $request->validate([
+            'content' => ['required', 'string', 'max:2000'],
+            'is_internal' => ['nullable', 'boolean'],
+        ]);
+
+        $this->authorizeView($submission, $request->user());
+
+        // Only approvers and admins can post internal comments
+        $isInternal = $request->boolean('is_internal');
+        if ($isInternal && !$request->user()->can('access-request-types-module')) {
+            $isInternal = false;
+        }
+
+        ApprovalComment::create([
+            'submission_id' => $submission->id,
+            'user_id' => $request->user()->id,
+            'content' => $request->input('content'),
+            'type' => ApprovalComment::TYPE_COMMENT,
+            'is_internal' => $isInternal,
+        ]);
+
+        return back()->with('success', 'Comment added successfully.');
     }
 
     public function fulfill(Request $request, RequestSubmission $submission)
@@ -482,8 +630,8 @@ class RequestSubmissionController extends Controller
 
         if ($scope === 'assigned') {
             $roleIds = $user->roles->pluck('id');
-            $userEmployee = $user->employee_id ? Employee::with(['position', 'department.faculty'])->find($user->employee_id) : null;
-            $userPositionId = $userEmployee?->position_id;
+            $userEmployee = $user->employee_id ? Employee::with(['primaryDesignation.position', 'primaryDesignation.unit.sector'])->find($user->employee_id) : null;
+            $userPositionId = $userEmployee?->primaryDesignation?->position_id;
             
             $query->where(function ($subQuery) use ($user, $roleIds, $userPositionId) {
                 $subQuery->whereHas('approvalActions', function ($actionQuery) use ($user, $roleIds, $userPositionId) {
@@ -783,13 +931,15 @@ class RequestSubmissionController extends Controller
     protected function initializeApprovalFlow(RequestSubmission $submission, RequestType $requestType): void
     {
         $steps = $requestType->approvalSteps();
-        $hierarchicalService = new HierarchicalApproverService();
+        $hierarchicalService = app(HierarchicalApproverService::class);
         
         // Get requester employee for hierarchical resolution
         $requesterEmployee = null;
         if ($submission->user && $submission->user->employee_id) {
-            $requesterEmployee = Employee::with(['position', 'department.faculty'])->find($submission->user->employee_id);
+            $requesterEmployee = Employee::with(['primaryDesignation.position', 'primaryDesignation.unit.sector'])->find($submission->user->employee_id);
         }
+
+        $createdActions = [];
 
         foreach ($steps as $index => $step) {
             $approvers = collect(data_get($step, 'approvers', []));
@@ -798,14 +948,33 @@ class RequestSubmissionController extends Controller
                 continue;
             }
 
+            // Get step configuration
+            $approvalMode = data_get($step, 'approval_mode', RequestType::APPROVAL_MODE_ANY);
+            $slaHours = data_get($step, 'sla_hours');
+            $dueAt = $slaHours ? now()->addHours((int) $slaHours) : null;
+
             // Resolve approvers hierarchically if requester employee exists
             $resolvedApprovers = $requesterEmployee 
                 ? $hierarchicalService->resolveApprovers($approvers->toArray(), $requesterEmployee)
                 : $approvers->toArray();
 
-            // Filter approvers by requester's department if requester employee exists
+            // Filter approvers by requester's unit/sector if requester employee exists
             if ($requesterEmployee) {
-                $resolvedApprovers = $this->filterApproversByDepartment($resolvedApprovers, $requesterEmployee);
+                $resolvedApprovers = $this->filterApproversByUnit($resolvedApprovers, $requesterEmployee);
+            }
+
+            // Check if we have valid approvers after resolution
+            if (empty($resolvedApprovers)) {
+                \Log::warning("No valid approvers found for step {$index} in submission {$submission->id}");
+                
+                // Create a system comment about the issue
+                ApprovalComment::createSystemComment(
+                    $submission->id,
+                    "Warning: No valid approvers could be resolved for step '{$step['name']}'. The request may require manual intervention.",
+                    null,
+                    null
+                );
+                continue;
             }
 
             foreach ($resolvedApprovers as $approver) {
@@ -816,59 +985,75 @@ class RequestSubmissionController extends Controller
                 $wasResolvedFromRole = data_get($approver, 'was_resolved_from_role', false);
                 $wasResolvedFromPosition = data_get($approver, 'was_resolved_from_position', false);
 
-                // If position/role was resolved to specific users, use approver_id only
+                $wasResolvedFromHierarchical = data_get($approver, 'was_resolved_from_hierarchical', false);
+                $minAuthorityLevel = data_get($approver, 'min_authority_level');
+
+                // If position/role/hierarchical was resolved to specific users, use approver_id only
                 // Otherwise, if it's still a position/role, use approver_position_id/approver_role_id
-                $submission->approvalActions()->create([
+                $action = $submission->approvalActions()->create([
                     'step_index' => $index,
                     'status' => RequestApprovalAction::STATUS_PENDING,
                     'approver_id' => ($type === 'user' && $approverId) ? $approverId : null,
                     'approver_role_id' => ($type === 'role' && !$wasResolvedFromRole && $approverRoleId) ? $approverRoleId : null,
                     'approver_position_id' => ($type === 'position' && !$wasResolvedFromPosition && $approverPositionId) ? $approverPositionId : null,
+                    'due_at' => $dueAt,
                     'meta' => [
                         'step' => $step,
                         'approver' => $approver,
+                        'approval_mode' => $approvalMode,
                         'original_approver_id' => data_get($approver, 'original_approver_id'),
                         'was_escalated' => data_get($approver, 'was_escalated', false),
                         'was_resolved_from_role' => $wasResolvedFromRole,
                         'was_resolved_from_position' => $wasResolvedFromPosition,
+                        'was_resolved_from_hierarchical' => $wasResolvedFromHierarchical,
                         'original_role_id' => $wasResolvedFromRole ? $approverRoleId : null,
                         'original_position_id' => $wasResolvedFromPosition ? $approverPositionId : null,
+                        'min_authority_level' => $minAuthorityLevel,
+                        'resolved_authority_level' => data_get($approver, 'resolved_authority_level'),
+                        'resolved_unit' => data_get($approver, 'resolved_unit'),
                     ],
                 ]);
+
+                $createdActions[] = $action;
             }
+        }
+
+        // Notify approvers for the first step
+        $firstStepActions = collect($createdActions)->where('step_index', 0);
+        foreach ($firstStepActions as $action) {
+            $this->notifyApprovers($submission, $action);
         }
     }
 
     /**
-     * Filter approvers to only include those from the requester's department.
-     * 
-     * When multiple department heads are selected in a single step, only the
-     * department head from the requester's department should be included.
-     * 
+     * Filter approvers to only include those from the requester's unit/sector.
+     *
+     * When multiple unit heads are selected in a single step, only the
+     * head from the requester's unit (or sector) should be included.
+     *
      * @param array $approvers Array of resolved approvers
      * @param Employee $requesterEmployee The requester employee
      * @return array Filtered approvers
      */
-    protected function filterApproversByDepartment(array $approvers, Employee $requesterEmployee): array
+    protected function filterApproversByUnit(array $approvers, Employee $requesterEmployee): array
     {
-        // Ensure department is loaded
-        if (!$requesterEmployee->relationLoaded('department')) {
-            $requesterEmployee->load('department.faculty');
+        // Ensure primary designation is loaded (new org structure)
+        if (!$requesterEmployee->relationLoaded('primaryDesignation')) {
+            $requesterEmployee->load('primaryDesignation.unit.sector');
         }
 
-        if (!$requesterEmployee->department_id) {
-            return $approvers; // If requester has no department, return all approvers
+        $requesterUnitId = $requesterEmployee->primaryDesignation?->unit_id;
+        if (!$requesterUnitId) {
+            return $approvers; // If requester has no unit, return all approvers
         }
 
-        $requesterDepartmentId = $requesterEmployee->department_id;
+        // Get requester sector ID once
+        $requesterSectorId = $requesterEmployee->primaryDesignation?->unit?->sector_id ?? null;
 
-        // Get requester faculty ID once
-        $requesterFacultyId = $requesterEmployee->department?->faculty_id ?? null;
-
-        return collect($approvers)->filter(function ($approver) use ($requesterDepartmentId, $requesterEmployee, $requesterFacultyId) {
+        return collect($approvers)->filter(function ($approver) use ($requesterUnitId, $requesterEmployee, $requesterSectorId) {
             $type = data_get($approver, 'approver_type');
             
-            // For user-based approvers, check if user's department matches requester's department
+            // For user-based approvers, check if user's unit matches requester's unit
             if ($type === 'user') {
                 $approverId = data_get($approver, 'approver_id');
                 if (!$approverId) {
@@ -878,41 +1063,36 @@ class RequestSubmissionController extends Controller
                 // If this is an escalated approver, allow it (don't filter out)
                 $wasEscalated = data_get($approver, 'was_escalated', false);
                 if ($wasEscalated) {
-                    // Escalated approvers are allowed - they're from higher hierarchy levels
-                    // Check if they're in the same faculty (for faculty-level escalations)
-                    $approverUser = User::with('employee.department.faculty')->find($approverId);
+                    // Escalated approvers are allowed - they're from higher authority levels
+                    $approverUser = User::with('employee.primaryDesignation.unit.sector')->find($approverId);
                     if ($approverUser && $approverUser->employee) {
-                        $approverFacultyId = $approverUser->employee->department?->faculty_id;
+                        $approverSectorId = $approverUser->employee->primaryDesignation?->unit?->sector_id;
                         
-                        // If escalated to faculty level, check if same faculty
-                        // Otherwise, check if same department
-                        if ($requesterFacultyId && $approverFacultyId === $requesterFacultyId) {
-                            return true; // Same faculty (escalated to faculty level)
+                        // If escalated to sector level, check if same sector
+                        if ($requesterSectorId && $approverSectorId === $requesterSectorId) {
+                            return true; // Same sector (escalated)
                         }
-                        if ($approverUser->employee->department_id === $requesterDepartmentId) {
-                            return true; // Same department (escalated within department)
+                        $approverUnitId = $approverUser->employee->primaryDesignation?->unit_id;
+                        if ($approverUnitId === $requesterUnitId) {
+                            return true; // Same unit (escalated within unit)
                         }
                     }
-                    // If escalation doesn't match faculty/department, still allow it
-                    // as it might be an administrative escalation
+                    // Allow administrative escalations
                     return true;
                 }
 
-                $approverUser = User::with('employee.department')->find($approverId);
+                $approverUser = User::with('employee.primaryDesignation.unit')->find($approverId);
                 if (!$approverUser || !$approverUser->employee) {
                     return false;
                 }
 
-                $approverDepartmentId = $approverUser->employee->department_id;
+                $approverUnitId = $approverUser->employee->primaryDesignation?->unit_id;
                 
-                // Check if user's department matches requester's department
-                // This ensures that when multiple department heads (or other approvers) are selected,
-                // only the one from the requester's department is included
-                return $approverDepartmentId === $requesterDepartmentId;
+                // Check if user's unit matches requester's unit
+                return $approverUnitId === $requesterUnitId;
             }
 
-            // For position-based approvers, check if position is a department head position
-            // and if it matches the requester's department
+            // For position-based approvers, check if approver is in same unit or sector
             if ($type === 'position') {
                 $approverPositionId = data_get($approver, 'approver_position_id');
                 if (!$approverPositionId) {
@@ -924,45 +1104,26 @@ class RequestSubmissionController extends Controller
                     return false;
                 }
 
-                // If this is an escalated faculty-level position, allow it (don't filter out)
-                $wasEscalatedToFaculty = data_get($approver, 'was_escalated_to_faculty', false);
-                if ($wasEscalatedToFaculty) {
-                    // Check if the faculty position belongs to the requester's faculty
-                    if ($requesterFacultyId && $position->faculty_id && $position->faculty_id === $requesterFacultyId) {
-                        return true; // Escalated to faculty-level position for same faculty
+                // If this is an escalated position (e.g. escalated to sector level), allow it
+                $wasEscalatedToSector = data_get($approver, 'was_escalated_to_faculty', false) || data_get($approver, 'was_escalated_to_sector', false);
+                if ($wasEscalatedToSector) {
+                    // Check if the position belongs to the requester's sector
+                    if ($requesterSectorId && $position->sector_id && $position->sector_id === $requesterSectorId) {
+                        return true;
                     }
-                    // If escalated to faculty but can't verify faculty match, still allow it
-                    // as it's an escalation and should not be filtered out
                     return true;
                 }
 
-                // Check if this position is a department head position for the requester's department
-                // This is the key check: if multiple department heads are selected, only the one
-                // whose department matches the requester's department should be included
-                $department = Department::where('id', $requesterDepartmentId)
-                    ->where('head_position_id', $approverPositionId)
-                    ->first();
-
-                if ($department) {
-                    return true; // This is the department head for requester's department
-                }
-
-                // If the position is not a department head position, check if it's in the same department
-                // This handles non-department-head positions that should still be filtered by department
-                if ($position->department_id === $requesterDepartmentId) {
+                // Check if position is in same sector
+                if ($position->sector_id === $requesterSectorId) {
                     return true;
                 }
 
-                // If position is a department head for a different department, exclude it
                 return false;
             }
 
-            // For role-based approvers that were resolved to users, they should already be filtered
-            // by HierarchicalApproverService, but we can add an extra check if needed
-            // For now, we'll keep them as they should already be filtered by department
+            // For role-based approvers - already filtered by HierarchicalApproverService
             if ($type === 'role') {
-                // Role-based approvers are already filtered by HierarchicalApproverService
-                // to only include users from the same department, so we keep them
                 return true;
             }
 
@@ -1005,13 +1166,15 @@ class RequestSubmissionController extends Controller
                     $step['approvers'] = collect($step['approvers'] ?? [])
                         ->map(function ($approver) use ($action) {
                             $matchesUser = $action->approver_id && $approver['approver_id'] === $action->approver_id;
-                            $matchesRole = $action->approver_role_id && $approver['approver_role_id'] === $action->approver_role_id;
+                            $matchesRole = $action->approver_role_id && ($approver['approver_role_id'] ?? null) === $action->approver_role_id;
+                            $matchesPosition = $action->approver_position_id && ($approver['approver_position_id'] ?? null) === $action->approver_position_id;
 
-                            if ($matchesUser || $matchesRole) {
+                            if ($matchesUser || $matchesRole || $matchesPosition) {
                                 $approver['status'] = $action->status;
                                 $approver['acted_at'] = $action->acted_at?->toIso8601String();
                                 $approver['acted_by'] = $action->approver_id;
                                 $approver['notes'] = $action->notes;
+                                $approver['delegated_from'] = $action->delegated_from_user_id;
                             }
 
                             return $approver;
@@ -1019,7 +1182,12 @@ class RequestSubmissionController extends Controller
                         ->values()
                         ->all();
 
-                    $step['status'] = $this->resolveStepStatus($step['approvers']);
+                    // Get approval mode from step config or action meta
+                    $approvalMode = data_get($step, 'approval_mode') 
+                        ?? data_get($action->meta, 'approval_mode') 
+                        ?? RequestType::APPROVAL_MODE_ANY;
+
+                    $step['status'] = $this->resolveStepStatus($step['approvers'], $approvalMode);
                 }
 
                 return $step;
@@ -1032,22 +1200,77 @@ class RequestSubmissionController extends Controller
         ]);
     }
 
-    protected function resolveStepStatus(array $approvers): string
+    /**
+     * Resolve the status of a step based on its approval mode.
+     * 
+     * @param array $approvers Array of approver statuses
+     * @param string $approvalMode The approval mode (any, all, majority)
+     * @return string The resolved step status
+     */
+    protected function resolveStepStatus(array $approvers, string $approvalMode = RequestType::APPROVAL_MODE_ANY): string
     {
         $statuses = collect($approvers)->pluck('status')->filter();
+        $total = $statuses->count();
 
-        if ($statuses->contains(RequestApprovalAction::STATUS_REJECTED)) {
+        if ($total === 0) {
+            return RequestApprovalAction::STATUS_PENDING;
+        }
+
+        $approvedCount = $statuses->filter(fn ($s) => $s === RequestApprovalAction::STATUS_APPROVED)->count();
+        $rejectedCount = $statuses->filter(fn ($s) => $s === RequestApprovalAction::STATUS_REJECTED)->count();
+
+        // Any rejection in 'all' mode means rejected
+        if ($approvalMode === RequestType::APPROVAL_MODE_ALL && $rejectedCount > 0) {
             return RequestApprovalAction::STATUS_REJECTED;
         }
 
-        if ($statuses->isNotEmpty() && $statuses->every(fn ($status) => $status === RequestApprovalAction::STATUS_APPROVED)) {
-            return RequestApprovalAction::STATUS_APPROVED;
+        // In 'any' mode, any rejection only matters if all have rejected
+        if ($approvalMode === RequestType::APPROVAL_MODE_ANY && $rejectedCount === $total) {
+            return RequestApprovalAction::STATUS_REJECTED;
+        }
+
+        // In 'majority' mode, check if majority rejected
+        if ($approvalMode === RequestType::APPROVAL_MODE_MAJORITY) {
+            $majorityThreshold = ceil($total / 2);
+            if ($rejectedCount >= $majorityThreshold) {
+                return RequestApprovalAction::STATUS_REJECTED;
+            }
+        }
+
+        // Check for approval based on mode
+        switch ($approvalMode) {
+            case RequestType::APPROVAL_MODE_ANY:
+                // Any one approval is sufficient
+                if ($approvedCount > 0) {
+                    return RequestApprovalAction::STATUS_APPROVED;
+                }
+                break;
+
+            case RequestType::APPROVAL_MODE_ALL:
+                // All must approve
+                if ($approvedCount === $total) {
+                    return RequestApprovalAction::STATUS_APPROVED;
+                }
+                break;
+
+            case RequestType::APPROVAL_MODE_MAJORITY:
+                // More than half must approve
+                $majorityThreshold = ceil($total / 2);
+                if ($approvedCount >= $majorityThreshold) {
+                    return RequestApprovalAction::STATUS_APPROVED;
+                }
+                break;
         }
 
         return RequestApprovalAction::STATUS_PENDING;
     }
 
-    protected function advanceOrComplete(RequestSubmission $submission): void
+    /**
+     * Advance to next step or complete the submission.
+     * 
+     * @return bool True if this was the final approval (no more steps)
+     */
+    protected function advanceOrComplete(RequestSubmission $submission, ?User $currentApprover = null): bool
     {
         $nextAction = $submission->approvalActions()->pending()->orderBy('step_index')->first();
 
@@ -1055,7 +1278,11 @@ class RequestSubmissionController extends Controller
             $submission->update([
                 'current_step_index' => $nextAction->step_index,
             ]);
-            return;
+            
+            // Notify the next approver(s)
+            $this->notifyApprovers($submission, $nextAction);
+            
+            return false;
         }
 
         $submission->update([
@@ -1067,6 +1294,62 @@ class RequestSubmissionController extends Controller
 
         // Handle training application approval
         $this->handleTrainingApplicationApproval($submission);
+        
+        return true;
+    }
+
+    /**
+     * Notify approvers for a pending action.
+     */
+    protected function notifyApprovers(RequestSubmission $submission, RequestApprovalAction $action): void
+    {
+        $approvers = [];
+
+        // Direct approver
+        if ($action->approver_id) {
+            $approver = User::find($action->approver_id);
+            if ($approver) {
+                $approvers[] = $approver;
+                
+                // Also notify delegate if exists
+                $delegate = ApprovalDelegation::getActiveDelegateFor($approver->id);
+                if ($delegate) {
+                    $approvers[] = $delegate;
+                }
+            }
+        }
+
+        // Role-based approvers
+        if ($action->approver_role_id) {
+            $roleApprovers = User::whereHas('roles', function ($query) use ($action) {
+                $query->where('id', $action->approver_role_id);
+            })->get();
+
+            foreach ($roleApprovers as $approver) {
+                $approvers[] = $approver;
+            }
+        }
+
+        // Position-based approvers
+        if ($action->approver_position_id) {
+            $positionApprovers = User::whereHas('employee.designations', function ($query) use ($action) {
+                $query->where('position_id', $action->approver_position_id)
+                    ->where('is_primary', true);
+            })->get();
+
+            foreach ($positionApprovers as $approver) {
+                $approvers[] = $approver;
+            }
+        }
+
+        // Send notifications (deduplicated)
+        $notifiedIds = [];
+        foreach ($approvers as $approver) {
+            if (!in_array($approver->id, $notifiedIds)) {
+                $approver->notify(new ApprovalRequestedNotification($submission, $action));
+                $notifiedIds[] = $approver->id;
+            }
+        }
     }
 
     protected function authorizeView(RequestSubmission $submission, $user): void
@@ -1080,8 +1363,8 @@ class RequestSubmissionController extends Controller
         }
 
         $roleIds = $user->roles->pluck('id');
-        $userEmployee = $user->employee_id ? Employee::with(['position', 'department.faculty'])->find($user->employee_id) : null;
-        $userPositionId = $userEmployee?->position_id;
+        $userEmployee = $user->employee_id ? Employee::with(['primaryDesignation.position', 'primaryDesignation.unit.sector'])->find($user->employee_id) : null;
+        $userPositionId = $userEmployee?->primaryDesignation?->position_id;
 
         $isApprover = $submission->approvalActions()
             ->where(function ($query) use ($user, $roleIds, $userPositionId) {
@@ -1213,14 +1496,18 @@ class RequestSubmissionController extends Controller
         ]);
 
         $roleIds = $user->roles->pluck('id')->all();
+        
+        // Get users who have delegated to this user
+        $delegatorIds = ApprovalDelegation::getDelegatorsFor($user->id);
 
         \Log::info('currentActionFor - User info', [
             'user_id' => $user->id,
             'user_employee_id' => $user->employee_id,
             'user_role_ids' => $roleIds,
+            'delegator_ids' => $delegatorIds,
         ]);
 
-        $result = $pendingActions->first(function (RequestApprovalAction $action) use ($user, $roleIds) {
+        $result = $pendingActions->first(function (RequestApprovalAction $action) use ($user, $roleIds, $delegatorIds) {
             \Log::info('currentActionFor - Checking action', [
                 'action_id' => $action->id,
                 'approver_id' => $action->approver_id,
@@ -1230,8 +1517,18 @@ class RequestSubmissionController extends Controller
                 'user_employee_id' => $user->employee_id,
             ]);
 
+            // Direct match
             if ($action->approver_id && $action->approver_id === $user->id) {
                 \Log::info('currentActionFor - Matched by approver_id', ['action_id' => $action->id]);
+                return true;
+            }
+
+            // Check if user is a delegate for the approver
+            if ($action->approver_id && in_array($action->approver_id, $delegatorIds)) {
+                \Log::info('currentActionFor - Matched by delegation', [
+                    'action_id' => $action->id,
+                    'delegator_id' => $action->approver_id,
+                ]);
                 return true;
             }
 
@@ -1266,9 +1563,14 @@ class RequestSubmissionController extends Controller
         return $result;
     }
 
-    protected function formatSubmissionPayload(RequestSubmission $submission): array
+    protected function formatSubmissionPayload(RequestSubmission $submission, bool $includeInternalComments = false): array
     {
         $answers = $submission->answers->keyBy('field_id');
+
+        // Get comments based on permissions
+        $comments = $includeInternalComments 
+            ? ($submission->comments ?? collect())
+            : ($submission->publicComments ?? collect());
 
         return [
             'id' => $submission->id,
@@ -1276,13 +1578,15 @@ class RequestSubmissionController extends Controller
             'status' => $submission->status,
             'submitted_at' => $submission->submitted_at?->toIso8601String(),
             'fulfilled_at' => $submission->fulfilled_at?->toIso8601String(),
-            'request_type' => [
+            'withdrawn_at' => $submission->withdrawn_at?->toIso8601String(),
+            'withdrawal_reason' => $submission->withdrawal_reason,
+            'request_type' => $submission->requestType ? [
                 'id' => $submission->requestType->id,
                 'name' => $submission->requestType->name,
                 'has_fulfillment' => $submission->requestType->has_fulfillment,
-            ],
+            ] : null,
             'requester' => $this->formatRequester($submission),
-            'fields' => $submission->requestType->fields->map(function (RequestField $field) use ($answers) {
+            'fields' => $submission->requestType?->fields->map(function (RequestField $field) use ($answers) {
                 $answer = $answers->get($field->id);
                 $value = $answer?->value;
                 $downloadUrl = null;
@@ -1304,7 +1608,7 @@ class RequestSubmissionController extends Controller
                     'value_json' => $answer?->value_json,
                     'download_url' => $downloadUrl,
                 ];
-            }),
+            }) ?? [],
             'approval' => [
                 'actions' => $submission->approvalActions
                     ->sortBy('step_index')
@@ -1316,6 +1620,18 @@ class RequestSubmissionController extends Controller
                             'status' => $action->status ?? 'pending',
                             'notes' => $action->notes,
                             'acted_at' => $action->acted_at?->toIso8601String(),
+                            'due_at' => $action->due_at?->toIso8601String(),
+                            'is_overdue' => $action->isOverdue(),
+                            'is_escalated' => $action->is_escalated,
+                            'escalated_at' => $action->escalated_at?->toIso8601String(),
+                            'escalated_from' => $action->escalatedFromUser ? [
+                                'id' => $action->escalatedFromUser->id,
+                                'name' => $action->escalatedFromUser->name,
+                            ] : null,
+                            'delegated_from' => $action->delegatedFromUser ? [
+                                'id' => $action->delegatedFromUser->id,
+                                'name' => $action->delegatedFromUser->name,
+                            ] : null,
                             'approver' => $action->approver ? [
                                 'id' => $action->approver->id,
                                 'name' => $action->approver->name,
@@ -1352,12 +1668,26 @@ class RequestSubmissionController extends Controller
                             ] : null,
                             // Include approver name even for position-based approvers (if resolved to a user)
                             'approver_name' => $action->approver ? $action->approver->name : null,
+                            'approval_mode' => data_get($action->meta, 'approval_mode', RequestType::APPROVAL_MODE_ANY),
                         ];
                     })
                     ->values()
                     ->toArray(),
                 'state' => $submission->approval_state,
             ],
+            'comments' => $comments->map(function (ApprovalComment $comment) {
+                return [
+                    'id' => $comment->id,
+                    'content' => $comment->content,
+                    'type' => $comment->type,
+                    'is_internal' => $comment->is_internal,
+                    'created_at' => $comment->created_at?->toIso8601String(),
+                    'user' => $comment->user ? [
+                        'id' => $comment->user->id,
+                        'name' => $comment->user->name,
+                    ] : null,
+                ];
+            })->values()->toArray(),
             'fulfillment' => $submission->fulfillment
                 ? [
                     'file_url' => $submission->fulfillment->file_url,

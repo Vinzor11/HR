@@ -12,9 +12,10 @@ import { Label } from '@/components/ui/label';
 import { MaskedInput } from '@/components/ui/masked-input';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { PageProps, type BreadcrumbItem } from '@/types';
-import { ChevronLeft, ChevronRight, Check, User, MapPin, IdCard, Building2, GraduationCap, Briefcase, Award, Users, FileText, UploadCloud, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, User, MapPin, IdCard, Building2, GraduationCap, Briefcase, Award, Users, FileText, UploadCloud, AlertCircle, LoaderCircle } from 'lucide-react';
 import { CSForm212PreviewTable } from '@/components/CSForm212PreviewTable';
 import { validateEmployeeData } from '@/utils/csForm212Validation';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type CreateEmployeeProps = {
   employee?: {
@@ -25,9 +26,6 @@ type CreateEmployeeProps = {
     name_extension: string;
     status: string;
     employee_type: string;
-    faculty_id?: string;
-    department_id: string;
-    position_id: string;
     birth_date: string;
     birth_place: string;
     sex: string;
@@ -145,9 +143,6 @@ type CreateEmployeeProps = {
       details: string;
     }>;
   };
-  departments: { id: number; name?: string; faculty_name?: string; faculty_id?: number | null; type?: string }[];
-  positions: { id: number; name?: string; pos_name?: string; department_id: number | null; faculty_id?: number | null }[];
-  faculties: { id: number; name: string; code?: string | null }[];
   mode?: 'create' | 'edit' | 'view';
 };
 
@@ -183,7 +178,10 @@ const formatNumberWithCommas = (value: string | number): string => {
   return decimalPart !== undefined ? `${formattedInteger}.${decimalPart}` : formattedInteger;
 };
 
-export default function CreateEmployee({ employee, departments, positions, faculties, mode = 'create' }: CreateEmployeeProps) {
+export default function CreateEmployee({ 
+  employee, 
+  mode = 'create' 
+}: CreateEmployeeProps) {
   const { csrf, errors, importedData } = usePage<PageProps & { importedData?: Record<string, unknown> | null }>().props;
   const isEdit = !!employee;
   const isView = mode === 'view';
@@ -333,7 +331,8 @@ export default function CreateEmployee({ employee, departments, positions, facul
 
     if (currentStep === 1) {
       if (step1Tab === 'basic') {
-        // Required fields: id, surname, first_name, birth_date, birth_place, sex, civil_status, department_id, position_id, salary, date_regularized
+        // Required fields: id, surname, first_name, birth_date, birth_place, sex, civil_status, department_id, position_id, salary
+        // Date fields are conditionally required based on employment_status
         if (!data.id || data.id.trim() === '') {
           missingFields.push('Employee ID');
           newClientErrors['id'] = 'Employee ID is required';
@@ -362,29 +361,43 @@ export default function CreateEmployee({ employee, departments, positions, facul
           missingFields.push('Civil Status');
           newClientErrors['civil_status'] = 'Civil Status is required';
         }
-        if (data.organization_type === 'academic' && !data.faculty_id) {
-          missingFields.push('Faculty');
-          newClientErrors['faculty_id'] = 'Faculty is required for academic departments';
-        }
-        // Check if selected position is faculty-level to determine if department is required
-        const selectedPos = positions.find(pos => String(pos.id) === String(data.position_id || ''));
-        const isFacultyLevelPos = selectedPos ? (selectedPos.faculty_id && !selectedPos.department_id) : false;
-        if (!isFacultyLevelPos && !data.department_id) {
-          const orgTypeLabel = data.organization_type === 'administrative' ? 'Office' : 'Department';
-          missingFields.push(orgTypeLabel);
-          newClientErrors['department_id'] = `${orgTypeLabel} is required`;
-        }
-        if (!data.position_id) {
-          missingFields.push('Position');
-          newClientErrors['position_id'] = 'Position is required';
-        }
         if (!data.salary || String(data.salary).trim() === '') {
           missingFields.push('Salary');
           newClientErrors['salary'] = 'Salary is required';
         }
-        if (!data.date_regularized) {
-          missingFields.push('Date Regularized');
-          newClientErrors['date_regularized'] = 'Date Regularized is required';
+        
+        // Conditional date field validation based on employment_status
+        if (data.employment_status === 'Regular') {
+          if (!data.date_hired) {
+            missingFields.push('Date Hired');
+            newClientErrors['date_hired'] = 'Date Hired is required';
+          }
+          if (!data.date_regularized) {
+            missingFields.push('Date Regularized');
+            newClientErrors['date_regularized'] = 'Date Regularized is required';
+          }
+        } else if (data.employment_status === 'Job-Order') {
+          if (!data.start_date) {
+            missingFields.push('Start Date');
+            newClientErrors['start_date'] = 'Start Date is required';
+          }
+          if (!data.end_date) {
+            missingFields.push('End Date');
+            newClientErrors['end_date'] = 'End Date is required';
+          }
+        } else if (data.employment_status === 'Contractual') {
+          if (!data.date_hired) {
+            missingFields.push('Date Hired');
+            newClientErrors['date_hired'] = 'Date Hired is required';
+          }
+          if (!data.start_date) {
+            missingFields.push('Start Date');
+            newClientErrors['start_date'] = 'Start Date is required';
+          }
+          if (!data.end_date) {
+            missingFields.push('End Date');
+            newClientErrors['end_date'] = 'End Date is required';
+          }
         }
       } else if (step1Tab === 'address') {
         // Required fields: res_city, res_province, email_address, mobile_no
@@ -556,29 +569,43 @@ export default function CreateEmployee({ employee, departments, positions, facul
         allMissingFields.push('Civil Status');
         allErrors['civil_status'] = 'Civil Status is required';
       }
-      if (data.organization_type === 'academic' && !data.faculty_id) {
-        allMissingFields.push('Faculty');
-        allErrors['faculty_id'] = 'Faculty is required for academic departments';
-      }
-      // Check if selected position is faculty-level to determine if department is required
-      const selectedPosForAll = positions.find(pos => String(pos.id) === String(data.position_id || ''));
-      const isFacultyLevelPosForAll = selectedPosForAll ? (selectedPosForAll.faculty_id && !selectedPosForAll.department_id) : false;
-      if (!isFacultyLevelPosForAll && !data.department_id) {
-        const orgTypeLabel = data.organization_type === 'administrative' ? 'Office' : 'Department';
-        allMissingFields.push(orgTypeLabel);
-        allErrors['department_id'] = `${orgTypeLabel} is required`;
-      }
-      if (!data.position_id) {
-        allMissingFields.push('Position');
-        allErrors['position_id'] = 'Position is required';
-      }
       if (!data.salary || String(data.salary).trim() === '') {
         allMissingFields.push('Salary');
         allErrors['salary'] = 'Salary is required';
       }
-      if (!data.date_regularized) {
-        allMissingFields.push('Date Regularized');
-        allErrors['date_regularized'] = 'Date Regularized is required';
+      
+      // Conditional date field validation based on employment_status
+      if (data.employment_status === 'Regular') {
+        if (!data.date_hired) {
+          allMissingFields.push('Date Hired');
+          allErrors['date_hired'] = 'Date Hired is required';
+        }
+        if (!data.date_regularized) {
+          allMissingFields.push('Date Regularized');
+          allErrors['date_regularized'] = 'Date Regularized is required';
+        }
+      } else if (data.employment_status === 'Job-Order') {
+        if (!data.start_date) {
+          allMissingFields.push('Start Date');
+          allErrors['start_date'] = 'Start Date is required';
+        }
+        if (!data.end_date) {
+          allMissingFields.push('End Date');
+          allErrors['end_date'] = 'End Date is required';
+        }
+      } else if (data.employment_status === 'Contractual') {
+        if (!data.date_hired) {
+          allMissingFields.push('Date Hired');
+          allErrors['date_hired'] = 'Date Hired is required';
+        }
+        if (!data.start_date) {
+          allMissingFields.push('Start Date');
+          allErrors['start_date'] = 'Start Date is required';
+        }
+        if (!data.end_date) {
+          allMissingFields.push('End Date');
+          allErrors['end_date'] = 'End Date is required';
+        }
       }
       // Address tab
       if (!data.res_city || data.res_city.trim() === '') {
@@ -1000,41 +1027,6 @@ export default function CreateEmployee({ employee, departments, positions, facul
     }
   };
   
-  const inferredFacultyId = (() => {
-    if (employee?.faculty_id) {
-      return String(employee.faculty_id);
-    }
-    if (employee?.department?.faculty_id) {
-      return String(employee.department.faculty_id);
-    }
-    const employeeDeptId = employee?.department_id || employee?.department?.id;
-    if (employeeDeptId) {
-      const matchingDepartment = departments.find(
-        (dept) => String(dept.id) === String(employeeDeptId)
-      );
-      if (matchingDepartment?.faculty_id) {
-        return String(matchingDepartment.faculty_id);
-      }
-    }
-    return '';
-  })();
-
-  // Infer organization_type from the selected department
-  const inferredOrganizationType = (() => {
-    const employeeDeptId = employee?.department_id || employee?.department?.id;
-    if (employeeDeptId) {
-      const matchingDepartment = departments.find(
-        (dept) => String(dept.id) === String(employeeDeptId)
-      );
-      if (matchingDepartment) {
-        // Use the type field if available, otherwise fallback to faculty_id check
-        return matchingDepartment.type || (matchingDepartment.faculty_id ? 'academic' : 'administrative');
-      }
-    }
-    // Default to academic if we can't determine
-    return 'academic';
-  })();
-
   // Format initial dates to remove time component
   const initialData = {
     id: employee?.id || '',
@@ -1045,17 +1037,11 @@ export default function CreateEmployee({ employee, departments, positions, facul
     status: employee?.status || 'active',
     employment_status: employee?.employment_status || 'Probationary',
     employee_type: employee?.employee_type || 'Teaching',
-    organization_type: inferredOrganizationType || 'academic',
-    faculty_id: inferredFacultyId || '',
-    department_id: employee?.department_id 
-      ? String(employee.department_id) 
-      : (employee?.department?.id ? String(employee.department.id) : ''),
-    position_id: employee?.position_id 
-      ? String(employee.position_id) 
-      : (employee?.position?.id ? String(employee.position.id) : ''),
-  salary: employee?.salary ? String(employee.salary) : '',
+    salary: employee?.salary ? String(employee.salary) : '',
     date_hired: formatDate(employee?.date_hired || ''),
     date_regularized: formatDate(employee?.date_regularized || ''),
+    start_date: formatDate(employee?.start_date || ''),
+    end_date: formatDate(employee?.end_date || ''),
     birth_date: formatDate(employee?.birth_date || ''),
     birth_place: employee?.birth_place || '',
     sex: employee?.sex || 'Male',
@@ -1257,238 +1243,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
     }
   }, [hasUserInteracted, originalSetData, currentStep, step1Tab, step2Tab, step3Tab, step4Tab]);
 
-  const departmentLookup = useMemo(() => {
-    const lookup = new Map<string, (typeof departments)[number]>();
-    departments.forEach((dept) => {
-      lookup.set(String(dept.id), dept);
-    });
-    return lookup;
-  }, [departments]);
 
-  // Define these before they're used in useMemo hooks
-  const isAcademic = data.organization_type === 'academic';
-  const isAdministrative = data.organization_type === 'administrative';
-  const facultySelected = Boolean(data.faculty_id);
-  const departmentSelected = Boolean(data.department_id);
-
-  const filteredDepartments = useMemo(() => {
-    const allDepartments = departments || [];
-    
-    // For academic: require faculty selection first
-    if (isAcademic) {
-      if (!facultySelected) {
-        return []; // No departments available until faculty is selected
-      }
-      // Filter by organization type and selected faculties
-      const selectedFacultyId = Number(data.faculty_id);
-      return allDepartments.filter((dept: any) => {
-        const deptType = dept.type || 'academic';
-        return deptType === 'academic' && 
-               dept.faculty_id && 
-               Number(dept.faculty_id) === selectedFacultyId;
-      });
-    }
-    
-    // For administrative: show only administrative departments (offices)
-    if (isAdministrative) {
-      return allDepartments.filter((dept: any) => {
-        const deptType = dept.type || 'academic';
-        return deptType === 'administrative';
-      });
-    }
-
-    return [];
-  }, [data.organization_type, data.faculty_id, departments, isAcademic, isAdministrative, facultySelected]);
-
-  // Filter positions based on organization type, selected departments, and faculties
-  const filteredPositions = useMemo(() => {
-    const availablePositions = positions || [];
-    const selectedDepartmentId = data.department_id ? String(data.department_id) : null;
-    const departmentSelected = Boolean(selectedDepartmentId);
-
-    // For academic: require faculty selection first
-    if (isAcademic) {
-      if (!facultySelected) {
-        return []; // No positions available until faculty is selected
-      }
-
-      const selectedFacultyId = Number(data.faculty_id);
-
-      // If departments are selected, show positions from those departments AND faculty-level positions
-      if (departmentSelected) {
-        return availablePositions.filter((position: any) => {
-          const departmentId = position.department_id ? String(position.department_id) : null;
-          const facultyId = position.faculty_id ? Number(position.faculty_id) : null;
-
-          // Check if position belongs to a selected department
-          if (departmentId && selectedDepartmentId && departmentId === selectedDepartmentId) {
-            // Verify the department is academic
-            const dept = departmentLookup.get(departmentId);
-            if (dept && dept.type === 'academic') {
-              return true;
-            }
-          }
-
-          // Check if position is faculty-level (no department) and matches selected faculties
-          if (!departmentId && facultyId && facultyId === selectedFacultyId) {
-            return true;
-          }
-
-          return false;
-        });
-      }
-
-      // If only faculty is selected (no departments), show only faculty-level positions
-      return availablePositions.filter((position: any) => {
-        // Must be faculty-level (no department_id) and match selected faculties
-        return !position.department_id && 
-               position.faculty_id && 
-               Number(position.faculty_id) === selectedFacultyId;
-      });
-    }
-
-    // For administrative: show positions from selected administrative departments
-    if (isAdministrative) {
-      if (departmentSelected && selectedDepartmentId) {
-        return availablePositions.filter((position: any) => {
-          const departmentId = position.department_id ? String(position.department_id) : null;
-          if (departmentId && departmentId === selectedDepartmentId) {
-            // Verify the department is administrative
-            const dept = departmentLookup.get(departmentId);
-            return dept && dept.type === 'administrative';
-          }
-          return false;
-        });
-      }
-      // If no department selected, show all positions that belong to administrative departments
-      return availablePositions.filter((position: any) => {
-        if (position.department_id) {
-          const dept = departmentLookup.get(String(position.department_id));
-          return dept && dept.type === 'administrative';
-        }
-        return false;
-      });
-    }
-
-    return [];
-  }, [data.organization_type, data.faculty_id, data.department_id, positions, departmentLookup, isAcademic, isAdministrative, facultySelected]);
-
-  const hasPositionsAvailable = filteredPositions.length > 0;
-  const hasPositionsForFaculty = facultySelected && filteredPositions.length > 0;
-  
-  // Check if the selected position is faculty-level (has faculty_id but no department_id)
-  const selectedPosition = useMemo(() => {
-    if (!data.position_id) return null;
-    return positions.find(pos => String(pos.id) === String(data.position_id));
-  }, [positions, data.position_id]);
-  
-  const isFacultyLevelPosition = selectedPosition 
-    ? (selectedPosition.faculty_id && !selectedPosition.department_id)
-    : false;
-  
-  const isDepartmentRequired = !isFacultyLevelPosition;
-  const positionPlaceholder = isAdministrative
-    ? (hasPositionsAvailable
-        ? 'Select Position'
-        : 'No positions available for this department')
-    : (!facultySelected
-        ? 'Select a faculty first'
-        : hasPositionsAvailable
-          ? 'Select Position'
-          : departmentSelected
-            ? 'No positions available for this department or faculty'
-            : 'No positions available for this faculty');
-  const availableDepartments = filteredDepartments;
-  const hasDepartmentsForFaculty = availableDepartments.length > 0;
-  const departmentPlaceholder = isAcademic
-    ? (!facultySelected
-        ? 'Select a faculty first'
-        : hasDepartmentsForFaculty
-          ? 'Select Department'
-          : 'No departments available for this faculty')
-    : (hasDepartmentsForFaculty
-        ? 'Select Office'
-        : 'No offices available');
-  const shouldShowSelectFacultyMessage = isAcademic && !facultySelected && !isView;
-  const shouldShowDepartmentWarning = isAcademic && facultySelected && !hasDepartmentsForFaculty && !isView;
-
-  const handleOrganizationTypeChange = (value: string) => {
-    if (data.organization_type === value) {
-      return;
-    }
-    setData('organization_type', value);
-    // Clear related fields when switching types
-    setData('faculty_id', '');
-    setData('department_id', '');
-    setData('position_id', '');
-  };
-
-  const handleFacultyChange = (value: string) => {
-    if (data.faculty_id === value) {
-      return;
-    }
-    setData('faculty_id', value);
-    setData('department_id', '');
-    setData('position_id', '');
-  };
-
-  const handleDepartmentChange = (value: string) => {
-    setData('department_id', value);
-    if (!value) {
-      setData('position_id', '');
-      return;
-    }
-
-    const isCurrentPositionValid = positions.some(
-      (pos) =>
-        String(pos.id) === String(data.position_id || '') &&
-        String(pos.department_id ?? '') === value
-    );
-
-    if (!isCurrentPositionValid) {
-      setData('position_id', '');
-    }
-  };
-
-  // Update department_id and position_id when employee data is loaded (only once on mount)
-  useEffect(() => {
-    if (employee && isEdit) {
-      // Ensure department_id is set - check multiple possible sources
-      const deptId = employee.department_id || employee.department?.id;
-      if (deptId) {
-        const deptIdStr = String(deptId);
-        if (data.department_id !== deptIdStr) {
-          setData('department_id', deptIdStr);
-        }
-      }
-      
-      // Ensure position_id is set - check multiple possible sources
-      const posId = employee.position_id || employee.position?.id;
-      if (posId) {
-        const posIdStr = String(posId);
-        if (data.position_id !== posIdStr) {
-          setData('position_id', posIdStr);
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employee, isEdit]); // Only run when employee or isEdit changes
-
-  useEffect(() => {
-    if (!data.department_id) {
-      return;
-    }
-    const matchingDepartment = departments.find(
-      (dept) => String(dept.id) === String(data.department_id)
-    );
-    if (matchingDepartment?.faculty_id) {
-      const facultyIdStr = String(matchingDepartment.faculty_id);
-      if (data.faculty_id !== facultyIdStr) {
-        setData('faculty_id', facultyIdStr);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.department_id, departments]);
 
   const applyImportedData = useCallback((payload: Partial<FormState>) => {
     if (!payload || Object.keys(payload).length === 0) {
@@ -1579,17 +1334,11 @@ export default function CreateEmployee({ employee, departments, positions, facul
     
     // Client-side validation using CS Form 212 compliant rules
     // Always use UNFILTERED validation result for submission check
-    const validationResult = validateEmployeeData(data, positions);
+    const validationResult = validateEmployeeData(data);
     
-    // Log validation result for debugging (only if there are errors)
+    // Check validation result
     if (!validationResult.isValid) {
-      console.log('Validation errors found on submit:', {
-        isValid: validationResult.isValid,
-        requiredErrorsCount: Object.keys(validationResult.requiredErrors).length,
-        formatErrorsCount: Object.keys(validationResult.formatErrors).length,
-        requiredErrors: validationResult.requiredErrors,
-        formatErrors: validationResult.formatErrors,
-      });
+      // Validation failed - errors will be displayed to user
     }
     
     // On submit, always show ALL errors (not filtered by tab)
@@ -1624,14 +1373,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
     setFormatErrors({});
     
     // Transform questionnaire answers to ensure they are proper booleans before submission
-    const transformedQuestionnaire = data.questionnaire.map((q, idx) => {
-      // Log original value before transformation
-      console.log(`Question ${q.question_number} (index ${idx}):`, {
-        originalAnswer: q.answer,
-        originalType: typeof q.answer,
-        originalValueString: String(q.answer)
-      });
-      
+    const transformedQuestionnaire = data.questionnaire.map((q) => {
       // Handle various formats: boolean, string, number
       let answerValue: boolean;
       if (typeof q.answer === 'boolean') {
@@ -1645,31 +1387,12 @@ export default function CreateEmployee({ employee, departments, positions, facul
         answerValue = Boolean(q.answer);
       }
       
-      console.log(`Question ${q.question_number} transformed:`, {
-        original: q.answer,
-        transformed: answerValue,
-        type: typeof answerValue
-      });
-      
       return {
         question_number: q.question_number,
         answer: answerValue, // Explicitly ensure it's a boolean
         details: q.details || ''
       };
     });
-
-    // Log questionnaire data for debugging
-    console.log('=== QUESTIONNAIRE SUBMISSION DEBUG ===');
-    console.log('Raw questionnaire data from state:', JSON.stringify(data.questionnaire, null, 2));
-    console.log('Transformed questionnaire data:', JSON.stringify(transformedQuestionnaire, null, 2));
-    console.log('Questionnaire answers summary:', transformedQuestionnaire.map(q => ({ 
-      question: q.question_number, 
-      answer: q.answer, 
-      type: typeof q.answer,
-      isTrue: q.answer === true,
-      isFalse: q.answer === false,
-      details: q.details ? 'has details' : 'no details'
-    })));
 
     // Prepare submission data with transformed questionnaire
     // Deep clone to avoid mutating the original data
@@ -1687,10 +1410,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
         };
       })
     };
-    const { faculty_id: _removedFacultyId, organization_type: _removedOrgType, ...sanitizedSubmissionData } = submissionData;
-    
-    console.log('Full submission data questionnaire:', JSON.stringify(submissionData.questionnaire, null, 2));
-    console.log('=====================================');
+    const { faculty_id: _removedFacultyId, organization_type: _removedOrgType, department_id: _removedDepartmentId, position_id: _removedPositionId, sector_id: _removedSectorId, ...sanitizedSubmissionData } = submissionData;
 
     const routeName = isEdit ? 'employees.update' : 'employees.store';
     const routeParams = isEdit ? { employee: employee?.id } : {};
@@ -1722,7 +1442,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
           const backendRequiredErrors: Record<string, string> = {};
           
           // First, run client-side validation on current data to see what's actually invalid
-          const currentValidation = validateEmployeeData(data, positions);
+          const currentValidation = validateEmployeeData(data);
           
           Object.entries(errors).forEach(([field, message]) => {
             const msg = Array.isArray(message) ? message[0] : message;
@@ -1743,8 +1463,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                 backendFormatErrors[field] = errorMessage;
               }
             } else {
-              // Field has been fixed - log it but don't show the error
-              console.log(`Field ${field} was fixed but backend still reports error. Ignoring backend error.`);
+              // Field has been fixed - don't show the error
             }
           });
           
@@ -1814,7 +1533,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
           const backendRequiredErrors: Record<string, string> = {};
           
           // First, run client-side validation on current data to see what's actually invalid
-          const currentValidation = validateEmployeeData(data, positions);
+          const currentValidation = validateEmployeeData(data);
           
           Object.entries(errors).forEach(([field, message]) => {
             const msg = Array.isArray(message) ? message[0] : message;
@@ -1835,8 +1554,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                 backendFormatErrors[field] = errorMessage;
               }
             } else {
-              // Field has been fixed - log it but don't show the error
-              console.log(`Field ${field} was fixed but backend still reports error. Ignoring backend error.`);
+              // Field has been fixed - don't show the error
             }
           });
           
@@ -1894,13 +1612,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
       const boolValue = value === true || value === 'true' || value === 1 || value === '1' || value === 'yes';
       arr[index] = { ...arr[index], [field]: Boolean(boolValue) };
       
-      // Debug log to verify the value is being set correctly
-      console.log(`Setting questionnaire[${index}].answer to:`, {
-        originalValue: value,
-        originalType: typeof value,
-        convertedValue: Boolean(boolValue),
-        convertedType: typeof Boolean(boolValue)
-      });
+      // Set questionnaire answer (converted to boolean)
     } else {
       arr[index] = { ...arr[index], [field]: value };
     }
@@ -2006,23 +1718,14 @@ export default function CreateEmployee({ employee, departments, positions, facul
     // This prevents mixed content errors
     const importUrl = '/employees/import/cs-form-212';
     
-    console.log('CS Form 212 upload URL:', importUrl);
-    console.log('File details:', { name: file.name, size: file.size, type: file.type });
 
     // Use axios directly for file uploads (more reliable than Inertia router.post)
     const formData = new FormData();
     formData.append('pds_file', file);
 
-    // Debug: Log FormData contents
-    console.log('FormData entries:');
-    for (const pair of formData.entries()) {
-      console.log(pair[0] + ': ', pair[1]);
-    }
-
     // Get CSRF token from meta tag or cookie
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                       (document.cookie.match(/XSRF-TOKEN=([^;]+)/) ? decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)[1]) : null);
-    console.log('CSRF Token:', csrfToken ? `Found (${csrfToken.substring(0, 20)}...)` : 'Missing');
     
     // Ensure token is available
     if (!csrfToken) {
@@ -2044,10 +1747,11 @@ export default function CreateEmployee({ employee, departments, positions, facul
       withCredentials: true,
     })
     .then((response) => {
-      console.log('CS Form 212 upload success:', response);
-      
       // Get importedData from response
       const importedData = response.data?.importedData || response.data?.data?.importedData;
+      
+      // Debug logging for questionnaire data
+      console.log('CS Form 212 Import - Raw questionnaire data:', importedData?.questionnaire);
       
       if (importedData) {
         // Reset the processed flag to allow new import
@@ -2060,30 +1764,19 @@ export default function CreateEmployee({ employee, departments, positions, facul
       }
     })
     .catch((error) => {
-      console.error('CS Form 212 upload error:', error);
-      console.error('Error response:', error.response);
-      console.error('Error response data:', error.response?.data);
-      console.error('Error response status:', error.response?.status);
-      console.error('Full error object:', JSON.stringify(error.response?.data, null, 2));
+      // Log error details for debugging (without sensitive data)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('CS Form 212 upload error:', error.response?.status, error.response?.statusText);
+      }
       
       let message = 'Failed to import CS Form 212 file. Please check the file format and try again.';
       
       if (error.response) {
         const responseData = error.response.data;
         
-        // Log all error details for debugging
-        console.log('Response data structure:', {
-          hasErrors: !!responseData?.errors,
-          hasMessage: !!responseData?.message,
-          hasError: !!responseData?.error,
-          errorsKeys: responseData?.errors ? Object.keys(responseData.errors) : [],
-          fullResponse: responseData,
-        });
-        
         // Check for Laravel validation errors
         if (responseData?.errors) {
           const errors = responseData.errors;
-          console.log('Validation errors found:', errors);
           
           // Get the first error message from any field
           const allErrors = Object.values(errors).flat();
@@ -2097,7 +1790,6 @@ export default function CreateEmployee({ employee, departments, positions, facul
               ? responseData.errors.pds_file[0] 
               : responseData.errors.pds_file;
             message = fileError || message;
-            console.log('File-specific error:', fileError);
           }
         } else if (responseData?.message) {
           message = responseData.message;
@@ -2131,7 +1823,6 @@ export default function CreateEmployee({ employee, departments, positions, facul
       }
     })
     .finally(() => {
-      console.log('CS Form 212 upload finished');
       setIsImporting(false);
       if (event.target) {
         event.target.value = '';
@@ -2203,7 +1894,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
     }
     
     // Define which fields belong to which step/tab
-    const step1BasicFields = ['id', 'surname', 'first_name', 'middle_name', 'name_extension', 'birth_date', 'birth_place', 'sex', 'civil_status', 'faculty_id', 'department_id', 'position_id', 'salary', 'employee_type', 'status', 'employment_status', 'date_hired', 'date_regularized', 'citizenship', 'height_m', 'weight_kg', 'blood_type'];
+    const step1BasicFields = ['id', 'surname', 'first_name', 'middle_name', 'name_extension', 'birth_date', 'birth_place', 'sex', 'civil_status', 'salary', 'employee_type', 'status', 'employment_status', 'date_hired', 'date_regularized', 'citizenship', 'height_m', 'weight_kg', 'blood_type'];
     const step1AddressFields = ['res_city', 'res_province', 'res_zip_code', 'res_house_no', 'res_street', 'res_subdivision', 'res_barangay', 'perm_city', 'perm_province', 'perm_zip_code', 'perm_house_no', 'perm_street', 'perm_subdivision', 'perm_barangay', 'email_address', 'mobile_no', 'telephone_no'];
     const step1GovernmentFields = ['gsis_id_no', 'pagibig_id_no', 'philhealth_no', 'sss_no', 'tin_no'];
     
@@ -2295,7 +1986,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
       return;
     }
     
-    const validationResult = validateEmployeeData(data, positions);
+    const validationResult = validateEmployeeData(data);
     // Filter errors to only show fields in the current tab (for display)
     const filteredRequiredErrors = filterErrorsForCurrentTab(validationResult.requiredErrors);
     const filteredFormatErrors = filterErrorsForCurrentTab(validationResult.formatErrors);
@@ -2340,7 +2031,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
         return merged;
       });
     }
-  }, [data, positions, isView, shouldShowValidation, hasAttemptedSubmit, hasAppliedImportedData, currentStep, step1Tab, step2Tab, step3Tab, step4Tab]);
+  }, [data, isView, shouldShowValidation, hasAttemptedSubmit, hasAppliedImportedData, currentStep, step1Tab, step2Tab, step3Tab, step4Tab]);
 
   // Function to scroll to error field
   const scrollToErrorField = (errorKey: string) => {
@@ -2865,15 +2556,14 @@ export default function CreateEmployee({ employee, departments, positions, facul
         'birth_place': { step: 1, tab: 'basic' },
         'sex': { step: 1, tab: 'basic' },
         'civil_status': { step: 1, tab: 'basic' },
-        'faculty_id': { step: 1, tab: 'basic' },
-        'department_id': { step: 1, tab: 'basic' },
-        'position_id': { step: 1, tab: 'basic' },
         'employee_type': { step: 1, tab: 'basic' },
         'salary': { step: 1, tab: 'basic' },
         'status': { step: 1, tab: 'basic' },
         'employment_status': { step: 1, tab: 'basic' },
         'date_hired': { step: 1, tab: 'basic' },
         'date_regularized': { step: 1, tab: 'basic' },
+        'start_date': { step: 1, tab: 'basic' },
+        'end_date': { step: 1, tab: 'basic' },
         'citizenship': { step: 1, tab: 'basic' },
         // Step 1 - Address tab
         'res_city': { step: 1, tab: 'address' },
@@ -2930,9 +2620,6 @@ export default function CreateEmployee({ employee, departments, positions, facul
             'birth_place': 'Place of Birth',
             'sex': 'Sex',
             'civil_status': 'Civil Status',
-            'faculty_id': 'Faculty',
-            'department_id': 'Department',
-            'position_id': 'Position',
             'salary': 'Salary (Monthly)',
             'email_address': 'Email Address',
             'mobile_no': 'Mobile No.',
@@ -3316,9 +3003,6 @@ export default function CreateEmployee({ employee, departments, positions, facul
       birth_place: { step: 1, tab: 'basic' },
       sex: { step: 1, tab: 'basic' },
       civil_status: { step: 1, tab: 'basic' },
-      faculty_id: { step: 1, tab: 'basic' },
-      department_id: { step: 1, tab: 'basic' },
-      position_id: { step: 1, tab: 'basic' },
       salary: { step: 1, tab: 'basic' },
       employee_type: { step: 1, tab: 'basic' },
       status: { step: 1, tab: 'basic' },
@@ -3443,14 +3127,35 @@ export default function CreateEmployee({ employee, departments, positions, facul
                 onClick={handleTriggerImport}
                 disabled={isView || isImporting}
               >
+                {isImporting && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {isImporting ? 'Uploading...' : pendingImport ? 'Re-upload File' : 'Upload & Auto-Fill'}
-                <UploadCloud className="ml-2 h-4 w-4" />
+                {!isImporting && <UploadCloud className="ml-2 h-4 w-4" />}
               </Button>
             </div>
           </div>
         )}
 
-        {pendingImport && (
+        {isImporting && (
+          <div className="mb-6 rounded-lg border border-primary/20 bg-muted/30 p-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <LoaderCircle className="h-5 w-5 animate-spin text-primary" />
+                <p className="font-semibold text-foreground">Processing CS Form 212 file...</p>
+              </div>
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-5/6" />
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingImport && !isImporting && (
           <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
             <div className="mb-4">
               <p className="font-semibold text-amber-900 mb-1">Preview Imported CS Form 212 Data</p>
@@ -3460,10 +3165,11 @@ export default function CreateEmployee({ employee, departments, positions, facul
             <div className="mt-4">
               <CSForm212PreviewTable
                 importedData={pendingImport}
-                departments={departments}
-                positions={positions}
-                faculties={faculties}
                 onConfirm={(editedData) => {
+                  // Debug: log the questionnaire data being confirmed
+                  console.log('onConfirm - Full editedData:', editedData);
+                  console.log('onConfirm - Questionnaire from editedData:', editedData?.questionnaire);
+                  
                   // Apply the edited imported data to the form
                   if (editedData) {
                     // First, clear all existing errors to start fresh
@@ -3484,7 +3190,23 @@ export default function CreateEmployee({ employee, departments, positions, facul
                       const next = { ...prev };
                       Object.keys(editedData).forEach((key) => {
                         if (editedData[key] !== undefined && editedData[key] !== null) {
-                          next[key] = editedData[key];
+                          // Special handling for questionnaire - ensure answers are proper booleans
+                          if (key === 'questionnaire' && Array.isArray(editedData[key])) {
+                            console.log('Applying questionnaire data - before conversion:', editedData[key]);
+                            next[key] = editedData[key].map((q: any) => {
+                              const convertedAnswer = typeof q.answer === 'boolean' 
+                                ? q.answer 
+                                : (q.answer === true || q.answer === 'true' || q.answer === 1 || q.answer === '1' || q.answer === 'yes' || String(q.answer).toLowerCase() === 'true');
+                              console.log(`Q${q.question_number}: raw=${q.answer} (${typeof q.answer}), converted=${convertedAnswer}`);
+                              return {
+                                ...q,
+                                answer: convertedAnswer
+                              };
+                            });
+                            console.log('Applying questionnaire data - after conversion:', next[key]);
+                          } else {
+                            next[key] = editedData[key];
+                          }
                         }
                       });
                       return next;
@@ -3507,7 +3229,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                     
                     // Run validation immediately with the updatedData object (not the state)
                     // This ensures we validate against the actual imported data, not stale state
-                    const validationResult = validateEmployeeData(updatedData, positions);
+                    const validationResult = validateEmployeeData(updatedData);
                     // Replace (not merge) errors to ensure we have the latest validation state
                     setRequiredErrors(validationResult.requiredErrors);
                     setFormatErrors(validationResult.formatErrors);
@@ -3740,202 +3462,37 @@ export default function CreateEmployee({ employee, departments, positions, facul
                             <h3 className="text-lg font-semibold text-foreground">Employment Details</h3>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <Label htmlFor="organization_type" className="text-sm font-medium mb-2 block">
-                                Organization Type <span className="text-destructive">*</span>
+                              <Label htmlFor="salary" className="text-sm font-medium mb-2 block">
+                                Salary (Monthly) <span className="text-destructive">*</span> <span className="text-muted-foreground">(decimal)</span>
                               </Label>
-                              <select
-                                id="organization_type"
-                                value={data.organization_type || 'academic'}
-                                onChange={(e) => handleOrganizationTypeChange(e.target.value)}
-                                className="h-12 w-full rounded-lg border border-border bg-background px-4 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={isView}
-                              >
-                                <option value="academic">Academic</option>
-                                <option value="administrative">Administrative</option>
-                              </select>
-                              {getError('organization_type') && (
-                                <p 
-                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
-                                  onClick={() => handleErrorClick('organization_type')}
-                                >
-                                  {getError('organization_type')}
-                                </p>
-                              )}
-                            </div>
-
-                            <div>
-                              <Label htmlFor="faculty_id" className="text-sm font-medium mb-2 block">
-                                Faculty {isAcademic && <span className="text-destructive">*</span>}
-                              </Label>
-                              <select
-                                id="faculty_id"
-                                value={data.faculty_id || ''}
-                                onChange={(e) => handleFacultyChange(e.target.value)}
-                                className="h-12 w-full rounded-lg border border-border bg-background px-4 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={isView || isAdministrative}
-                              >
-                                <option value="">Select Faculty</option>
-                                {faculties.map((faculty) => (
-                                  <option key={faculty.id} value={String(faculty.id)}>
-                                    {faculty.name}
-                                    {faculty.code ? ` (${faculty.code})` : ''}
-                                  </option>
-                                ))}
-                              </select>
-                              {getError('faculty_id') && (
-                                <p 
-                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
-                                  onClick={() => handleErrorClick('faculty_id')}
-                                >
-                                  {getError('faculty_id')}
-                                </p>
-                              )}
-                              {shouldShowSelectFacultyMessage && isAcademic && (
-                                <p className="mt-1.5 text-xs text-muted-foreground px-1">
-                                  Select a faculty to load its departments and positions.
-                                </p>
-                              )}
-                              {isAdministrative && (
-                                <p className="mt-1.5 text-xs text-muted-foreground px-1">
-                                  Faculty selection is not required for administrative departments.
-                                </p>
-                              )}
-                            </div>
-
-                            <div>
-                              <Label htmlFor="department_id" className="text-sm font-medium mb-2 block">
-                                {isAdministrative ? 'Office' : 'Department'} {isDepartmentRequired && <span className="text-destructive">*</span>}
-                                {isFacultyLevelPosition && (
-                                  <span className="text-xs text-muted-foreground ml-1">(Optional for faculty-level positions)</span>
-                                )}
-                              </Label>
-                              <select
-                                id="department_id"
-                                value={data.department_id || ''}
-                                onChange={(e) => handleDepartmentChange(e.target.value)}
-                                className="h-12 w-full rounded-lg border border-border bg-background px-4 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={isView || isFacultyLevelPosition || (isAcademic && !facultySelected)}
-                              >
-                                <option value="">{departmentPlaceholder}</option>
-                                {availableDepartments.map(dept => (
-                                  <option key={dept.id} value={String(dept.id)}>
-                                    {dept.name || dept.faculty_name || (isAdministrative ? 'Unnamed Office' : 'Unnamed Department')}
-                                  </option>
-                                ))}
-                              </select>
-                              {getError('department_id') && (
-                                <p 
-                                  className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
-                                  onClick={() => handleErrorClick('department_id')}
-                                >
-                                  {getError('department_id')}
-                                </p>
-                              )}
-                              {isAcademic && facultySelected && !hasDepartmentsForFaculty && !isView && (
-                                <p className="mt-1.5 text-xs text-amber-600 px-1">
-                                  No departments found under this faculty. Add one under Org Structure → Departments.
-                                </p>
-                              )}
-                              {isAdministrative && !hasDepartmentsForFaculty && !isView && (
-                                <p className="mt-1.5 text-xs text-amber-600 px-1">
-                                  No offices available. Add one under Org Structure → Departments.
-                                </p>
-                              )}
-                              {isAcademic && !facultySelected && !isView && (
-                                <p className="mt-1.5 text-xs text-muted-foreground px-1">
-                                  Select a faculty first to view available departments.
-                                </p>
-                              )}
-                              {isAdministrative && !isView && (
-                                <p className="mt-1.5 text-xs text-muted-foreground px-1">
-                                  Select the office where this employee belongs.
-                                </p>
-                              )}
-                            </div>
-
-                          <div>
-                            <Label htmlFor="salary" className="text-sm font-medium mb-2 block">
-                              Salary (Monthly) <span className="text-destructive">*</span> <span className="text-muted-foreground">(decimal)</span>
-                            </Label>
-                            <Input
-                              id="salary"
-                              type="text"
-                              value={data.salary ? formatNumberWithCommas(data.salary) : ''}
-                              onChange={(e) => {
-                                const rawValue = e.target.value.replace(/,/g, '');
-                                if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
-                                  setData('salary', rawValue);
-                                }
-                              }}
-                              onBlur={(e) => {
-                                const rawValue = e.target.value.replace(/,/g, '');
-                                if (rawValue && parseFloat(rawValue) >= 0) {
-                                  setData('salary', rawValue);
-                                }
-                              }}
-                              className="h-12"
-                              disabled={isView}
-                              placeholder="0.00"
-                            />
-                            {getError('salary') && (
-                              <p
-                                className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
-                                onClick={() => handleErrorClick('salary')}
-                              >
-                                {getError('salary')}
-                              </p>
-                            )}
-                          </div>
-
-                            <div>
-                              <Label htmlFor="position_id" className="text-sm font-medium mb-2 block">
-                                Position <span className="text-destructive">*</span>
-                              </Label>
-                              <select
-                                id="position_id"
-                                value={data.position_id || ''}
-                                onChange={e => {
-                                  const positionId = e.target.value;
-                                  setData('position_id', positionId);
-                                  // Clear department if faculty-level position is selected
-                                  if (positionId) {
-                                    const selectedPos = positions.find(pos => String(pos.id) === String(positionId));
-                                    if (selectedPos && selectedPos.faculty_id && !selectedPos.department_id) {
-                                      // Faculty-level position selected, clear department and department error
-                                      setData('department_id', '');
-                                      setRequiredErrors(prev => {
-                                        const newErrors = { ...prev };
-                                        delete newErrors['department_id'];
-                                        return newErrors;
-                                      });
-                                    }
+                              <Input
+                                id="salary"
+                                type="text"
+                                value={data.salary ? formatNumberWithCommas(data.salary) : ''}
+                                onChange={(e) => {
+                                  const rawValue = e.target.value.replace(/,/g, '');
+                                  if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+                                    setData('salary', rawValue);
                                   }
                                 }}
-                                className="h-12 w-full rounded-lg border border-border bg-background px-4 text-sm text-foreground transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={isView || (isAcademic && !facultySelected) || !hasPositionsAvailable}
-                              >
-                                <option value="">{positionPlaceholder}</option>
-                                {filteredPositions.map(pos => (
-                                  <option key={pos.id} value={String(pos.id)}>
-                                    {pos.name || pos.pos_name || 'Unnamed Position'}
-                                  </option>
-                                ))}
-                              </select>
-                              {getError('position_id') && (
-                                <p 
+                                onBlur={(e) => {
+                                  const rawValue = e.target.value.replace(/,/g, '');
+                                  if (rawValue && parseFloat(rawValue) >= 0) {
+                                    setData('salary', rawValue);
+                                  }
+                                }}
+                                className="h-12"
+                                disabled={isView}
+                                placeholder="0.00"
+                              />
+                              {getError('salary') && (
+                                <p
                                   className="mt-1.5 text-xs text-destructive px-1 cursor-pointer hover:underline"
-                                  onClick={() => handleErrorClick('position_id')}
+                                  onClick={() => handleErrorClick('salary')}
                                 >
-                                  {getError('position_id')}
-                                </p>
-                              )}
-                              {!hasPositionsAvailable && facultySelected && !isView && (
-                                <p className="mt-1.5 text-xs text-amber-600 px-1">
-                                  {departmentSelected 
-                                    ? 'No positions found for this department or faculty. Add new positions under Org Structure → Positions.'
-                                    : 'No positions available for this faculty. Add positions under Org Structure → Positions.'}
+                                  {getError('salary')}
                                 </p>
                               )}
                             </div>
@@ -3998,27 +3555,113 @@ export default function CreateEmployee({ employee, departments, positions, facul
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FloatingInput
-                              label="Date Hired"
-                              type="date"
-                              value={data.date_hired || ''}
-                              onChange={e => setData('date_hired', e.target.value)}
-                              error={getError('date_hired')}
-                              readOnly={isView}
-                              required
-                            />
-                            <FloatingInput
-                              label="Date Regularized"
-                              type="date"
-                              value={data.date_regularized || ''}
-                              onChange={e => setData('date_regularized', e.target.value)}
-                              error={getError('date_regularized')}
-                              readOnly={isView}
-                              min={data.date_hired || undefined}
-                              helperText="Must be on or after Date Hired"
-                            />
-                          </div>
+                          {/* Conditional Date Fields Based on Employment Status */}
+                          {data.employment_status === 'Regular' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FloatingInput
+                                label="Date Hired"
+                                type="date"
+                                value={data.date_hired || ''}
+                                onChange={e => setData('date_hired', e.target.value)}
+                                error={getError('date_hired')}
+                                readOnly={isView}
+                                required
+                                onErrorClick={() => handleErrorClick('date_hired')}
+                              />
+                              <FloatingInput
+                                label="Date Regularized"
+                                type="date"
+                                value={data.date_regularized || ''}
+                                onChange={e => setData('date_regularized', e.target.value)}
+                                error={getError('date_regularized')}
+                                readOnly={isView}
+                                min={data.date_hired || undefined}
+                                helperText="Must be on or after Date Hired"
+                                required
+                                onErrorClick={() => handleErrorClick('date_regularized')}
+                              />
+                            </div>
+                          )}
+                          
+                          {data.employment_status === 'Probationary' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FloatingInput
+                                label="Date Hired"
+                                type="date"
+                                value={data.date_hired || ''}
+                                onChange={e => setData('date_hired', e.target.value)}
+                                error={getError('date_hired')}
+                                readOnly={isView}
+                                onErrorClick={() => handleErrorClick('date_hired')}
+                              />
+                            </div>
+                          )}
+                          
+                          {data.employment_status === 'Job-Order' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FloatingInput
+                                label="Start Date"
+                                type="date"
+                                value={data.start_date || ''}
+                                onChange={e => setData('start_date', e.target.value)}
+                                error={getError('start_date')}
+                                readOnly={isView}
+                                required
+                                onErrorClick={() => handleErrorClick('start_date')}
+                              />
+                              <FloatingInput
+                                label="End Date"
+                                type="date"
+                                value={data.end_date || ''}
+                                onChange={e => setData('end_date', e.target.value)}
+                                error={getError('end_date')}
+                                readOnly={isView}
+                                min={data.start_date || undefined}
+                                helperText="Must be on or after Start Date"
+                                required
+                                onErrorClick={() => handleErrorClick('end_date')}
+                              />
+                            </div>
+                          )}
+                          
+                          {data.employment_status === 'Contractual' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <FloatingInput
+                                label="Date Hired"
+                                type="date"
+                                value={data.date_hired || ''}
+                                onChange={e => setData('date_hired', e.target.value)}
+                                error={getError('date_hired')}
+                                readOnly={isView}
+                                required
+                                onErrorClick={() => handleErrorClick('date_hired')}
+                              />
+                              <FloatingInput
+                                label="Start Date"
+                                type="date"
+                                value={data.start_date || ''}
+                                onChange={e => setData('start_date', e.target.value)}
+                                error={getError('start_date')}
+                                readOnly={isView}
+                                required
+                                onErrorClick={() => handleErrorClick('start_date')}
+                              />
+                              <FloatingInput
+                                label="End Date"
+                                type="date"
+                                value={data.end_date || ''}
+                                onChange={e => setData('end_date', e.target.value)}
+                                error={getError('end_date')}
+                                readOnly={isView}
+                                min={data.start_date || undefined}
+                                helperText="Must be on or after Start Date"
+                                required
+                                onErrorClick={() => handleErrorClick('end_date')}
+                              />
+                            </div>
+                          )}
+
+                          {/* Note: Unit Designation is managed separately via the Designations page */}
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="md:col-span-2">
@@ -5485,6 +5128,11 @@ export default function CreateEmployee({ employee, departments, positions, facul
                     }
                   };
 
+                  // Ensure answer is a proper boolean for radio button comparison
+                  const answerBool = typeof q.answer === 'boolean' 
+                    ? q.answer 
+                    : (q.answer === true || q.answer === 'true' || q.answer === 1 || q.answer === '1' || q.answer === 'yes' || String(q.answer).toLowerCase() === 'true');
+
                   return (
                   <div key={idx} className="p-4 border border-border rounded-lg bg-muted/20 space-y-4">
                     <Label className="text-sm font-medium text-foreground block mb-2">
@@ -5495,7 +5143,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                         <input
                           type="radio"
                           name={`questionnaire-${idx}`}
-                          checked={q.answer === true}
+                          checked={answerBool === true}
                           onChange={() => !isView && updateSection('questionnaire', idx, 'answer', true)}
                           disabled={isView}
                           className="h-4 w-4 text-primary border-border focus:ring-2 focus:ring-primary/20 cursor-pointer"
@@ -5506,7 +5154,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                         <input
                           type="radio"
                           name={`questionnaire-${idx}`}
-                          checked={q.answer === false}
+                          checked={answerBool === false}
                           onChange={() => !isView && updateSection('questionnaire', idx, 'answer', false)}
                           disabled={isView}
                           className="h-4 w-4 text-primary border-border focus:ring-2 focus:ring-primary/20 cursor-pointer"
@@ -5514,7 +5162,7 @@ export default function CreateEmployee({ employee, departments, positions, facul
                         <span className="text-sm text-foreground">No</span>
                       </label>
                     </div>
-                    {q.answer === true && (
+                    {answerBool === true && (
                       <FloatingInput
                         label="If YES, give details"
                         value={q.details || ''}

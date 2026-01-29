@@ -16,10 +16,38 @@ class CertificateService
     const PIXEL_TO_POINT = 0.75;
 
     /**
+     * System field keys available for certificate generation (requester/user/request meta).
+     * Used by the request builder and certificate template editor.
+     */
+    public static function getSystemFieldKeys(): array
+    {
+        return [
+            'user_name',
+            'user_email',
+            'employee_full_name',
+            'employee_first_name',
+            'employee_last_name',
+            'employee_middle_name',
+            'employee_position',
+            'employee_unit',
+            'reference_code',
+            'submitted_date',
+            'completed_date',
+            'current_date',
+            'current_year',
+        ];
+    }
+
+    /**
      * Generate certificate for a request submission
      */
     public function generateCertificate(RequestSubmission $submission): ?string
     {
+        $submission->load([
+            'user.employee.primaryDesignation.position',
+            'user.employee.primaryDesignation.unit',
+        ]);
+
         $requestType = $submission->requestType;
         
         if (!$requestType->hasCertificateGeneration()) {
@@ -84,15 +112,23 @@ class CertificateService
             $answers['user_name'] = $user->name;
             $answers['user_email'] = $user->email;
             
-            // Add employee information if available
+            // Add employee information if available (using primary designation: position + unit)
             if ($user->employee) {
                 $employee = $user->employee;
-                $answers['employee_full_name'] = $employee->first_name . ' ' . $employee->last_name;
+                $answers['employee_full_name'] = trim($employee->first_name . ' ' . ($employee->middle_name ?? '') . ' ' . $employee->last_name);
                 $answers['employee_first_name'] = $employee->first_name;
                 $answers['employee_last_name'] = $employee->last_name;
                 $answers['employee_middle_name'] = $employee->middle_name ?? '';
-                $answers['employee_position'] = $employee->position->name ?? '';
-                $answers['employee_department'] = $employee->department->name ?? '';
+                $designation = $employee->primaryDesignation;
+                if ($designation) {
+                    $answers['employee_position'] = $designation->position?->pos_name ?? '';
+                    $answers['employee_unit'] = $designation->unit?->name ?? '';
+                } else {
+                    $answers['employee_position'] = '';
+                    $answers['employee_unit'] = '';
+                }
+                // Keep employee_department as alias for employee_unit for backward compatibility
+                $answers['employee_department'] = $answers['employee_unit'];
             }
         }
 

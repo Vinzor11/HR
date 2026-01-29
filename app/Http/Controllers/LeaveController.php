@@ -69,7 +69,7 @@ class LeaveController extends Controller
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
         $employeeId = $request->input('employee_id');
-        $departmentId = $request->integer('department_id');
+        $unitId = $request->integer('unit_id');
 
         // Default to current month if no dates provided
         if (!$dateFrom || !$dateTo) {
@@ -80,18 +80,20 @@ class LeaveController extends Controller
             $endDate = Carbon::parse($dateTo)->endOfDay();
         }
 
-        $leaves = $this->leaveService->getLeaveCalendar($startDate, $endDate, $employeeId, $departmentId);
+        $leaves = $this->leaveService->getLeaveCalendar($startDate, $endDate, $employeeId, $unitId);
 
         // Get leave types for filter dropdown
         $leaveTypes = LeaveType::active()->ordered()->get(['id', 'name', 'code']);
+        $units = \App\Models\Unit::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
 
         return Inertia::render('leaves/calendar', [
             'leaves' => $leaves,
             'dateFrom' => $dateFrom ?: $startDate->format('Y-m-d'),
             'dateTo' => $dateTo ?: $endDate->format('Y-m-d'),
             'leaveTypes' => $leaveTypes,
+            'units' => $units,
             'selectedEmployeeId' => $employeeId,
-            'selectedDepartmentId' => $departmentId,
+            'selectedUnitId' => $unitId,
         ]);
     }
 

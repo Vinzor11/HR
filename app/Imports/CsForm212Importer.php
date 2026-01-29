@@ -53,8 +53,13 @@ class CsForm212Importer
             $payload['other_information'] = $otherInfo;
         }
 
-        if ($questionnaire = $this->extractQuestionnaire($sheets)) {
+        // Always include questionnaire data (even if empty array)
+        $questionnaire = $this->extractQuestionnaire($sheets);
+        if (!empty($questionnaire)) {
             $payload['questionnaire'] = $questionnaire;
+            \Log::info('Questionnaire data extracted', ['questionnaire' => $questionnaire]);
+        } else {
+            \Log::warning('No questionnaire data extracted from CS Form 212');
         }
 
         return $payload;
@@ -392,9 +397,34 @@ class CsForm212Importer
             $answerRaw = $this->getCellValue($sheets, $cells['answer_cell'] ?? null, $sheetName);
             $detailsRaw = $this->getCellValue($sheets, $cells['details_cell'] ?? null, $sheetName);
 
+            // Log for debugging
+            \Log::debug('Questionnaire extraction', [
+                'question_number' => $questionNumber,
+                'answer_cell' => $cells['answer_cell'] ?? null,
+                'details_cell' => $cells['details_cell'] ?? null,
+                'answer_raw' => $answerRaw,
+                'answer_raw_type' => gettype($answerRaw),
+                'details_raw' => $detailsRaw,
+                'details_raw_type' => gettype($detailsRaw),
+            ]);
+
+            // Consider answer as YES (true) if:
+            // 1. The answer cell has any value (checkmark, X, etc.), OR
+            // 2. The details cell has any value (user provided details means they answered YES)
+            $hasAnswerInCell = !$this->isBlank($answerRaw);
+            $hasDetails = !$this->isBlank($detailsRaw);
+            $isYes = $hasAnswerInCell || $hasDetails;
+            
+            \Log::debug('Questionnaire answer computed', [
+                'question_number' => $questionNumber,
+                'hasAnswerInCell' => $hasAnswerInCell,
+                'hasDetails' => $hasDetails,
+                'isYes' => $isYes,
+            ]);
+            
             $entries[] = [
                 'question_number' => (int) $questionNumber,
-                'answer' => $this->castToBoolean($answerRaw),
+                'answer' => (bool) $isYes, // Explicitly cast to boolean - true if answer cell OR details has value
                 'details' => $detailsRaw ? trim((string) $detailsRaw) : '',
             ];
         }

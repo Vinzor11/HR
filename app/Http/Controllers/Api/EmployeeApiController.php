@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Services\Api\EmployeeApiFormatter;
 use App\Services\EmployeeScopeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,9 +14,12 @@ class EmployeeApiController extends Controller
 {
     protected EmployeeScopeService $scopeService;
 
-    public function __construct(EmployeeScopeService $scopeService)
+    protected EmployeeApiFormatter $formatter;
+
+    public function __construct(EmployeeScopeService $scopeService, EmployeeApiFormatter $formatter)
     {
         $this->scopeService = $scopeService;
+        $this->formatter = $formatter;
     }
 
     /**
@@ -38,10 +42,10 @@ class EmployeeApiController extends Controller
         // Include soft-deleted employees if requested (for sync purposes)
         $includeDeleted = $request->boolean('include_deleted', false);
         
-        // Build query for all employees
+        // Build query for all employees with new org structure
         $query = $includeDeleted 
-            ? Employee::withTrashed()->with(['department', 'position'])
-            : Employee::with(['department', 'position']);
+            ? Employee::withTrashed()->with(['primaryDesignation.unit.sector', 'primaryDesignation.position', 'primaryDesignation.academicRank', 'primaryDesignation.staffGrade'])
+            : Employee::with(['primaryDesignation.unit.sector', 'primaryDesignation.position', 'primaryDesignation.academicRank', 'primaryDesignation.staffGrade']);
         
         // Filter by status
         $status = $request->input('status', 'active');
@@ -56,9 +60,7 @@ class EmployeeApiController extends Controller
             ->paginate($perPage);
         
         // Format employees data
-        $formattedEmployees = $employees->map(function ($employee) {
-            return $this->formatEmployeeResponseData($employee);
-        });
+        $formattedEmployees = $employees->map(fn (Employee $employee) => $this->formatter->format($employee));
         
         return response()->json([
             'data' => $formattedEmployees,
@@ -96,7 +98,7 @@ class EmployeeApiController extends Controller
             ], 404);
         }
         
-        $employee = Employee::with(['department', 'position'])
+        $employee = Employee::with(['primaryDesignation.unit.sector', 'primaryDesignation.position', 'primaryDesignation.academicRank', 'primaryDesignation.staffGrade'])
             ->where('id', $user->employee_id)
             ->where('status', 'active')
             ->first();
@@ -123,7 +125,7 @@ class EmployeeApiController extends Controller
         $user = $request->user();
         
         // Find the employee
-        $employee = Employee::with(['department', 'position'])
+        $employee = Employee::with(['primaryDesignation.unit.sector', 'primaryDesignation.position', 'primaryDesignation.academicRank', 'primaryDesignation.staffGrade'])
             ->where('id', $employee_id)
             ->first();
         
@@ -162,105 +164,10 @@ class EmployeeApiController extends Controller
     
     /**
      * Format employee response for API
-     * 
-     * Returns a structured JSON response with all necessary employee information
-     * for form auto-filling in external systems.
      */
     private function formatEmployeeResponse(Employee $employee): JsonResponse
     {
-        return response()->json($this->formatEmployeeResponseData($employee));
-    }
-
-    /**
-     * Format employee data for list responses (returns array instead of JsonResponse)
-     * 
-     * @param Employee $employee
-     * @return array
-     */
-    private function formatEmployeeResponseData(Employee $employee): array
-    {
-        return [
-            'id' => $employee->id,
-            'is_deleted' => $employee->trashed(), // true if soft-deleted
-            'deleted_at' => $employee->deleted_at?->format('Y-m-d H:i:s'), // null if not deleted
-            'name' => [
-                'surname' => $employee->surname,
-                'first_name' => $employee->first_name,
-                'middle_name' => $employee->middle_name,
-                'name_extension' => $employee->name_extension,
-                'full_name' => trim("{$employee->first_name} {$employee->middle_name} {$employee->surname} {$employee->name_extension}"),
-            ],
-            'contact' => [
-                'email' => $employee->email_address,
-                'mobile' => $employee->mobile_no,
-                'telephone' => $employee->telephone_no,
-            ],
-            'employment' => [
-                'status' => $employee->status,
-                'employment_status' => $employee->employment_status,
-                'employee_type' => $employee->employee_type,
-                'date_hired' => $employee->date_hired?->format('Y-m-d'),
-                'date_regularized' => $employee->date_regularized?->format('Y-m-d'),
-            ],
-            'department' => $employee->department ? [
-                'id' => $employee->department->id,
-                'code' => $employee->department->code,
-                'name' => $employee->department->name,
-                'type' => $employee->department->type,
-                'faculty_id' => $employee->department->faculty_id,
-            ] : null,
-            'position' => $employee->position ? [
-                'id' => $employee->position->id,
-                'code' => $employee->position->pos_code,
-                'name' => $employee->position->pos_name,
-            ] : null,
-            'personal' => [
-                'birth_date' => $employee->birth_date?->format('Y-m-d'),
-                'birth_place' => $employee->birth_place,
-                'sex' => $employee->sex,
-                'civil_status' => $employee->civil_status,
-                'citizenship' => $employee->citizenship,
-                'dual_citizenship' => $employee->dual_citizenship,
-                'citizenship_type' => $employee->citizenship_type,
-            ],
-            'address' => [
-                'residential' => [
-                    'house_no' => $employee->res_house_no,
-                    'street' => $employee->res_street,
-                    'subdivision' => $employee->res_subdivision,
-                    'barangay' => $employee->res_barangay,
-                    'city' => $employee->res_city,
-                    'province' => $employee->res_province,
-                    'zip_code' => $employee->res_zip_code,
-                ],
-                'permanent' => [
-                    'house_no' => $employee->perm_house_no,
-                    'street' => $employee->perm_street,
-                    'subdivision' => $employee->perm_subdivision,
-                    'barangay' => $employee->perm_barangay,
-                    'city' => $employee->perm_city,
-                    'province' => $employee->perm_province,
-                    'zip_code' => $employee->perm_zip_code,
-                ],
-            ],
-            'government_ids' => [
-                'gsis' => $employee->gsis_id_no,
-                'pagibig' => $employee->pagibig_id_no,
-                'philhealth' => $employee->philhealth_no,
-                'sss' => $employee->sss_no,
-                'tin' => $employee->tin_no,
-                'agency_employee_no' => $employee->agency_employee_no,
-                'government_issued_id' => $employee->government_issued_id,
-                'id_number' => $employee->id_number,
-                'id_date_issued' => $employee->id_date_issued?->format('Y-m-d'),
-                'id_place_of_issue' => $employee->id_place_of_issue,
-            ],
-            'special_categories' => [
-                'pwd_id_no' => $employee->pwd_id_no,
-                'solo_parent_id_no' => $employee->solo_parent_id_no,
-                'indigenous_group' => $employee->indigenous_group,
-            ],
-        ];
+        return response()->json($this->formatter->format($employee));
     }
 }
 

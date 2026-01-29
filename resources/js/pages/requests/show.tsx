@@ -4,19 +4,40 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CustomTextarea } from '@/components/ui/custom-textarea';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { RequestSubmissionResource, RequestStatus } from '@/types/requests';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, Clock4, Download, FileText, ShieldAlert } from 'lucide-react';
-import { useMemo } from 'react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock4, Download, FileText, MessageSquare, ShieldAlert, Undo2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+
+interface ApprovalComment {
+    id: number;
+    content: string;
+    type: string;
+    is_internal: boolean;
+    created_at: string | null;
+    user: {
+        id: number;
+        name: string;
+    } | null;
+}
 
 interface RequestShowProps {
-    submission: RequestSubmissionResource;
+    submission: RequestSubmissionResource & {
+        comments?: ApprovalComment[];
+        withdrawn_at?: string | null;
+        withdrawal_reason?: string | null;
+    };
     can: {
         approve: boolean;
         reject: boolean;
         fulfill: boolean;
+        withdraw?: boolean;
+        comment?: boolean;
+        internal_comment?: boolean;
     };
     downloadRoutes: {
         fulfillment: string | null;
@@ -28,12 +49,13 @@ const breadcrumbs = (submission: RequestSubmissionResource): BreadcrumbItem[] =>
     { title: submission.reference_code, href: route('requests.show', submission.id) },
 ];
 
-const statusBadgeStyles: Record<RequestStatus, string> = {
+const statusBadgeStyles: Record<RequestStatus | 'withdrawn', string> = {
     pending: 'bg-amber-100 text-amber-800',
     approved: 'bg-emerald-100 text-emerald-800',
     fulfillment: 'bg-sky-100 text-sky-800',
     completed: 'bg-indigo-100 text-indigo-800',
     rejected: 'bg-red-100 text-red-800',
+    withdrawn: 'bg-gray-100 text-gray-800',
 };
 
 const APP_TIMEZONE =
@@ -58,13 +80,32 @@ const formatDate = (value?: string | null) => {
     }).format(date);
 };
 
+const formatShortDate = (value?: string | null) => {
+    if (!value) {
+        return '—';
+    }
+
+    const date = new Date(value);
+    return new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: '2-digit',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: APP_TIMEZONE,
+    }).format(date);
+};
+
 export default function RequestShow({ submission, can, downloadRoutes }: RequestShowProps) {
     const approvalForm = useForm<{ notes: string }>({ notes: '' });
     const rejectionForm = useForm<{ notes: string }>({ notes: '' });
     const fulfillmentForm = useForm<{ file: File | null; notes: string }>({ file: null, notes: '' });
+    const withdrawForm = useForm<{ reason: string }>({ reason: '' });
+    const commentForm = useForm<{ content: string; is_internal: boolean }>({ content: '', is_internal: false });
+    
+    const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
 
     const handleApprove = () => {
-        // Prevent double submission
         if (approvalForm.processing) {
             return;
         }
@@ -80,7 +121,6 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
     };
 
     const handleReject = () => {
-        // Prevent double submission
         if (rejectionForm.processing) {
             return;
         }
@@ -96,7 +136,6 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
     };
 
     const handleFulfill = () => {
-        // Prevent double submission
         if (fulfillmentForm.processing) {
             return;
         }
@@ -112,32 +151,58 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
         });
     };
 
+    const handleWithdraw = () => {
+        if (withdrawForm.processing) {
+            return;
+        }
+        
+        withdrawForm.post(route('requests.withdraw', submission.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                withdrawForm.reset();
+                setShowWithdrawConfirm(false);
+                toast.success('Request has been withdrawn.');
+            },
+            onError: () => toast.error('Unable to withdraw request.'),
+        });
+    };
+
+    const handleAddComment = () => {
+        if (commentForm.processing || !commentForm.data.content.trim()) {
+            return;
+        }
+        
+        commentForm.post(route('requests.comment', submission.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                commentForm.reset();
+                toast.success('Comment added.');
+            },
+            onError: () => toast.error('Unable to add comment.'),
+        });
+    };
+
     const currentStatusLabel = submission.status.charAt(0).toUpperCase() + submission.status.slice(1);
 
     const timeline = useMemo(
         () =>
-            submission.approval.actions.map((action) => {
+            submission.approval.actions.map((action: any) => {
                 let label = 'Approver';
                 
-                // Get the position name - prefer from approver_position, then from approver.employee.position
                 const positionName = action.approver_position?.pos_name 
                     ?? action.approver?.position?.pos_name 
                     ?? null;
                 
-                // Get the user's full name
                 const userName = action.approver?.name ?? action.approver_name ?? null;
                 
-                // Format: "Position (Fullname)" - similar to training requests
                 if (positionName && userName) {
                     label = `${positionName} (${userName})`;
                 } else if (positionName) {
                     label = positionName;
                 } else if (action.approver_role?.label || action.approver_role?.name) {
-                    // Fallback to role if no position available
                     const roleName = action.approver_role.label ?? action.approver_role.name;
                     label = userName ? `${roleName} (${userName})` : roleName;
                 } else if (userName) {
-                    // Fallback to just name if no position or role
                     label = userName;
                 }
                 
@@ -147,10 +212,18 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                     status: action.status,
                     notes: action.notes,
                     acted_at: action.acted_at,
+                    due_at: action.due_at,
+                    is_overdue: action.is_overdue,
+                    is_escalated: action.is_escalated,
+                    escalated_from: action.escalated_from,
+                    delegated_from: action.delegated_from,
+                    approval_mode: action.approval_mode,
                 };
             }),
         [submission.approval.actions],
     );
+
+    const comments = submission.comments ?? [];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs(submission)}>
@@ -164,8 +237,80 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                             <ArrowLeft className="mr-1 h-4 w-4" />
                             Back to all requests
                         </Link>
-                        <Badge className={statusBadgeStyles[submission.status]}>{currentStatusLabel}</Badge>
+                        <div className="flex items-center gap-2">
+                            <Badge className={statusBadgeStyles[submission.status as keyof typeof statusBadgeStyles]}>{currentStatusLabel}</Badge>
+                            {can.withdraw && (
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => setShowWithdrawConfirm(true)}
+                                >
+                                    <Undo2 className="mr-2 h-4 w-4" />
+                                    Withdraw
+                                </Button>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Withdrawal Confirmation */}
+                    {showWithdrawConfirm && (
+                        <Card className="p-4 border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                            <div className="flex items-start gap-3">
+                                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                                <div className="flex-1 space-y-3">
+                                    <div>
+                                        <h3 className="font-medium text-foreground">Withdraw this request?</h3>
+                                        <p className="text-sm text-muted-foreground">
+                                            This action cannot be undone. The request will be marked as withdrawn.
+                                        </p>
+                                    </div>
+                                    <CustomTextarea
+                                        className="text-sm"
+                                        placeholder="Reason for withdrawal (optional)"
+                                        value={withdrawForm.data.reason}
+                                        onChange={(e) => withdrawForm.setData('reason', e.target.value)}
+                                    />
+                                    <div className="flex gap-2">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={() => setShowWithdrawConfirm(false)}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button 
+                                            variant="destructive" 
+                                            size="sm"
+                                            onClick={handleWithdraw}
+                                            disabled={withdrawForm.processing}
+                                        >
+                                            Confirm Withdrawal
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+                    )}
+
+                    {/* Withdrawn Notice */}
+                    {submission.status === 'withdrawn' && (
+                        <Card className="p-4 border-gray-200 bg-gray-50 dark:bg-gray-950/20">
+                            <div className="flex items-start gap-3">
+                                <Undo2 className="h-5 w-5 text-gray-600 mt-0.5" />
+                                <div>
+                                    <h3 className="font-medium text-foreground">Request Withdrawn</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Withdrawn on {formatDate(submission.withdrawn_at)}
+                                    </p>
+                                    {submission.withdrawal_reason && (
+                                        <p className="text-sm text-foreground mt-1">
+                                            Reason: {submission.withdrawal_reason}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+                    )}
 
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -233,6 +378,74 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                                 </div>
                             ))}
                         </div>
+
+                        {/* Comments Section */}
+                        {can.comment && (
+                            <div className="border-t pt-4 space-y-4">
+                                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                                    <MessageSquare className="h-4 w-4" />
+                                    Comments ({comments.length})
+                                </div>
+
+                                {comments.length > 0 && (
+                                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                                        {comments.map((comment) => (
+                                            <div 
+                                                key={comment.id} 
+                                                className={`rounded-lg border p-3 text-sm ${
+                                                    comment.is_internal 
+                                                        ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200' 
+                                                        : 'bg-card'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="font-medium text-foreground">
+                                                        {comment.user?.name ?? 'System'}
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        {comment.is_internal && (
+                                                            <Badge variant="outline" className="text-xs">Internal</Badge>
+                                                        )}
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatShortDate(comment.created_at)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <p className="text-foreground">{comment.content}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <CustomTextarea
+                                        className="text-sm"
+                                        placeholder="Add a comment..."
+                                        value={commentForm.data.content}
+                                        onChange={(e) => commentForm.setData('content', e.target.value)}
+                                    />
+                                    <div className="flex items-center justify-between">
+                                        {can.internal_comment && (
+                                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                <Checkbox
+                                                    checked={commentForm.data.is_internal}
+                                                    onCheckedChange={(checked) => commentForm.setData('is_internal', Boolean(checked))}
+                                                />
+                                                Internal note (not visible to requester)
+                                            </label>
+                                        )}
+                                        <Button 
+                                            type="button" 
+                                            size="sm"
+                                            onClick={handleAddComment}
+                                            disabled={commentForm.processing || !commentForm.data.content.trim()}
+                                        >
+                                            Add Comment
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </Card>
 
                     <div className="space-y-4">
@@ -249,7 +462,11 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                                     </div>
                                 ) : (
                                     timeline.map((item) => (
-                                        <div key={item.id} className="rounded-lg border border-border bg-card p-3 text-sm">
+                                        <div key={item.id} className={`rounded-lg border p-3 text-sm ${
+                                            item.is_overdue && item.status === 'pending'
+                                                ? 'border-red-200 bg-red-50 dark:bg-red-950/20'
+                                                : 'border-border bg-card'
+                                        }`}>
                                             <div className="flex items-center justify-between">
                                                 <p className="font-medium text-foreground">{item.label}</p>
                                                 <Badge
@@ -267,7 +484,24 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                                             {item.acted_at ? (
                                                 <p className="text-xs text-muted-foreground">Updated {formatDate(item.acted_at)}</p>
                                             ) : (
-                                                <p className="text-xs text-muted-foreground">Pending approval</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Pending approval
+                                                    {item.due_at && (
+                                                        <span className={item.is_overdue ? ' text-red-600 font-medium' : ''}>
+                                                            {item.is_overdue ? ' (OVERDUE)' : ` • Due ${formatShortDate(item.due_at)}`}
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            )}
+                                            {item.is_escalated && item.escalated_from && (
+                                                <p className="text-xs text-amber-600 mt-1">
+                                                    Escalated from {item.escalated_from.name}
+                                                </p>
+                                            )}
+                                            {item.delegated_from && (
+                                                <p className="text-xs text-blue-600 mt-1">
+                                                    Acting on behalf of {item.delegated_from.name}
+                                                </p>
                                             )}
                                             {item.notes && <p className="mt-2 text-sm text-foreground">{item.notes}</p>}
                                         </div>
@@ -362,4 +596,3 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
         </AppLayout>
     );
 }
-

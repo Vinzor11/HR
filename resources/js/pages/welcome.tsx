@@ -86,7 +86,7 @@ export default function Welcome() {
                         {/* System Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                             <a
-                                href="https://admission-thesis-production.up.railway.app"
+                                href="https://essu-admission.online/login"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="group bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:bg-white/20 hover:scale-105 transition-all duration-300"

@@ -74,50 +74,29 @@ const trainingFields = {
         rows: 3,
         className: 'rounded border p-2 w-full',
     },
-    organizationType: {
-        id: 'organization-type',
-        key: 'organization_type',
-        name: 'organization_type',
-        label: 'Organization Type',
-        type: 'single-select',
-        placeholder: 'Select organization type',
+    sectors: {
+        id: 'sectors',
+        key: 'sectors',
+        name: 'sector_ids',
+        label: 'Allowed Sectors',
+        type: 'checkbox-group',
+        viewKey: 'allowed_sectors',
         tabIndex: 9,
-        options: [
-            { label: 'Academic', value: 'academic', key: 'academic' },
-            { label: 'Administrative', value: 'administrative', key: 'administrative' },
-        ],
+        description: 'Select the sectors (Academic/Administrative) that are allowed to join this training. Leave empty to allow all sectors.',
     },
-    faculties: {
-        id: 'faculties',
-        key: 'faculties',
-        name: 'faculty_ids',
-        label: 'Allowed Faculties',
+    units: {
+        id: 'units',
+        key: 'units',
+        name: 'unit_ids',
+        label: 'Allowed Units',
         type: 'checkbox-group',
-        viewKey: 'allowed_faculties',
+        viewKey: 'allowed_units',
         tabIndex: 10,
-        condition: {
-            field: 'organization_type',
-            value: 'academic',
-        },
-    },
-    departments: {
-        id: 'departments',
-        key: 'departments',
-        name: 'department_ids',
-        label: 'Allowed Departments/Offices',
-        type: 'checkbox-group',
-        viewKey: 'allowed_departments',
-        tabIndex: 11,
         description: (data: Record<string, any>) => {
-            if (data.organization_type === 'academic') {
-                if (!data.faculty_ids || data.faculty_ids.length === 0) {
-                    return 'Please select at least one faculty first to view available departments.';
-                }
-                return 'Select the departments that are allowed to join this training.';
-            } else if (data.organization_type === 'administrative') {
-                return 'Select the offices that are allowed to join this training.';
+            if (!data.sector_ids || data.sector_ids.length === 0) {
+                return 'Select sectors first to filter available units, or leave empty to allow all units.';
             }
-            return '';
+            return 'Select the units (Colleges/Programs/Offices) that are allowed to join this training.';
         },
     },
     positions: {
@@ -127,7 +106,8 @@ const trainingFields = {
         label: 'Allowed Positions',
         type: 'checkbox-group',
         viewKey: 'allowed_positions',
-        tabIndex: 12,
+        tabIndex: 11,
+        description: 'Select specific positions that are allowed to join this training. Leave empty to allow all positions.',
     },
     requiresApproval: {
         id: 'requires-approval',
@@ -135,7 +115,7 @@ const trainingFields = {
         name: 'requires_approval',
         label: 'Requires Approval',
         type: 'checkbox',
-        tabIndex: 13,
+        tabIndex: 12,
         description:
             'When checked, employees must request approval before joining this training. The system will automatically create an approval workflow if needed. Employees can track their application status in Training History and will receive notifications when approved or rejected.',
     },
@@ -150,9 +130,8 @@ const fieldList = [
     trainingFields.venue,
     trainingFields.capacity,
     trainingFields.remarks,
-    trainingFields.organizationType,
-    trainingFields.faculties,
-    trainingFields.departments,
+    trainingFields.sectors,
+    trainingFields.units,
     trainingFields.positions,
     trainingFields.requiresApproval,
 ];
@@ -188,4 +167,3 @@ export const TrainingsModalFormConfig = {
         },
     ],
 };
-

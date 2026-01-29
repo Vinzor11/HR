@@ -3,7 +3,7 @@ import { EnterpriseEmployeeTable } from '@/components/EnterpriseEmployeeTable'
 import { CustomToast, toast } from '@/components/custom-toast'
 import { PageLayout } from '@/components/page-layout'
 import { IconButton } from '@/components/ui/icon-button'
-import { PositionModalFormConfig, POSITION_CATEGORY_OPTIONS, POSITION_CATEGORY_DESCRIPTIONS } from '@/config/forms/position-modal-form'
+import { PositionModalFormConfig } from '@/config/forms/position-modal-form'
 import { PositionTableConfig } from '@/config/tables/position-table'
 import AppLayout from '@/layouts/app-layout'
 import { type BreadcrumbItem } from '@/types'
@@ -27,31 +27,15 @@ interface Position {
   pos_code: string
   pos_name: string
   description?: string
-  position_category?: string | null
-  faculty_id?: number | null
-  faculty?: {
-    id: number
-    name: string
-    code: string
-  } | null
-  department_id?: number | null
-  department?: {
-    id: number
-    name: string
-    code: string
-  } | null
   position_type?: string | null
-  hierarchy_level?: number | null
-  capacity?: number | null
   creation_type?: 'manual' | 'auto' | null
-}
-
-interface DepartmentOption {
-  id: number
-  name: string
-  code: string
-  type?: string
-  faculty_id?: number | null
+  sector_id?: number | null
+  sector?: {
+    id: number
+    name: string
+    code?: string | null
+  } | null
+  authority_level?: number | null
 }
 
 interface Pagination<T> {
@@ -82,27 +66,23 @@ interface FilterProps {
   search: string
   search_mode?: string
   perPage: string
-  department_id?: string
-  position_category?: string
+  sector_id?: string
   show_deleted?: boolean
 }
 
-interface FacultyOption {
+interface SectorOption {
   id: number
   name: string
-  code: string
+  code?: string | null
 }
 
 interface IndexProps {
   positions: Pagination<Position>
-  departments: DepartmentOption[]
-  faculties: FacultyOption[]
+  sectors: SectorOption[]
   filters?: FilterProps
 }
 
-const DEFAULT_HIERARCHY_LEVEL = '1'
-
-export default function PositionIndex({ positions, departments, faculties, filters }: IndexProps) {
+export default function PositionIndex({ positions, sectors, filters }: IndexProps) {
   const { flash, auth } = usePage<FlashProps & { auth?: { permissions?: string[] } }>().props
   const permissions = auth?.permissions || []
   const flashMessage = flash?.success || flash?.error
@@ -111,18 +91,18 @@ export default function PositionIndex({ positions, departments, faculties, filte
   const [selectedItem, setSelectedItem] = useState<Position | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedPositionForView, setSelectedPositionForView] = useState<Position | null>(null)
-  const [sortKey, setSortKey] = useState<'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'hierarchy-desc' | 'hierarchy-asc'>(() => {
+  const [sortKey, setSortKey] = useState<'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'authority-desc' | 'authority-asc'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('positions_sortKey')
-      if (saved && ['name-asc', 'name-desc', 'date-asc', 'date-desc', 'hierarchy-desc', 'hierarchy-asc'].includes(saved)) {
+      if (saved && ['name-asc', 'name-desc', 'date-asc', 'date-desc', 'authority-desc', 'authority-asc'].includes(saved)) {
         return saved as typeof sortKey
       }
     }
-    return 'hierarchy-desc' // Default to highest hierarchy first
+    return 'authority-desc' // Default to highest authority first
   })
   const [searchTerm, setSearchTerm] = useState(filters?.search ?? '')
-  const [searchMode, setSearchMode] = useState<'any' | 'pos_name' | 'code' | 'description' | 'department' | 'faculty'>(() =>
-    (filters?.search_mode as 'any' | 'pos_name' | 'code' | 'description' | 'department' | 'faculty') || 'any'
+  const [searchMode, setSearchMode] = useState<'any' | 'pos_name' | 'code' | 'description' | 'sector'>(() =>
+    (filters?.search_mode as 'any' | 'pos_name' | 'code' | 'description' | 'sector') || 'any'
   )
   const [perPage, setPerPage] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -136,8 +116,7 @@ export default function PositionIndex({ positions, departments, faculties, filte
   const [isSearching, setIsSearching] = useState(false)
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const hasSyncedRef = useRef(false)
-  const [departmentFilter, setDepartmentFilter] = useState(filters?.department_id ? String(filters?.department_id) : '')
-  const [categoryFilter, setCategoryFilter] = useState(filters?.position_category ?? '')
+  const [sectorFilter, setSectorFilter] = useState(filters?.sector_id ?? '')
   const [showDeleted, setShowDeleted] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('positions_filter_show_deleted')
@@ -150,19 +129,16 @@ export default function PositionIndex({ positions, departments, faculties, filte
   const { data, setData, errors, processing, reset, post, transform } = useForm({
     pos_code: '',
     pos_name: '',
-    position_category: '',
-    faculty_id: '',
-    department_id: '',
-    hierarchy_level: DEFAULT_HIERARCHY_LEVEL,
-    capacity: '',
+    sector_id: '',
+    authority_level: '',
     description: '',
     _method: 'POST',
   })
 
-  const facultyOptions = faculties.map((faculty) => ({
-    key: String(faculty.id),
-    value: String(faculty.id),
-    label: `${faculty.code} - ${faculty.name}`,
+  const sectorOptions = (sectors || []).map((sector) => ({
+    key: String(sector.id),
+    value: String(sector.id),
+    label: sector.name,
   }))
 
   // Flash messages
@@ -171,187 +147,32 @@ export default function PositionIndex({ positions, departments, faculties, filte
     if (flash?.error) toast.error(flash.error);
   }, [flash]);
 
-  // Auto-set hierarchy level to 8 when position name contains "Department Head"
+  // Auto-set authority level to 80 when position name contains "Head", "Dean", "Director", or "President"
   useEffect(() => {
-    if (data.pos_name && data.pos_name.includes('Department Head')) {
-      const currentLevel = parseInt(data.hierarchy_level || '1')
-      if (currentLevel < 8) {
-        setData('hierarchy_level', '8')
+    if (data.pos_name && (data.pos_name.includes('Head') || data.pos_name.includes('Dean') || data.pos_name.includes('Director') || data.pos_name.includes('President'))) {
+      const currentLevel = parseInt(data.authority_level || '1')
+      if (currentLevel < 80) {
+        setData('authority_level', '80')
         if (mode === 'edit' || mode === 'create') {
-          toast.info('Department Head hierarchy level automatically set to 8')
+          toast.info('Leadership position authority level automatically set to 80')
         }
       }
     }
   }, [data.pos_name, mode])
 
-  // Get position category to determine field visibility
-  const positionCategory = data.position_category
-
-  // Determine which fields should be visible/required based on category
-  const getFieldVisibility = (fieldName: string) => {
-    if (!positionCategory) return { visible: true, required: false }
-
-    switch (positionCategory) {
-      case 'executive':
-      case 'administrative_non_teaching':
-      case 'support_utility':
-      case 'specialized_compliance':
-        // Office only (administrative departments)
-        if (fieldName === 'faculty_id') return { visible: false, required: false }
-        if (fieldName === 'department_id') return { visible: true, required: true }
-        return { visible: true, required: false }
-
-      case 'academic_teaching':
-        // Faculty + Department required
-        if (fieldName === 'faculty_id') return { visible: true, required: true }
-        if (fieldName === 'department_id') return { visible: true, required: true }
-        return { visible: true, required: false }
-
-      case 'academic_support':
-        // Can be Faculty+Department OR Faculty only OR Office only
-        if (fieldName === 'faculty_id') return { visible: true, required: false }
-        if (fieldName === 'department_id') return { visible: true, required: false }
-        return { visible: true, required: false }
-
-      case 'technical_skilled':
-        // Can be Faculty+Department OR Office only
-        if (fieldName === 'faculty_id') return { visible: true, required: false }
-        if (fieldName === 'department_id') return { visible: true, required: false }
-        return { visible: true, required: false }
-
-      default:
-        return { visible: true, required: false }
-    }
-  }
-
-  // Filter departments based on category
-  const getFilteredDepartmentOptions = () => {
-    if (!positionCategory) return departmentOptions
-
-    switch (positionCategory) {
-      case 'executive':
-      case 'administrative_non_teaching':
-      case 'support_utility':
-      case 'specialized_compliance':
-        // Show only administrative departments (offices)
-        return departments
-          .filter((dept) => dept.type === 'administrative')
-          .map((dept) => ({
-            key: String(dept.id),
-            value: String(dept.id),
-            label: `${dept.name} (${dept.code})`,
-          }))
-
-      case 'academic_teaching':
-      case 'technical_skilled':
-        // Show academic departments, optionally filtered by faculty
-        let filtered = departments.filter((dept) => dept.type === 'academic')
-        
-        // If faculty is selected, filter by faculty
-        if (data.faculty_id) {
-          filtered = filtered.filter((dept) => dept.faculty_id === Number(data.faculty_id))
-        }
-        
-        return filtered.map((dept) => ({
-          key: String(dept.id),
-          value: String(dept.id),
-          label: `${dept.name} (${dept.code})`,
-        }))
-
-      case 'academic_support':
-        // Show both academic departments (if faculty selected) and administrative departments (offices)
-        const academicDepts = data.faculty_id
-          ? departments.filter((dept) => dept.type === 'academic' && dept.faculty_id === Number(data.faculty_id))
-          : departments.filter((dept) => dept.type === 'academic')
-        const adminDepts = departments.filter((dept) => dept.type === 'administrative')
-        
-        return [...academicDepts, ...adminDepts].map((dept) => ({
-          key: String(dept.id),
-          value: String(dept.id),
-          label: `${dept.name} (${dept.code})${dept.type === 'administrative' ? ' (Office)' : ''}`,
-        }))
-
-      default:
-        return departmentOptions
-    }
-  }
-
-  const departmentOptions = departments.map((dept) => ({
-    key: String(dept.id),
-    value: String(dept.id),
-    label: `${dept.name} (${dept.code})`,
-  }))
-
-  const filteredDepartmentOptions = getFilteredDepartmentOptions()
-
-  // Clear fields when category changes
-  useEffect(() => {
-    if (positionCategory) {
-      const category = positionCategory
-      
-      // Clear fields that should be hidden based on category
-      if (['executive', 'administrative_non_teaching', 'support_utility', 'specialized_compliance'].includes(category)) {
-        // Office only - clear faculty
-        if (data.faculty_id) {
-          setData('faculty_id', '')
-        }
-      }
-    }
-  }, [positionCategory])
-
-  // Clear faculty when Office (administrative department) is selected for Academic Support or Technical/Skilled
-  useEffect(() => {
-    if (positionCategory && ['academic_support', 'technical_skilled'].includes(positionCategory) && data.department_id) {
-      const selectedDept = departments.find((d) => String(d.id) === String(data.department_id))
-      if (selectedDept && selectedDept.type === 'administrative' && data.faculty_id) {
-        // Office selected - clear faculty
-        setData('faculty_id', '')
-      } else if (selectedDept && selectedDept.type === 'academic' && !data.faculty_id) {
-        // Academic department selected but no faculty - this will be validated on submit
-      }
-    }
-  }, [data.department_id, positionCategory])
-
   const modalFields = useMemo(() => {
     return PositionModalFormConfig.fields.map((field) => {
-    const visibility = getFieldVisibility(field.name)
-    
-    if (field.name === 'position_category') {
+    if (field.name === 'sector_id') {
       return {
         ...field,
-        visible: visibility.visible,
-        required: visibility.required,
-        description: positionCategory && POSITION_CATEGORY_DESCRIPTIONS[positionCategory]
-          ? POSITION_CATEGORY_DESCRIPTIONS[positionCategory]
-          : undefined,
+        options: sectorOptions,
+        visible: true,
+        required: true,
       }
     }
-    if (field.name === 'faculty_id') {
-      return {
-        ...field,
-        options: facultyOptions,
-        visible: visibility.visible,
-        required: visibility.required,
-      }
-    }
-    if (field.name === 'department_id') {
-      return {
-        ...field,
-        options: filteredDepartmentOptions,
-        visible: visibility.visible,
-        required: visibility.required,
-        label: positionCategory && ['executive', 'administrative_non_teaching', 'support_utility', 'specialized_compliance'].includes(positionCategory)
-          ? 'Office'
-          : 'Department / Office',
-      }
-    }
-    return {
-      ...field,
-      visible: visibility.visible,
-      required: visibility.required,
-    }
-  }).filter((field) => field.visible !== false)
-  }, [positionCategory, data.faculty_id, filteredDepartmentOptions])
+    return field
+  })
+  }, [sectorOptions])
 
   const closeModal = () => {
     setMode('create')
@@ -365,16 +186,11 @@ export default function PositionIndex({ positions, departments, faculties, filte
     if (!open) closeModal()
   }
 
-const handleDepartmentFilterChange = (value: string) => {
-  const normalized = value === 'all' ? '' : value
-  setDepartmentFilter(normalized)
-  triggerFetch({ department_id: normalized, page: 1 })
-}
 
-const handleCategoryFilterChange = (value: string) => {
+const handleSectorFilterChange = (value: string) => {
   const normalized = value === 'all' ? '' : value
-  setCategoryFilter(normalized)
-  triggerFetch({ position_category: normalized, page: 1 })
+  setSectorFilter(normalized)
+  triggerFetch({ sector_id: normalized, page: 1 })
 }
 
   const refreshTable = () => {
@@ -398,34 +214,31 @@ const handleCategoryFilterChange = (value: string) => {
     if (item) {
       setSelectedItem(item)
       
-      // Auto-fix Department Head hierarchy level if it's incorrect
-      let hierarchyLevel = item.hierarchy_level !== undefined && item.hierarchy_level !== null
-        ? String(item.hierarchy_level)
-        : DEFAULT_HIERARCHY_LEVEL
+      // Auto-fix leadership position authority level if it's incorrect
+      let authorityLevel = item.authority_level !== undefined && item.authority_level !== null
+        ? String(item.authority_level)
+        : ''
       
-      // Check if this is a Department Head position with incorrect hierarchy level
-      const isDepartmentHead = (
-        item.pos_name?.includes('Department Head') || 
-        item.pos_code?.includes('DHEAD') ||
-        (item as any).position_type === 'department_leadership'
-      ) && item.pos_name?.includes('Department Head')
+      // Check if this is a leadership position with incorrect authority level
+      const isLeadershipPosition = (
+        item.pos_name?.includes('Head') || 
+        item.pos_name?.includes('Dean') ||
+        item.pos_name?.includes('Director') ||
+        item.pos_name?.includes('President') ||
+        item.pos_code?.includes('HEAD') ||
+        item.pos_code?.includes('DEAN')
+      )
       
-      if (isDepartmentHead && (parseInt(hierarchyLevel) < 8 || hierarchyLevel === DEFAULT_HIERARCHY_LEVEL)) {
-        hierarchyLevel = '8'
-        // Show a toast notification
-        toast.success('Auto-corrected Department Head hierarchy level to 8')
+      if (isLeadershipPosition && (!authorityLevel || parseInt(authorityLevel) < 80)) {
+        authorityLevel = '80'
+        toast.success('Auto-corrected leadership position authority level to 80')
       }
       
       setData({
         pos_code: item.pos_code,
         pos_name: item.pos_name,
-        position_category: (item as any).position_category || '',
-        faculty_id: item.faculty_id ? String(item.faculty_id) : '',
-        department_id: item.department_id ? String(item.department_id) : '',
-        hierarchy_level: hierarchyLevel,
-        capacity: item.capacity !== undefined && item.capacity !== null
-          ? String(item.capacity)
-          : '',
+        sector_id: item.sector_id ? String(item.sector_id) : '',
+        authority_level: authorityLevel,
         description: item.description || '',
         _method: 'PUT',
       })
@@ -448,10 +261,8 @@ const handleCategoryFilterChange = (value: string) => {
 
     transform((formData) => ({
       ...formData,
-      faculty_id: formData.faculty_id ? Number(formData.faculty_id) : null,
-      department_id: formData.department_id ? Number(formData.department_id) : null,
-      hierarchy_level: formData.hierarchy_level ? Number(formData.hierarchy_level) : null,
-      capacity: formData.capacity ? Number(formData.capacity) : null,
+      sector_id: formData.sector_id ? Number(formData.sector_id) : null,
+      authority_level: formData.authority_level ? Number(formData.authority_level) : null,
     }))
 
     const routePath = isEditMode
@@ -518,8 +329,7 @@ const handleCategoryFilterChange = (value: string) => {
   const tableData = positions.data.map((pos) => {
     return {
       ...pos,
-      faculty: pos.faculty || null,
-      department: pos.department || null,
+      sector: pos.sector || null,
     }
   })
 
@@ -529,7 +339,7 @@ const handleCategoryFilterChange = (value: string) => {
     const sortByMap: Record<string, string> = {
       'name': 'pos_name',
       'date': 'created_at',
-      'hierarchy': 'hierarchy_level',
+      'authority': 'authority_level',
     }
     return {
       sort_by: sortByMap[field] || 'created_at',
@@ -543,8 +353,7 @@ const handleCategoryFilterChange = (value: string) => {
       search: params.search !== undefined ? params.search : searchTerm,
       search_mode: params.search_mode !== undefined ? params.search_mode : searchMode,
       perPage,
-      department_id: departmentFilter,
-      position_category: categoryFilter,
+      sector_id: params.sector_id !== undefined ? params.sector_id : sectorFilter,
       show_deleted: params.show_deleted !== undefined ? params.show_deleted : showDeleted,
       sort_by: params.sort_by !== undefined ? params.sort_by : sortParams.sort_by,
       sort_order: params.sort_order !== undefined ? params.sort_order : sortParams.sort_order,
@@ -577,7 +386,7 @@ const handleCategoryFilterChange = (value: string) => {
     triggerFetch({ perPage: value })
   }
 
-  const handleSortKeyChange = (value: 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'hierarchy-desc' | 'hierarchy-asc') => {
+  const handleSortKeyChange = (value: 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'authority-desc' | 'authority-asc') => {
     setSortKey(value)
     if (typeof window !== 'undefined') {
       localStorage.setItem('positions_sortKey', value)
@@ -682,7 +491,7 @@ const handleCategoryFilterChange = (value: string) => {
 
       <PageLayout
         title="Positions"
-        subtitle={showDeleted ? "Viewing deleted positions. You can restore or permanently delete them." : "Manage job positions and organizational hierarchy."}
+        subtitle={showDeleted ? "Viewing deleted positions. You can restore or permanently delete them." : "Manage job positions and organizational structure."}
         primaryAction={{
           label: 'Add Position',
           icon: <Plus className="h-4 w-4" />,
@@ -700,11 +509,10 @@ const handleCategoryFilterChange = (value: string) => {
             { value: 'pos_name', label: 'Position' },
             { value: 'code', label: 'Code' },
             { value: 'description', label: 'Description' },
-            { value: 'department', label: 'Department' },
-            { value: 'faculty', label: 'Faculty' },
+            { value: 'sector', label: 'Sector' },
           ],
           onChange: (value: string) => {
-            setSearchMode(value as 'any' | 'pos_name' | 'code' | 'description' | 'department' | 'faculty')
+            setSearchMode(value as 'any' | 'pos_name' | 'code' | 'description' | 'sector')
             if (searchTerm) triggerFetch({ search_mode: value, search: searchTerm, page: 1 })
           },
         }}
@@ -714,34 +522,17 @@ const handleCategoryFilterChange = (value: string) => {
         }}
         filtersSlot={
           <>
-            {/* Department filter */}
-            <div className="hidden md:flex items-center">
-              <Select value={departmentFilter || 'all'} onValueChange={handleDepartmentFilterChange}>
-                <SelectTrigger className="h-9 w-[160px]">
-                  <SelectValue placeholder="Department" />
+            {/* Sector filter */}
+            <div className="hidden xl:flex items-center">
+              <Select value={sectorFilter || 'all'} onValueChange={handleSectorFilterChange}>
+                <SelectTrigger className="h-9 w-[140px]">
+                  <SelectValue placeholder="Sector" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Depts</SelectItem>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept.id} value={String(dept.id)}>
-                      {dept.name || dept.code}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Category filter */}
-            <div className="hidden lg:flex items-center">
-              <Select value={categoryFilter || 'all'} onValueChange={handleCategoryFilterChange}>
-                <SelectTrigger className="h-9 w-[160px]">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {POSITION_CATEGORY_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                  <SelectItem value="all">All Sectors</SelectItem>
+                  {(sectors || []).map((sector) => (
+                    <SelectItem key={sector.id} value={String(sector.id)}>
+                      {sector.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -763,8 +554,8 @@ const handleCategoryFilterChange = (value: string) => {
                   />
                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleSortKeyChange('hierarchy-desc')}>Highest Hierarchy First</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleSortKeyChange('hierarchy-asc')}>Lowest Hierarchy First</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('authority-desc')}>Highest Authority First</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSortKeyChange('authority-asc')}>Lowest Authority First</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => handleSortKeyChange('name-asc')}>A → Z</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => handleSortKeyChange('name-desc')}>Z → A</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => handleSortKeyChange('date-asc')}>Oldest First</DropdownMenuItem>
@@ -859,10 +650,9 @@ const handleCategoryFilterChange = (value: string) => {
         open={modalOpen}
         onOpenChange={handleModalToggle}
         mode={mode}
-        extraData={{
-          faculties: facultyOptions,
-          departments: departmentOptions,
-        }}
+          extraData={{
+            sectors: sectorOptions,
+          }}
       />
 
       {/* Position Detail Drawer */}
@@ -876,8 +666,7 @@ const handleCategoryFilterChange = (value: string) => {
           subtitleKey="id"
           subtitleLabel="Position ID"
           extraData={{
-            faculties: faculties.map((f) => ({ id: f.id, name: f.name, label: f.name, value: f.id.toString() })),
-            departments: departments.map((d) => ({ id: d.id, name: d.name, label: d.name, value: d.id.toString() }))
+            sectors: (sectors || []).map((s) => ({ id: s.id, name: s.name, label: s.name, value: s.id.toString() })),
           }}
         />
       )}

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\CertificateTemplate;
 use App\Models\CertificateTextLayer;
+use App\Models\RequestType;
+use App\Services\CertificateService;
 use App\Services\CertificateTemplateConverter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -59,7 +61,20 @@ class CertificateTemplateController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('certificate-templates/create');
+        $requestTypes = RequestType::with(['fields' => fn ($q) => $q->orderBy('sort_order')])
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn ($rt) => [
+                'id' => $rt->id,
+                'name' => $rt->name,
+                'fields' => $rt->fields->map(fn ($f) => ['field_key' => $f->field_key, 'label' => $f->label])->toArray(),
+            ])
+            ->toArray();
+
+        return Inertia::render('certificate-templates/create', [
+            'requestTypes' => $requestTypes,
+            'systemFieldKeys' => CertificateService::getSystemFieldKeys(),
+        ]);
     }
 
     /**
@@ -189,6 +204,10 @@ class CertificateTemplateController extends Controller
     {
         abort_unless($request->user()->can('access-request-types-module'), 403, 'Unauthorized action.');
 
+        $request->merge([
+            'request_type_id' => $request->input('request_type_id') ? (int) $request->input('request_type_id') : null,
+        ]);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -209,6 +228,7 @@ class CertificateTemplateController extends Controller
             'text_layers.*.text_align' => ['nullable', 'string', 'in:left,center,right'],
             'text_layers.*.max_width' => ['nullable', 'integer'],
             'text_layers.*.sort_order' => ['nullable', 'integer'],
+            'request_type_id' => ['nullable', 'integer', 'exists:request_types,id'],
         ]);
 
         return DB::transaction(function () use ($validated, $request) {
@@ -267,6 +287,16 @@ class CertificateTemplateController extends Controller
                 }
             }
 
+            // If a request type was selected, set it to require fulfillment and assign this template
+            $requestTypeId = $validated['request_type_id'] ?? null;
+            if ($requestTypeId) {
+                RequestType::where('id', $requestTypeId)->update([
+                    'has_fulfillment' => true,
+                    'certificate_template_id' => $template->id,
+                    'certificate_config' => ['field_mappings' => []],
+                ]);
+            }
+
             return redirect()
                 ->route('certificate-templates.index')
                 ->with('success', 'Certificate template created successfully.');
@@ -292,8 +322,20 @@ class CertificateTemplateController extends Controller
     {
         $certificateTemplate->load('textLayers');
 
+        $requestTypes = RequestType::with(['fields' => fn ($q) => $q->orderBy('sort_order')])
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn ($rt) => [
+                'id' => $rt->id,
+                'name' => $rt->name,
+                'fields' => $rt->fields->map(fn ($f) => ['field_key' => $f->field_key, 'label' => $f->label])->toArray(),
+            ])
+            ->toArray();
+
         return Inertia::render('certificate-templates/edit', [
             'template' => $certificateTemplate,
+            'requestTypes' => $requestTypes,
+            'systemFieldKeys' => CertificateService::getSystemFieldKeys(),
         ]);
     }
 

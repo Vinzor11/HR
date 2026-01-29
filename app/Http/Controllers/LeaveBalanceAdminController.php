@@ -39,11 +39,11 @@ class LeaveBalanceAdminController extends Controller
         $year = $request->integer('year', now()->year);
         $search = $request->input('search');
         $searchMode = $request->input('search_mode', 'any');
-        $departmentId = $request->integer('department_id');
+        $unitId = $request->integer('unit_id');
         $perPage = $request->integer('per_page', 15);
 
-        // Get employees with their leave balances
-        $query = Employee::with(['department', 'position'])
+        // Get employees with their leave balances (new org structure: primaryDesignation -> unit, position)
+        $query = Employee::with(['primaryDesignation.unit.sector', 'primaryDesignation.position'])
             ->where('status', 'active')
             ->orderBy('surname')
             ->orderBy('first_name');
@@ -66,8 +66,10 @@ class LeaveBalanceAdminController extends Controller
             });
         }
 
-        if ($departmentId) {
-            $query->where('department_id', $departmentId);
+        if ($unitId) {
+            $query->whereHas('primaryDesignation', function ($q) use ($unitId) {
+                $q->where('unit_id', $unitId);
+            });
         }
 
         $employees = $query->paginate($perPage)->withQueryString();
@@ -95,19 +97,19 @@ class LeaveBalanceAdminController extends Controller
             return $employee;
         });
 
-        // Get departments for filter
-        $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
+        // Get units for filter (new org structure)
+        $units = \App\Models\Unit::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
 
         return Inertia::render('admin/leave-balances/index', [
             'employees' => $employees,
             'leaveTypes' => $leaveTypes,
-            'departments' => $departments,
+            'units' => $units,
             'year' => $year,
             'availableYears' => $this->getAvailableYears(),
             'filters' => [
                 'search' => $search,
                 'search_mode' => $searchMode,
-                'department_id' => $departmentId,
+                'unit_id' => $unitId,
             ],
         ]);
     }
@@ -117,7 +119,7 @@ class LeaveBalanceAdminController extends Controller
      */
     public function show(Request $request, string $employeeId): Response
     {
-        $employee = Employee::with(['department', 'position'])->findOrFail($employeeId);
+        $employee = Employee::with(['primaryDesignation.unit.sector', 'primaryDesignation.position'])->findOrFail($employeeId);
         $year = $request->integer('year', now()->year);
 
         // Get all leave types and their balances
@@ -321,7 +323,7 @@ class LeaveBalanceAdminController extends Controller
         $year = $request->integer('year', now()->year);
         
         try {
-            $employee = Employee::with(['department', 'position'])->findOrFail($employeeId);
+            $employee = Employee::with(['primaryDesignation.unit.sector', 'primaryDesignation.position'])->findOrFail($employeeId);
             $balances = $this->leaveService->getEmployeeBalance($employeeId, $year);
             $history = $this->leaveService->getAdjustmentHistory($employeeId, null, $year);
             $specialGrants = $this->leaveService->getSpecialLeaveGrants($employeeId, $year);

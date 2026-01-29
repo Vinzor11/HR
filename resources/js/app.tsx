@@ -99,6 +99,8 @@ if (typeof window !== 'undefined') {
     axios.defaults.baseURL = window.location.origin;
     axios.defaults.withCredentials = true; // Send cookies with requests
     axios.defaults.withXSRFToken = true; // Automatically include XSRF token
+    axios.defaults.headers.common['Accept'] = 'application/json'; // Request JSON responses
+    // Don't set Content-Type - let axios handle it based on data type (form data for objects, JSON for strings)
         
     // Set initial CSRF token
     const initialCsrfToken = getCsrfToken();

@@ -299,7 +299,7 @@ const isRequiredField = (key: string): boolean => {
   const requiredFields = [
     'id', 'surname', 'first_name', 'birth_date', 'birth_place', 'sex', 'civil_status',
     'email_address', 'mobile_no', 'res_city', 'res_province', 'res_zip_code',
-    'faculty_id', 'department_id', 'position_id', 'employee_type', 'status', 'employment_status',
+    'employee_type', 'status', 'employment_status',
     'date_hired', 'date_regularized', 'salary', 'citizenship'
   ];
   return requiredFields.includes(key);
@@ -309,7 +309,7 @@ const isRequiredField = (key: string): boolean => {
  * Comprehensive validation for employee data (CS Form 212 compliant)
  * Returns separate required and format errors
  */
-export const validateEmployeeData = (data: Record<string, any>, positions?: Array<{ id: number | string; faculty_id?: number | string | null; department_id?: number | string | null }>): ValidationResult => {
+export const validateEmployeeData = (data: Record<string, any>): ValidationResult => {
   const requiredErrors: Record<string, string> = {};
   const formatErrors: Record<string, string> = {};
 
@@ -452,28 +452,6 @@ export const validateEmployeeData = (data: Record<string, any>, positions?: Arra
   }
 
   // Employment required fields
-  // Faculty ID is only required for academic organization type
-  if (data.organization_type === 'academic' && !data.faculty_id) {
-    requiredErrors.faculty_id = 'Faculty is required for academic departments';
-  }
-  
-  // Check if selected position is faculty-level (has faculty_id but no department_id)
-  let isFacultyLevelPosition = false;
-  if (data.position_id && positions) {
-    const selectedPosition = positions.find(pos => String(pos.id) === String(data.position_id));
-    if (selectedPosition && selectedPosition.faculty_id && !selectedPosition.department_id) {
-      isFacultyLevelPosition = true;
-    }
-  }
-  
-  // Department is only required if position is not faculty-level
-  if (!isFacultyLevelPosition && !data.department_id) {
-    requiredErrors.department_id = 'Department is required';
-  }
-
-  if (!data.position_id) {
-    requiredErrors.position_id = 'Position is required';
-  }
 
   if (!data.employee_type) {
     requiredErrors.employee_type = 'Employee type is required';
@@ -497,27 +475,108 @@ export const validateEmployeeData = (data: Record<string, any>, positions?: Arra
     formatErrors.employment_status = 'Employment status must be Regular, Contractual, Job-Order, or Probationary';
   }
 
-  if (!data.date_hired) {
-    requiredErrors.date_hired = 'Date hired is required';
-  } else {
-    const dateHiredError = validateDateNotFuture(data.date_hired, 'Date hired');
-    if (dateHiredError) {
-      formatErrors.date_hired = `Date hired ${dateHiredError}`;
+  // Conditional date field validation based on employment status
+  const employmentStatus = data.employment_status;
+
+  // Regular: date_hired and date_regularized are required
+  if (employmentStatus === 'Regular') {
+    if (!data.date_hired) {
+      requiredErrors.date_hired = 'Date hired is required';
+    } else {
+      const dateHiredError = validateDateNotFuture(data.date_hired, 'Date hired');
+      if (dateHiredError) {
+        formatErrors.date_hired = `Date hired ${dateHiredError}`;
+      }
+    }
+
+    if (!data.date_regularized || data.date_regularized.trim() === '') {
+      requiredErrors.date_regularized = 'Date regularized is required';
+    } else {
+      const dateRegularizedError = validateDateNotFuture(data.date_regularized, 'Date regularized');
+      if (dateRegularizedError) {
+        formatErrors.date_regularized = `Date regularized ${dateRegularizedError}`;
+      }
+
+      if (data.date_hired) {
+        const rangeError = validateDateRange(data.date_hired, data.date_regularized, 'Date regularized');
+        if (rangeError) {
+          formatErrors.date_regularized = 'Date of regularization must be the same as or later than Date Hired';
+        }
+      }
     }
   }
 
-  if (!data.date_regularized || data.date_regularized.trim() === '') {
-    requiredErrors.date_regularized = 'Date regularized is required';
-  } else {
-    const dateRegularizedError = validateDateNotFuture(data.date_regularized, 'Date regularized');
-    if (dateRegularizedError) {
-      formatErrors.date_regularized = `Date regularized ${dateRegularizedError}`;
+  // Probationary: date_hired is optional
+  if (employmentStatus === 'Probationary') {
+    if (data.date_hired) {
+      const dateHiredError = validateDateNotFuture(data.date_hired, 'Date hired');
+      if (dateHiredError) {
+        formatErrors.date_hired = `Date hired ${dateHiredError}`;
+      }
+    }
+  }
+
+  // Job-Order: start_date and end_date are required, date_hired and date_regularized are not
+  if (employmentStatus === 'Job-Order') {
+    if (!data.start_date) {
+      requiredErrors.start_date = 'Start date is required';
+    } else {
+      const startDateError = validateDateNotFuture(data.start_date, 'Start date');
+      if (startDateError) {
+        formatErrors.start_date = `Start date ${startDateError}`;
+      }
     }
 
-    if (data.date_hired) {
-      const rangeError = validateDateRange(data.date_hired, data.date_regularized, 'Date regularized');
-      if (rangeError) {
-        formatErrors.date_regularized = 'Date of regularization must be the same as or later than Date Hired';
+    if (!data.end_date) {
+      requiredErrors.end_date = 'End date is required';
+    } else {
+      const endDateError = validateDateNotFuture(data.end_date, 'End date');
+      if (endDateError) {
+        formatErrors.end_date = `End date ${endDateError}`;
+      }
+
+      if (data.start_date) {
+        const rangeError = validateDateRange(data.start_date, data.end_date, 'End date');
+        if (rangeError) {
+          formatErrors.end_date = 'End date must be on or after Start date';
+        }
+      }
+    }
+  }
+
+  // Contractual: date_hired, start_date, and end_date are required
+  if (employmentStatus === 'Contractual') {
+    if (!data.date_hired) {
+      requiredErrors.date_hired = 'Date hired is required';
+    } else {
+      const dateHiredError = validateDateNotFuture(data.date_hired, 'Date hired');
+      if (dateHiredError) {
+        formatErrors.date_hired = `Date hired ${dateHiredError}`;
+      }
+    }
+
+    if (!data.start_date) {
+      requiredErrors.start_date = 'Start date is required';
+    } else {
+      const startDateError = validateDateNotFuture(data.start_date, 'Start date');
+      if (startDateError) {
+        formatErrors.start_date = `Start date ${startDateError}`;
+      }
+    }
+
+    if (!data.end_date) {
+      requiredErrors.end_date = 'End date is required';
+    } else {
+      const endDateError = validateDateNotFuture(data.end_date, 'End date');
+      if (endDateError) {
+        formatErrors.end_date = `End date ${endDateError}`;
+      }
+
+      if (data.start_date) {
+        const rangeError = validateDateRange(data.start_date, data.end_date, 'End date');
+        if (rangeError) {
+          formatErrors.end_date = 'End date must be on or after Start date';
+        }
       }
     }
   }

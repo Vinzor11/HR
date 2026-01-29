@@ -3,9 +3,14 @@
 namespace App\Providers;
 
 use App\Http\Responses\InertiaAuthorizationViewResponse;
+use App\Models\EmployeeDesignation;
 use App\Models\RequestSubmission;
+use App\Models\Unit;
+use App\Observers\EmployeeDesignationObserver;
 use App\Observers\LeaveRequestObserver;
 use App\Observers\CertificateGenerationObserver;
+use App\Policies\UnitPolicy;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
 use Laravel\Passport\Contracts\AuthorizationViewResponse;
@@ -55,6 +60,9 @@ class AppServiceProvider extends ServiceProvider
         
         // Register Certificate Generation Observer
         RequestSubmission::observe(CertificateGenerationObserver::class);
+        
+        // Register Employee Designation Observer
+        EmployeeDesignation::observe(EmployeeDesignationObserver::class);
 
         // Configure Passport
         Passport::tokensExpireIn(now()->addHours(1));
@@ -72,5 +80,8 @@ class AppServiceProvider extends ServiceProvider
         
         // Default scope
         Passport::setDefaultScope(['hr']);
+        
+        // Register policies
+        Gate::policy(Unit::class, UnitPolicy::class);
     }
 }

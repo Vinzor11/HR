@@ -28,13 +28,13 @@ class OrganizationalLogController extends Controller
                 $unitName = null;
                 $unitCode = null;
                 
-                if ($log->unit_type === 'faculty') {
-                    $unit = \App\Models\Faculty::withTrashed()->find($log->unit_id);
+                // New org structure: sector, unit, position. Legacy: faculty->Sector, department/office->Unit
+                if ($log->unit_type === 'sector' || $log->unit_type === 'faculty') {
+                    $unit = \App\Models\Sector::withTrashed()->find($log->unit_id);
                     $unitName = $unit?->name;
                     $unitCode = $unit?->code;
-                } elseif ($log->unit_type === 'department' || $log->unit_type === 'office') {
-                    // Both departments and offices are stored in the departments table
-                    $unit = \App\Models\Department::withTrashed()->find($log->unit_id);
+                } elseif ($log->unit_type === 'unit' || $log->unit_type === 'department' || $log->unit_type === 'office') {
+                    $unit = \App\Models\Unit::withTrashed()->find($log->unit_id);
                     $unitName = $unit?->name;
                     $unitCode = $unit?->code;
                 } elseif ($log->unit_type === 'position') {

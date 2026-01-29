@@ -90,6 +90,15 @@ class AuditLog extends Model
             'certificate-templates' => 'CTMPL',
             'leaves' => 'LEV',
             'holidays' => 'HOL',
+            // Organizational Structure Modules
+            'sectors' => 'SEC',
+            'units' => 'UNIT',
+            'unit-positions' => 'UPOS',
+            'unit_positions' => 'UPOS',
+            'academic-ranks' => 'ACRK',
+            'academic_ranks' => 'ACRK',
+            'staff-grades' => 'STGR',
+            'staff_grades' => 'STGR',
             default => 'AUD',
         };
         

@@ -99,13 +99,20 @@ function getStatusBadgeClassName(status: LeaveStatus): string {
     }
 }
 
+interface Unit {
+    id: number;
+    name: string;
+    code?: string;
+}
+
 interface CalendarPageProps {
     leaves: LeaveCalendarItem[];
     dateFrom: string;
     dateTo: string;
     leaveTypes?: LeaveType[];
+    units?: Unit[];
     selectedEmployeeId?: string;
-    selectedDepartmentId?: number;
+    selectedUnitId?: number;
 }
 
 const formatDateForInput = (value?: string | null) => {
@@ -124,7 +131,7 @@ const formatDateForInput = (value?: string | null) => {
     }
 };
 
-export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes = [], selectedEmployeeId, selectedDepartmentId }: CalendarPageProps) {
+export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes = [], units = [], selectedEmployeeId, selectedUnitId }: CalendarPageProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchMode, setSearchMode] = useState<'any' | 'name' | 'reference'>('any');
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -144,7 +151,7 @@ export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes
             date_from: newDate, 
             date_to: localDateTo,
             employee_id: selectedEmployeeId,
-            department_id: selectedDepartmentId,
+            unit_id: selectedUnitId || undefined,
         }, { preserveState: true });
     };
 
@@ -154,7 +161,16 @@ export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes
             date_from: localDateFrom, 
             date_to: newDate,
             employee_id: selectedEmployeeId,
-            department_id: selectedDepartmentId,
+            unit_id: selectedUnitId || undefined,
+        }, { preserveState: true });
+    };
+
+    const handleUnitChange = (unitId: string) => {
+        router.get('/leaves/calendar', {
+            date_from: localDateFrom,
+            date_to: localDateTo,
+            employee_id: selectedEmployeeId,
+            unit_id: unitId === 'all' ? undefined : parseInt(unitId),
         }, { preserveState: true });
     };
 
@@ -330,6 +346,23 @@ export default function LeaveCalendarPage({ leaves, dateFrom, dateTo, leaveTypes
                                         ))}
                                     </SelectContent>
                                 </Select>
+
+                                {/* Unit Filter */}
+                                {units.length > 0 && (
+                                    <Select value={selectedUnitId ? selectedUnitId.toString() : 'all'} onValueChange={handleUnitChange}>
+                                        <SelectTrigger className="w-full sm:w-[180px]">
+                                            <SelectValue placeholder="All Units" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Units</SelectItem>
+                                            {units.map((unit) => (
+                                                <SelectItem key={unit.id} value={unit.id.toString()}>
+                                                    {unit.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
                             </div>
                         </div>
                         {sortedDates.length > 0 ? (

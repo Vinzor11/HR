@@ -27,6 +27,19 @@ const mainNavItems: NavItem[] = [
         permission: 'access-roles-module',
     },
     {
+        title: 'Employees',
+        icon: IdCard,
+        permission: 'access-employees-module',
+        children: [
+            {
+                title: 'Employees',
+                href: '/employees',
+                icon: IdCard,
+                permission: 'access-employees-module',
+            },
+        ],
+    },
+    {
         title: 'Users',
         icon: Users,
         permission: 'access-users-module',
@@ -46,39 +59,54 @@ const mainNavItems: NavItem[] = [
         ],
     },
     {
-        title: 'Employees',
-        icon: IdCard,
-        permission: 'access-employees-module',
-        children: [
-            {
-                title: 'Manage Employees',
-                href: '/employees',
-                icon: IdCard,
-                permission: 'access-employees-module',
-            },
-        ],
-    },
-    {
         title: 'Org Structure',
         icon: Landmark,
         children: [
             {
-                title: 'Faculties',
-                href: '/faculties',
-                icon: School,
-                permission: 'access-faculty',
+                title: 'Sectors',
+                href: '/sectors',
+                icon: Landmark,
+                permission: 'access-sector',
             },
             {
-                title: 'Departments & Offices',
-                href: '/departments',
-                icon: Landmark,
-                permission: 'access-department',
+                title: 'Units',
+                href: '/units',
+                icon: School,
+                permission: 'access-unit',
             },
             {
                 title: 'Positions',
                 href: '/positions',
                 icon: Briefcase,
                 permission: 'access-position',
+            },
+            {
+                title: 'Position Whitelist',
+                href: '/unit-positions',
+                icon: Briefcase,
+                permission: 'access-unit-position',
+            },
+            {
+                title: 'Academic Ranks',
+                href: '/academic-ranks',
+                icon: GraduationCap,
+                permission: 'access-academic-rank',
+            },
+            {
+                title: 'Staff Grades',
+                href: '/staff-grades',
+                icon: Wallet,
+                permission: 'access-staff-grade',
+            },
+            {
+                // Legacy Faculties removed - use Sectors/Units instead
+                icon: School,
+                permission: 'access-faculty',
+            },
+            {
+                // Legacy Departments removed - use Sectors/Units instead
+                icon: Landmark,
+                permission: 'access-department',
             },
         ],
     },

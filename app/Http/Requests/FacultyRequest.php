@@ -5,6 +5,9 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+/**
+ * @deprecated Faculty controller removed. Use Sector/Unit (new org structure) and SectorController/UnitController instead.
+ */
 class FacultyRequest extends FormRequest
 {
     public function authorize(): bool

@@ -103,8 +103,12 @@ class AdvancedEmployeeFilterService
             'questionnaire',
             'references',
             'other_information',
-            'department',
+            'primary_designation',
+            'unit',
+            'sector',
             'position',
+            'academic_rank',
+            'staff_grade',
         ];
 
         foreach ($relatedPrefixes as $prefix) {
@@ -151,6 +155,54 @@ class AdvancedEmployeeFilterService
         string $operator,
         $value
     ): void {
+        // Handle nested relationships (unit, sector, academic_rank, staff_grade, position)
+        if ($relation === 'unit') {
+            $query->whereHas('primaryDesignation', function ($q) use ($field, $operator, $value) {
+                $q->whereHas('unit', function ($unitQuery) use ($field, $operator, $value) {
+                    $this->applyFilterCondition($unitQuery, $field, $operator, $value);
+                });
+            });
+            return;
+        }
+
+        if ($relation === 'sector') {
+            $query->whereHas('primaryDesignation', function ($q) use ($field, $operator, $value) {
+                $q->whereHas('unit', function ($unitQuery) use ($field, $operator, $value) {
+                    $unitQuery->whereHas('sector', function ($sectorQuery) use ($field, $operator, $value) {
+                        $this->applyFilterCondition($sectorQuery, $field, $operator, $value);
+                    });
+                });
+            });
+            return;
+        }
+
+        if ($relation === 'academic_rank') {
+            $query->whereHas('primaryDesignation', function ($q) use ($field, $operator, $value) {
+                $q->whereHas('academicRank', function ($rankQuery) use ($field, $operator, $value) {
+                    $this->applyFilterCondition($rankQuery, $field, $operator, $value);
+                });
+            });
+            return;
+        }
+
+        if ($relation === 'staff_grade') {
+            $query->whereHas('primaryDesignation', function ($q) use ($field, $operator, $value) {
+                $q->whereHas('staffGrade', function ($gradeQuery) use ($field, $operator, $value) {
+                    $this->applyFilterCondition($gradeQuery, $field, $operator, $value);
+                });
+            });
+            return;
+        }
+
+        if ($relation === 'position') {
+            $query->whereHas('primaryDesignation', function ($q) use ($field, $operator, $value) {
+                $q->whereHas('position', function ($positionQuery) use ($field, $operator, $value) {
+                    $this->applyFilterCondition($positionQuery, $field, $operator, $value);
+                });
+            });
+            return;
+        }
+
         // Map frontend relation names to model relationship names
         $relationMap = [
             'family_background' => 'familyBackground',
@@ -165,32 +217,39 @@ class AdvancedEmployeeFilterService
             'questionnaire' => 'questionnaire',
             'references' => 'references',
             'other_information' => 'otherInformation',
-            'department' => 'department',
-            'position' => 'position',
+            'primary_designation' => 'primaryDesignation',
         ];
 
         $modelRelation = $relationMap[$relation] ?? $relation;
 
         $query->whereHas($modelRelation, function ($q) use ($field, $operator, $value) {
-            match ($operator) {
-                'equals' => $q->where($field, $value),
-                'not_equals' => $q->where($field, '!=', $value),
-                'contains' => $q->where($field, 'like', "%{$value}%"),
-                'not_contains' => $q->where($field, 'not like', "%{$value}%"),
-                'starts_with' => $q->where($field, 'like', "{$value}%"),
-                'ends_with' => $q->where($field, 'like', "%{$value}"),
-                'greater_than' => $q->where($field, '>', $value),
-                'greater_than_or_equal' => $q->where($field, '>=', $value),
-                'less_than' => $q->where($field, '<', $value),
-                'less_than_or_equal' => $q->where($field, '<=', $value),
-                'in' => $q->whereIn($field, is_array($value) ? $value : [$value]),
-                'not_in' => $q->whereNotIn($field, is_array($value) ? $value : [$value]),
-                'is_null' => $q->whereNull($field),
-                'is_not_null' => $q->whereNotNull($field),
-                'between' => $q->whereBetween($field, is_array($value) && count($value) === 2 ? $value : [$value, $value]),
-                default => null,
-            };
+            $this->applyFilterCondition($q, $field, $operator, $value);
         });
+    }
+
+    /**
+     * Apply filter condition to a query builder
+     */
+    protected function applyFilterCondition($query, string $field, string $operator, $value): void
+    {
+        match ($operator) {
+            'equals' => $query->where($field, $value),
+            'not_equals' => $query->where($field, '!=', $value),
+            'contains' => $query->where($field, 'like', "%{$value}%"),
+            'not_contains' => $query->where($field, 'not like', "%{$value}%"),
+            'starts_with' => $query->where($field, 'like', "{$value}%"),
+            'ends_with' => $query->where($field, 'like', "%{$value}"),
+            'greater_than' => $query->where($field, '>', $value),
+            'greater_than_or_equal' => $query->where($field, '>=', $value),
+            'less_than' => $query->where($field, '<', $value),
+            'less_than_or_equal' => $query->where($field, '<=', $value),
+            'in' => $query->whereIn($field, is_array($value) ? $value : [$value]),
+            'not_in' => $query->whereNotIn($field, is_array($value) ? $value : [$value]),
+            'is_null' => $query->whereNull($field),
+            'is_not_null' => $query->whereNotNull($field),
+            'between' => $query->whereBetween($field, is_array($value) && count($value) === 2 ? $value : [$value, $value]),
+            default => null,
+        };
     }
 
     /**
@@ -216,9 +275,17 @@ class AdvancedEmployeeFilterService
                 'employee_type' => ['type' => 'select', 'label' => 'Employee Type', 'options' => ['Teaching', 'Non-Teaching']],
                 'date_hired' => ['type' => 'date', 'label' => 'Date Hired'],
                 'date_regularized' => ['type' => 'date', 'label' => 'Date Regularized'],
+                'start_date' => ['type' => 'date', 'label' => 'Contract Start Date'],
+                'end_date' => ['type' => 'date', 'label' => 'Contract End Date'],
                 'salary' => ['type' => 'number', 'label' => 'Salary'],
-                'department.faculty_name' => ['type' => 'text', 'label' => 'Department'],
+                // Employee's organizational assignment (from primary designation)
+                'unit.name' => ['type' => 'text', 'label' => 'Unit'],
+                'sector.name' => ['type' => 'text', 'label' => 'Sector'],
                 'position.pos_name' => ['type' => 'text', 'label' => 'Position'],
+                'academic_rank.name' => ['type' => 'text', 'label' => 'Academic Rank'],
+                'staff_grade.name' => ['type' => 'text', 'label' => 'Staff Grade'],
+                'primary_designation.start_date' => ['type' => 'date', 'label' => 'Designation Start Date'],
+                'primary_designation.end_date' => ['type' => 'date', 'label' => 'Designation End Date'],
             ],
 
             // Employee Table - Address (Residential)

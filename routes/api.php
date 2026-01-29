@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Controllers\Api\DepartmentApiController;
 use App\Http\Controllers\Api\EmployeeApiController;
-use App\Http\Controllers\Api\FacultyApiController;
+use App\Http\Controllers\Api\SectorApiController;
+use App\Http\Controllers\Api\UnitApiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -27,20 +27,19 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         ->name('api.employees.show')
         ->where('employee_id', '[A-Z0-9]+');
     
-    // Department/Office endpoints
-    Route::get('/departments', [DepartmentApiController::class, 'index'])
-        ->name('api.departments.index');
+    // Sector endpoints (new org structure)
+    Route::get('/sectors', [SectorApiController::class, 'index'])
+        ->name('api.sectors.index');
     
-    Route::get('/departments/{id}', [DepartmentApiController::class, 'show'])
-        ->name('api.departments.show')
+    Route::get('/sectors/{id}', [SectorApiController::class, 'show'])
+        ->name('api.sectors.show')
         ->where('id', '[0-9]+');
     
-    // Faculty endpoints
-    Route::get('/faculties', [FacultyApiController::class, 'index'])
-        ->name('api.faculties.index');
+    // Unit endpoints (new org structure - replaces departments/offices/faculties)
+    Route::get('/units', [UnitApiController::class, 'index'])
+        ->name('api.units.index');
     
-    Route::get('/faculties/{id}', [FacultyApiController::class, 'show'])
-        ->name('api.faculties.show')
+    Route::get('/units/{id}', [UnitApiController::class, 'show'])
+        ->name('api.units.show')
         ->where('id', '[0-9]+');
 });
-
