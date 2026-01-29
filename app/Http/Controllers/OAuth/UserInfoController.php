@@ -13,10 +13,12 @@ class UserInfoController extends Controller
         $user = $request->user();
         $user->load([
             'employee.primaryDesignation.unit.sector',
+            'employee.primaryDesignation.unit.parentUnit',
             'employee.primaryDesignation.position',
             'employee.primaryDesignation.academicRank',
             'employee.primaryDesignation.staffGrade',
             'employee.designations.unit.sector',
+            'employee.designations.unit.parentUnit',
             'employee.designations.position',
             'employee.designations.academicRank',
             'employee.designations.staffGrade'
@@ -44,6 +46,11 @@ class UserInfoController extends Controller
                     $claims['unit'] = $designation->unit->name ?? null;
                     $claims['unit_code'] = $designation->unit->code ?? null;
                     $claims['unit_type'] = $designation->unit->unit_type ?? null;
+                    if ($designation->unit->parentUnit) {
+                        $claims['unit_parent'] = $designation->unit->parentUnit->name ?? null;
+                        $claims['unit_parent_code'] = $designation->unit->parentUnit->code ?? null;
+                        $claims['unit_parent_id'] = (string) $designation->unit->parentUnit->id;
+                    }
                 }
                 if ($designation->unit?->sector) {
                     $claims['sector'] = $designation->unit->sector->name ?? null;
@@ -71,6 +78,14 @@ class UserInfoController extends Controller
                         'name' => $designation->unit->name ?? null,
                         'unit_type' => $designation->unit->unit_type ?? null,
                     ];
+
+                    if ($designation->unit->parentUnit) {
+                        $designationData['unit']['parent_unit'] = [
+                            'id' => (string) $designation->unit->parentUnit->id,
+                            'code' => $designation->unit->parentUnit->code ?? null,
+                            'name' => $designation->unit->parentUnit->name ?? null,
+                        ];
+                    }
 
                     if ($designation->unit->sector) {
                         $designationData['unit']['sector'] = [
