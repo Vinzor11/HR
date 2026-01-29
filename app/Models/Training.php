@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Relations\SafeBelongsToMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -54,16 +55,39 @@ class Training extends Model
     }
 
     /**
-     * New org structure relationships (Sector/Unit/Position)
+     * New org structure relationships (Sector/Unit/Position).
+     * Uses SafeBelongsToMany so missing pivot table (e.g. before migrations on Railway) returns empty, not 500.
      */
     public function allowedSectors()
     {
-        return $this->belongsToMany(Sector::class, 'training_allowed_sectors', 'training_id', 'sector_id')->withTimestamps();
+        $instance = $this->newRelatedInstance(Sector::class);
+
+        return new SafeBelongsToMany(
+            $instance->newQuery(),
+            $this,
+            'training_allowed_sectors',
+            'training_id',
+            'sector_id',
+            $this->getKeyName(),
+            $instance->getKeyName(),
+            'allowedSectors'
+        )->withTimestamps();
     }
 
     public function allowedUnits()
     {
-        return $this->belongsToMany(Unit::class, 'training_allowed_units', 'training_id', 'unit_id')->withTimestamps();
+        $instance = $this->newRelatedInstance(Unit::class);
+
+        return new SafeBelongsToMany(
+            $instance->newQuery(),
+            $this,
+            'training_allowed_units',
+            'training_id',
+            'unit_id',
+            $this->getKeyName(),
+            $instance->getKeyName(),
+            'allowedUnits'
+        )->withTimestamps();
     }
 
     public function allowedPositions()
