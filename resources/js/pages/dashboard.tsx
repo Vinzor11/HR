@@ -28,8 +28,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -180,7 +178,6 @@ const statusBadgeColors: Record<string, string> = {
 export default function Dashboard() {
     const { auth } = usePage<SharedData>().props;
     const props = usePage<DashboardProps>().props;
-    const [notificationOpen, setNotificationOpen] = useState(false);
     const permissions = auth?.permissions || [];
 
     const getIcon = (iconName: string) => {
@@ -193,7 +190,7 @@ export default function Dashboard() {
             <Head title="Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-3 md:gap-4 rounded-xl p-3 md:p-4">
                 <div className="space-y-4 md:space-y-6">
-                    {/* Header with Notifications */}
+                    {/* Header — notifications live in sidebar bell (shared globally) */}
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
                             <h1 className="text-xl md:text-2xl font-semibold text-foreground">HR Dashboard</h1>
@@ -201,54 +198,7 @@ export default function Dashboard() {
                                 Welcome back, {auth.user.name}! Here's your HR overview.
                             </p>
                         </div>
-                    {props.notifications && props.notifications.length > 0 && (
-                        <DropdownMenu open={notificationOpen} onOpenChange={setNotificationOpen}>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon" className="relative">
-                                    <Bell className="h-5 w-5" />
-                                    {props.notifications.length > 0 && (
-                                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                            {props.notifications.length}
-                                        </span>
-                                    )}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-80">
-                                <div className="p-2">
-                                    <div className="mb-2 px-2 text-sm font-semibold">Notifications</div>
-                                    <div className="space-y-1">
-                                        {props.notifications.map((notification, idx) => {
-                                            const Icon = iconMap[notification.icon] || Bell;
-                                            return (
-                                                <Link
-                                                    key={idx}
-                                                    href={notification.link}
-                                                    className="flex items-start gap-3 rounded-lg p-3 hover:bg-muted transition-colors"
-                                                >
-                                                    <div className={`mt-0.5 rounded-full p-1.5 ${
-                                                        notification.type === 'urgent' ? 'bg-red-100 dark:bg-red-900/30' :
-                                                        notification.type === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' :
-                                                        'bg-blue-100 dark:bg-blue-900/30'
-                                                    }`}>
-                                                        <Icon className={`h-4 w-4 ${
-                                                            notification.type === 'urgent' ? 'text-red-600 dark:text-red-400' :
-                                                            notification.type === 'warning' ? 'text-amber-600 dark:text-amber-400' :
-                                                            'text-blue-600 dark:text-blue-400'
-                                                        }`} />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium text-foreground">{notification.title}</p>
-                                                        <p className="text-xs text-muted-foreground mt-0.5">{notification.message}</p>
-                                                    </div>
-                                                </Link>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                </div>
+                    </div>
 
                 {/* 1. Top Summary Cards */}
                 {props.summary_cards && props.summary_cards.length > 0 && (

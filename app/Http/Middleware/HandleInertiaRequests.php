@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\DashboardController;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -85,6 +86,9 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        // Notifications for sidebar bell (same as dashboard) so they persist on every page
+        $notifications = $user ? app(DashboardController::class)->getNotifications($user) : [];
+
         return [
              ...parent::share($request),
             'name'  => config('app.name'),
@@ -101,6 +105,7 @@ class HandleInertiaRequests extends Middleware
                 'roles'       => $roles,
                 'permissions' => $permissions,
             ],
+            'notifications' => $notifications,
             'ziggy' => function () use ($request): array {
                 // Determine environment and protocol early
                 $isProduction = config('app.env') === 'production';

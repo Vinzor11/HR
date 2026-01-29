@@ -51,7 +51,7 @@ class DashboardController extends Controller
         // 6. Analytics Data
         $data['analytics'] = $this->getAnalytics($user);
 
-        // 7. Notifications/Alerts
+        // 7. Notifications/Alerts (also shared globally via HandleInertiaRequests for sidebar bell)
         $data['notifications'] = $this->getNotifications($user);
 
         // 8. Request Type Statistics (for Request Builder)
@@ -487,7 +487,7 @@ class DashboardController extends Controller
         return $analytics;
     }
 
-    private function getNotifications($user): array
+    public function getNotifications($user): array
     {
         $notifications = [];
 
