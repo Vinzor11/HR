@@ -100,6 +100,32 @@ class TwoFactorController extends Controller
     }
 
     /**
+     * Verify a 2FA code without performing any action.
+     * Used by frontend to validate code before proceeding with sensitive actions.
+     */
+    public function verifyCode(Request $request)
+    {
+        $request->validate([
+            'two_factor_code' => ['required', 'string', 'size:6'],
+        ]);
+
+        $user = Auth::user();
+        
+        if (!$user || !$user->hasTwoFactorEnabled()) {
+            return back()->withErrors(['two_factor_code' => 'Two-factor authentication is not enabled.']);
+        }
+
+        $google2fa = new Google2FA();
+        $valid = $google2fa->verifyKey($user->two_factor_secret, $request->two_factor_code);
+
+        if (!$valid) {
+            return back()->withErrors(['two_factor_code' => 'The verification code is invalid or has expired.']);
+        }
+
+        return back()->with('success', 'Verification successful.');
+    }
+
+    /**
      * Regenerate recovery codes.
      */
     public function regenerateRecoveryCodes(Request $request)

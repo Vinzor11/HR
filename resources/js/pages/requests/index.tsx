@@ -7,6 +7,7 @@ import { TablePagination } from '@/components/ui/pagination';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog';
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog';
 import AppLayout from '@/layouts/app-layout';
 import type { RequestStatus } from '@/types/requests';
 import type { BreadcrumbItem } from '@/types';
@@ -143,14 +144,36 @@ export default function RequestsIndex({
     const [isSearching, setIsSearching] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [showRequire2FADialog, setShowRequire2FADialog] = useState(false);
+    const [show2FAVerifyDialog, setShow2FAVerifyDialog] = useState(false);
+    const [is2FAVerifying, setIs2FAVerifying] = useState(false);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const handleNewRequestClick = () => {
         if (!twoFactorEnabled) {
+            // User doesn't have 2FA enabled - prompt them to enable it
             setShowRequire2FADialog(true);
             return;
         }
-        setModalOpen(true);
+        // User has 2FA enabled - ask for verification code
+        setShow2FAVerifyDialog(true);
+    };
+
+    const handle2FAVerify = (code: string) => {
+        setIs2FAVerifying(true);
+        // Verify the 2FA code with the backend
+        router.post(route('two-factor.verify-code'), { two_factor_code: code }, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setShow2FAVerifyDialog(false);
+                setIs2FAVerifying(false);
+                // After successful verification, open the request type modal
+                setModalOpen(true);
+            },
+            onError: () => {
+                setIs2FAVerifying(false);
+            },
+        });
     };
 
     const triggerFetch = (params: Record<string, unknown> = {}) => {
@@ -339,6 +362,16 @@ export default function RequestsIndex({
                         onOpenChange={setShowRequire2FADialog}
                         description="To submit new requests you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
                         actionLabel="Let's go"
+                    />
+
+                    <TwoFactorVerifyDialog
+                        open={show2FAVerifyDialog}
+                        onOpenChange={setShow2FAVerifyDialog}
+                        onVerify={handle2FAVerify}
+                        title="Verify to create request"
+                        description="Enter your 6-digit verification code to proceed with creating a new request."
+                        verifyButtonLabel="Verify and Continue"
+                        processing={is2FAVerifying}
                     />
                 </div>
 

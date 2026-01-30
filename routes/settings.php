@@ -25,4 +25,5 @@ Route::middleware('auth')->group(function () {
     Route::match(['get', 'post'], 'settings/two-factor/enable', [TwoFactorController::class, 'enable'])->name('two-factor.enable');
     Route::match(['get', 'post'], 'settings/two-factor/disable', [TwoFactorController::class, 'disable'])->name('two-factor.disable');
     Route::match(['get', 'post'], 'settings/two-factor/recovery-codes', [TwoFactorController::class, 'regenerateRecoveryCodes'])->name('two-factor.recovery-codes');
+    Route::post('settings/two-factor/verify-code', [TwoFactorController::class, 'verifyCode'])->name('two-factor.verify-code');
 });
