@@ -134,8 +134,8 @@ class RequestSubmissionController extends Controller
 
                 $prefill = array_filter([
                     'employee_name' => $fullName ?: null,
-                    'department_office' => $unitName, // Using unit name for department_office field
-                    'position_title' => $positionName,
+                    'unit' => $unitName,
+                    'position' => $positionName,
                     'salary' => $employee->salary !== null ? number_format((float) $employee->salary, 2, '.', '') : null,
                     'date_of_filing' => now()->format('Y-m-d'),
                 ], fn ($value) => $value !== null);
@@ -208,6 +208,8 @@ class RequestSubmissionController extends Controller
     public function store(Request $request, RequestType $requestType)
     {
         abort_unless($requestType->isPublished(), 404, 'Request type is not available.');
+
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction($request);
 
         $requestType->load(['fields' => fn ($query) => $query->orderBy('sort_order')]);
 
@@ -311,6 +313,8 @@ class RequestSubmissionController extends Controller
 
     public function approve(Request $request, RequestSubmission $submission)
     {
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction($request);
+
         $request->validate([
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
