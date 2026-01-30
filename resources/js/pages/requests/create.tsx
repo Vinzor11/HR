@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { RequestFieldDefinition, RequestTypeResource } from '@/types/requests';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import { ShieldCheck, Sparkles } from 'lucide-react';
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog';
 
 interface LeaveBalance {
     code: string;
@@ -48,9 +49,14 @@ const buildInitialAnswers = (fields: RequestFieldDefinition[], prefill?: Record<
     }, {});
 
 export default function RequestCreate({ requestType, leaveBalances = {} }: RequestCreateProps) {
+    const page = usePage<{ auth?: { user?: { two_factor_enabled?: boolean } } }>();
+    const twoFactorEnabled = page.props.auth?.user?.two_factor_enabled ?? false;
+
     const { data, setData, post, processing, errors, reset } = useForm<{ answers: Record<string, unknown> }>({
         answers: buildInitialAnswers(requestType.fields, requestType.prefill_answers),
     });
+
+    const [show2FADialog, setShow2FADialog] = useState(false);
 
     const handleInputChange = (fieldKey: string, value: unknown) => {
         setData('answers', {
@@ -59,20 +65,48 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
         });
     };
 
+    const doSubmit = (twoFactorCode?: string) => {
+        const payload: Record<string, unknown> = { answers: data.answers };
+        if (twoFactorCode) payload.two_factor_code = twoFactorCode;
+
+        if (twoFactorCode) {
+            router.post(route('requests.store', requestType.id), payload as Record<string, string>, {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShow2FADialog(false);
+                    toast.success('Request submitted successfully.');
+                    reset();
+                },
+                onError: () => toast.error('Please fix the highlighted errors.'),
+            });
+        } else {
+            post(route('requests.store', requestType.id), {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Request submitted successfully.');
+                    reset();
+                },
+                onError: () => toast.error('Please fix the highlighted errors.'),
+            });
+        }
+    };
+
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (processing) {
             return;
         }
-        post(route('requests.store', requestType.id), {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Request submitted successfully.');
-                reset();
-            },
-            onError: () => toast.error('Please fix the highlighted errors.'),
-        });
+        if (twoFactorEnabled) {
+            setShow2FADialog(true);
+            return;
+        }
+        doSubmit();
+    };
+
+    const handle2FAVerify = (code: string) => {
+        doSubmit(code);
     };
 
     const fieldError = (fieldKey: string) => {
@@ -408,6 +442,17 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
                 </div>
             </form>
             </div>
+
+            {/* 2FA verification dialog for request submission */}
+            <TwoFactorVerifyDialog
+                open={show2FADialog}
+                onOpenChange={setShow2FADialog}
+                onVerify={handle2FAVerify}
+                title="Verify to submit request"
+                description="Enter your 6-digit verification code to confirm submission of this request."
+                verifyButtonLabel="Verify and Submit"
+                processing={processing}
+            />
         </AppLayout>
     );
 }
