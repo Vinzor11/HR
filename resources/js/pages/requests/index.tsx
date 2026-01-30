@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { TablePagination } from '@/components/ui/pagination';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog';
 import AppLayout from '@/layouts/app-layout';
 import type { RequestStatus } from '@/types/requests';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Calendar, ChevronRight, ClipboardList, Download, FileCheck2, Filter, Plus, UserCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -129,6 +130,9 @@ export default function RequestsIndex({
     scopeOptions,
     canManage,
 }: RequestIndexProps) {
+    const page = usePage<{ auth?: { user?: { two_factor_enabled?: boolean } } }>();
+    const twoFactorEnabled = page.props.auth?.user?.two_factor_enabled ?? false;
+
     const [searchTerm, setSearchTerm] = useState(filters?.search ?? '');
     const [status, setStatus] = useState(filters?.status ?? '');
     const [requestTypeId, setRequestTypeId] = useState(filters?.request_type_id ? String(filters.request_type_id) : '');
@@ -138,7 +142,16 @@ export default function RequestsIndex({
     const [dateTo, setDateTo] = useState(formatDateForInput(filters?.date_to));
     const [isSearching, setIsSearching] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
+    const [showRequire2FADialog, setShowRequire2FADialog] = useState(false);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
+    const handleNewRequestClick = () => {
+        if (!twoFactorEnabled) {
+            setShowRequire2FADialog(true);
+            return;
+        }
+        setModalOpen(true);
+    };
 
     const triggerFetch = (params: Record<string, unknown> = {}) => {
         router.get(
@@ -269,13 +282,12 @@ export default function RequestsIndex({
                         </p>
                     </div>
 
+                    <Button onClick={handleNewRequestClick}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        New Request
+                    </Button>
+
                     <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-                        <DialogTrigger asChild>
-                            <Button>
-                                <Plus className="mr-2 h-4 w-4" />
-                                New Request
-                            </Button>
-                        </DialogTrigger>
                         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>Select Request Type</DialogTitle>
@@ -321,6 +333,13 @@ export default function RequestsIndex({
                             </div>
                         </DialogContent>
                     </Dialog>
+
+                    <Require2FAPromptDialog
+                        open={showRequire2FADialog}
+                        onOpenChange={setShowRequire2FADialog}
+                        description="To submit new requests you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
+                        actionLabel="Let's go"
+                    />
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 md:gap-4">

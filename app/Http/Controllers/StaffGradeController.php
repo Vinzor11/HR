@@ -204,6 +204,8 @@ class StaffGradeController extends Controller
     {
         abort_unless($request->user()->can('force-delete-staff-grade'), 403, 'Unauthorized action.');
 
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction($request);
+
         $staffGrade = StaffGrade::onlyTrashed()->findOrFail($id);
         $gradeName = $staffGrade->name;
         $gradeCode = $staffGrade->code ?? '';

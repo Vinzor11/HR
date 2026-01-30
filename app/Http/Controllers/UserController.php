@@ -289,6 +289,8 @@ class UserController extends Controller
     {
         abort_unless(request()->user()->can('force-delete-user'), 403, 'Unauthorized action.');
 
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction(request());
+
         $user = User::withTrashed()->findOrFail($id);
         $userId = $user->id;
         $userName = $this->getUserName($user);

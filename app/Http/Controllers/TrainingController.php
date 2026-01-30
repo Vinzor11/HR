@@ -490,6 +490,8 @@ class TrainingController extends Controller
     {
         abort_unless(request()->user()->can('force-delete-training'), 403, 'Unauthorized action.');
 
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction(request());
+
         $training = Training::withTrashed()->findOrFail($id);
         $trainingTitle = $training->training_title ?? 'Training';
         

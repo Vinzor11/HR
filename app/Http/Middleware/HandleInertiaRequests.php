@@ -101,6 +101,7 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'employee_id' => $user->employee_id,
                     'avatar' => $user->avatar ?? null, // Include avatar if exists
+                    'two_factor_enabled' => $user->hasTwoFactorEnabled(),
                 ] : null,
                 'roles'       => $roles,
                 'permissions' => $permissions,
@@ -159,6 +160,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => $request->session()->get('success'),
                 'error'   => $request->session()->get('error'),
                 'newClient' => $request->session()->get('newClient'),
+                'prompt_2fa_setup' => $request->session()->get('prompt_2fa_setup'),
             ],
             'importedData' => fn () => $request->session()->pull('importedData'),
         ];

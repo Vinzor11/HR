@@ -17,6 +17,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DetailDrawer } from '@/components/DetailDrawer'
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog'
+import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog'
+import { useForceDeleteWith2FA } from '@/hooks/use-force-delete-with-2fa'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Manage Positions', href: '/positions' },
@@ -83,8 +86,23 @@ interface IndexProps {
 }
 
 export default function PositionIndex({ positions, sectors, filters }: IndexProps) {
-  const { flash, auth } = usePage<FlashProps & { auth?: { permissions?: string[] } }>().props
+  const { flash, auth } = usePage<FlashProps & { auth?: { permissions?: string[]; user?: { two_factor_enabled?: boolean } } }>().props
   const permissions = auth?.permissions || []
+  const twoFactorEnabled = auth?.user?.two_factor_enabled ?? false
+  const [showRequire2FAForceDeleteDialog, setShowRequire2FAForceDeleteDialog] = useState(false)
+
+  const {
+    show2FADialog: show2FAForceDeleteDialog,
+    setShow2FADialog: setShow2FAForceDeleteDialog,
+    requestForceDelete,
+    handle2FAVerify: handle2FAForceDeleteVerify,
+    close2FADialog: close2FAForceDeleteDialog,
+  } = useForceDeleteWith2FA('positions.force-delete', {
+    twoFactorEnabled,
+    onSuccess: () => triggerFetch({}),
+    onError: (msg) => toast.error(msg ?? 'Failed to permanently delete position'),
+    on2FARequired: () => setShowRequire2FAForceDeleteDialog(true),
+  })
   const flashMessage = flash?.success || flash?.error
   const [modalOpen, setModalOpen] = useState(false)
   const [mode, setMode] = useState<'create' | 'view' | 'edit'>('create')
@@ -298,16 +316,7 @@ const handleSectorFilterChange = (value: string) => {
     })
   }
 
-  const handleForceDelete = (id: string | number) => {
-    router.delete(route('positions.force-delete', id), {
-      preserveScroll: true,
-      onSuccess: () => {
-        // Flash message will be handled by useEffect watching flash prop
-        triggerFetch({})
-      },
-      onError: () => toast.error('Failed to permanently delete position'),
-    })
-  }
+  const handleForceDelete = requestForceDelete
 
   const handleDelete = (routeStr: string) => {
     router.delete(routeStr, {
@@ -670,6 +679,27 @@ const handleSectorFilterChange = (value: string) => {
           }}
         />
       )}
+
+      {/* 2FA required (user has no 2FA) */}
+      <Require2FAPromptDialog
+        open={showRequire2FAForceDeleteDialog}
+        onOpenChange={setShowRequire2FAForceDeleteDialog}
+        description="To permanently delete positions you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
+        actionLabel="Let's go"
+      />
+
+      {/* 2FA verification for permanent delete */}
+      <TwoFactorVerifyDialog
+        open={show2FAForceDeleteDialog}
+        onOpenChange={(open) => {
+          setShow2FAForceDeleteDialog(open)
+          if (!open) close2FAForceDeleteDialog()
+        }}
+        onVerify={handle2FAForceDeleteVerify}
+        title="Verify to permanently delete"
+        description="Enter your 6-digit verification code to confirm permanent deletion. This action cannot be undone."
+        verifyButtonLabel="Verify and delete"
+      />
     </AppLayout>
   )
 }

@@ -300,6 +300,8 @@ class PositionController extends Controller
     {
         abort_unless(request()->user()->can('force-delete-position'), 403, 'Unauthorized action.');
 
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction(request());
+
         $position = Position::withTrashed()->findOrFail($id);
         $position->refresh();
         

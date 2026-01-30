@@ -176,6 +176,8 @@ class SectorController extends Controller
 
     public function forceDelete($id)
     {
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction(request());
+
         $sector = Sector::onlyTrashed()->findOrFail($id);
         $sectorName = $sector->name;
         $sectorCode = $sector->code ?? '';

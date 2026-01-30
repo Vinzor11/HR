@@ -204,6 +204,8 @@ class AcademicRankController extends Controller
     {
         abort_unless($request->user()->can('force-delete-academic-rank'), 403, 'Unauthorized action.');
 
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction($request);
+
         $academicRank = AcademicRank::onlyTrashed()->findOrFail($id);
         $rankName = $academicRank->name;
         $rankCode = $academicRank->code ?? '';

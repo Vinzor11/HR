@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { RequestSubmissionResource, RequestStatus } from '@/types/requests';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock4, Download, FileText, MessageSquare, ShieldAlert, Undo2 } from 'lucide-react';
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog';
+import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog';
 import { useMemo, useState } from 'react';
 
 interface ApprovalComment {
@@ -97,6 +99,9 @@ const formatShortDate = (value?: string | null) => {
 };
 
 export default function RequestShow({ submission, can, downloadRoutes }: RequestShowProps) {
+    const page = usePage<{ auth?: { user?: { two_factor_enabled?: boolean } } }>();
+    const twoFactorEnabled = page.props.auth?.user?.two_factor_enabled ?? false;
+
     const approvalForm = useForm<{ notes: string }>({ notes: '' });
     const rejectionForm = useForm<{ notes: string }>({ notes: '' });
     const fulfillmentForm = useForm<{ file: File | null; notes: string }>({ file: null, notes: '' });
@@ -104,20 +109,47 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
     const commentForm = useForm<{ content: string; is_internal: boolean }>({ content: '', is_internal: false });
     
     const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+    const [show2FAApproveDialog, setShow2FAApproveDialog] = useState(false);
+    const [showRequire2FAApproveDialog, setShowRequire2FAApproveDialog] = useState(false);
+
+    const submitApprove = (twoFactorCode?: string) => {
+        const data: Record<string, string> = { notes: approvalForm.data.notes };
+        if (twoFactorCode) data.two_factor_code = twoFactorCode;
+        if (twoFactorCode) {
+            router.post(route('requests.approve', submission.id), data, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    approvalForm.reset();
+                    setShow2FAApproveDialog(false);
+                    toast.success('Request approved.');
+                },
+                onError: () => toast.error('Unable to approve at this time.'),
+            });
+        } else {
+            approvalForm.post(route('requests.approve', submission.id), {
+                preserveScroll: true,
+                onSuccess: () => {
+                    approvalForm.reset();
+                    toast.success('Request approved.');
+                },
+                onError: () => toast.error('Unable to approve at this time.'),
+            });
+        }
+    };
 
     const handleApprove = () => {
         if (approvalForm.processing) {
             return;
         }
-        
-        approvalForm.post(route('requests.approve', submission.id), {
-            preserveScroll: true,
-            onSuccess: () => {
-                approvalForm.reset();
-                toast.success('Request approved.');
-            },
-            onError: () => toast.error('Unable to approve at this time.'),
-        });
+        if (!twoFactorEnabled) {
+            setShowRequire2FAApproveDialog(true);
+            return;
+        }
+        setShow2FAApproveDialog(true);
+    };
+
+    const handle2FAApproveVerify = (code: string) => {
+        submitApprove(code);
     };
 
     const handleReject = () => {
@@ -593,6 +625,25 @@ export default function RequestShow({ submission, can, downloadRoutes }: Request
                 </div>
                 </div>
             </div>
+
+            {/* 2FA required (user has no 2FA) */}
+            <Require2FAPromptDialog
+                open={showRequire2FAApproveDialog}
+                onOpenChange={setShowRequire2FAApproveDialog}
+                description="To approve requests you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
+                actionLabel="Let's go"
+            />
+
+            {/* 2FA verification for approve */}
+            <TwoFactorVerifyDialog
+                open={show2FAApproveDialog}
+                onOpenChange={setShow2FAApproveDialog}
+                onVerify={handle2FAApproveVerify}
+                title="Verify to approve request"
+                description="Enter your 6-digit verification code to confirm approval of this request."
+                verifyButtonLabel="Verify and approve"
+                processing={approvalForm.processing}
+            />
         </AppLayout>
     );
 }

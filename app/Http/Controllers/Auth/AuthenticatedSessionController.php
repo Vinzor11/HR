@@ -130,7 +130,8 @@ class AuthenticatedSessionController extends Controller
         if (str_starts_with($dashboardUrl, 'http://')) {
             $dashboardUrl = str_replace('http://', 'https://', $dashboardUrl);
         }
-        return redirect()->intended($dashboardUrl);
+        // Prompt non-2FA users to enable 2FA for enhanced security and features
+        return redirect()->intended($dashboardUrl)->with('prompt_2fa_setup', true);
     }
 
     /**

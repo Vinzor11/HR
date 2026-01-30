@@ -1848,6 +1848,8 @@ class EmployeeController extends Controller
     {
         abort_unless(request()->user()->can('force-delete-employee'), 403, 'Unauthorized action.');
 
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction(request());
+
         $employee = Employee::withTrashed()->findOrFail($id);
         $employee->refresh();
 

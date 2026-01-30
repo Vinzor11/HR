@@ -209,8 +209,7 @@ class RequestSubmissionController extends Controller
     {
         abort_unless($requestType->isPublished(), 404, 'Request type is not available.');
 
-        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction($request);
-
+        // 2FA is required at "New Request" click on the request center (frontend gate), not at submit
         $requestType->load(['fields' => fn ($query) => $query->orderBy('sort_order')]);
 
         $rules = $this->buildDynamicRules($requestType);

@@ -260,6 +260,8 @@ class UnitController extends Controller
 
     public function forceDelete($id)
     {
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction(request());
+
         $unit = Unit::onlyTrashed()->findOrFail($id);
         $unitName = $unit->name;
         $unitCode = $unit->code ?? '';

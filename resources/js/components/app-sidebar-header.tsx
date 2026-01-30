@@ -20,21 +20,30 @@ import { useInitials } from '@/hooks/use-initials';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { type SharedData } from '@/types';
 import { Link, usePage, router } from '@inertiajs/react';
-import { Bell, Settings, LogOut } from 'lucide-react';
+import { Bell, ChevronDown, Settings, LogOut, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     const { position } = useLayout();
     const page = usePage<SharedData>();
     const { auth } = page.props;
+    const flash = (page.props as { flash?: { prompt_2fa_setup?: boolean } }).flash;
     const getInitials = useInitials();
     const cleanup = useMobileNavigation();
     const [notificationOpen, setNotificationOpen] = useState(false);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-    
+    const [show2FAPromptDialog, setShow2FAPromptDialog] = useState(false);
+
     // Get notifications from page props if available
     const notifications = (page.props as any).notifications || [];
+
+    // Show 2FA setup prompt after login when user doesn't have 2FA enabled
+    useEffect(() => {
+        if (flash?.prompt_2fa_setup) {
+            setShow2FAPromptDialog(true);
+        }
+    }, [flash?.prompt_2fa_setup]);
     
     // Handle logout
     const handleLogout = () => {
@@ -68,6 +77,22 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
             return () => clearTimeout(timer);
         }
     }, [showLogoutDialog]);
+
+    const handle2FAPromptDialogChange = (open: boolean) => {
+        setShow2FAPromptDialog(open);
+        if (!open) {
+            setTimeout(() => {
+                document.body.style.pointerEvents = '';
+                document.documentElement.style.pointerEvents = '';
+            }, 100);
+        }
+    };
+
+    const handleGoTo2FASetup = () => {
+        cleanup();
+        setShow2FAPromptDialog(false);
+        router.visit(route('two-factor.show'));
+    };
 
     return (
         <header className="border-sidebar-border/50 sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 border-b bg-sidebar px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 group-has-data-[collapsible=icon]/sidebar-wrapper:px-2 md:px-4 overflow-hidden md:rounded-t-xl">
@@ -143,15 +168,15 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                     <DropdownMenuTrigger asChild>
                         <Button 
                             variant="ghost" 
-                            size="icon"
-                            className="h-12 w-12 rounded-full hover:bg-accent/50 transition-all p-0"
+                            className="group h-12 rounded-full pl-1 pr-2 hover:bg-accent/50 transition-all gap-1.5"
                         >
-                            <Avatar className="size-10 overflow-hidden rounded-full ring-2 ring-background ring-offset-1">
+                            <Avatar className="size-10 overflow-hidden rounded-full ring-2 ring-background ring-offset-1 shrink-0">
                                 <AvatarImage src={auth.user.avatar} alt={auth.user.name} />
                                 <AvatarFallback className="rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold text-sm border border-primary/20">
                                     {getInitials(auth.user.name)}
                                 </AvatarFallback>
                             </Avatar>
+                            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-56" align="end">
@@ -202,6 +227,28 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
                                 Sign Out
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* 2FA setup prompt (shown after login when 2FA is not enabled) */}
+                <AlertDialog open={show2FAPromptDialog} onOpenChange={handle2FAPromptDialogChange}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <ShieldCheck className="h-5 w-5 text-primary" />
+                                Enable Two-Factor Authentication
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                To enhance your experience and keep your account secure, we recommend enabling two-factor authentication (2FA).
+                                Some features may require 2FA for added protection. You can set it up now in just a few steps.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleGoTo2FASetup}>
+                                Let&apos;s go
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

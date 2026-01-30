@@ -41,6 +41,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog';
+import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog';
 import { debounce } from 'lodash';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Manage Employees', href: '/employees' }];
@@ -142,8 +144,12 @@ export default function Index() {
   }>().props;
   
   const permissions = auth?.permissions || [];
+  const twoFactorEnabled = (auth as { user?: { two_factor_enabled?: boolean } })?.user?.two_factor_enabled ?? false;
 
   const [columnModalOpen, setColumnModalOpen] = useState(false);
+  const [show2FAForceDeleteDialog, setShow2FAForceDeleteDialog] = useState(false);
+  const [showRequire2FAForceDeleteDialog, setShowRequire2FAForceDeleteDialog] = useState(false);
+  const [pendingForceDeleteId, setPendingForceDeleteId] = useState<string | number | null>(null);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<FilterCondition[]>(() => {
@@ -502,19 +508,36 @@ export default function Index() {
     [triggerFetch]
   );
 
-  // Handle force delete
+  // Handle force delete (requires 2FA: show enable-2FA dialog or code dialog)
   const handleForceDelete = useCallback(
     (id: string | number) => {
-      router.delete(route('employees.force-delete', id), {
+      if (!twoFactorEnabled) {
+        setShowRequire2FAForceDeleteDialog(true);
+        return;
+      }
+      setPendingForceDeleteId(id);
+      setShow2FAForceDeleteDialog(true);
+    },
+    [twoFactorEnabled]
+  );
+
+  const handle2FAForceDeleteVerify = useCallback(
+    (code: string) => {
+      if (pendingForceDeleteId == null) return;
+      router.delete(route('employees.force-delete', pendingForceDeleteId), {
+        data: { two_factor_code: code },
         preserveScroll: true,
         onSuccess: () => {
-          // Flash message will be handled by useEffect watching flash prop
+          setShow2FAForceDeleteDialog(false);
+          setPendingForceDeleteId(null);
           triggerFetch({});
         },
-        onError: () => toast.error('Failed to permanently delete employee'),
+        onError: (errors) => {
+          toast.error((errors as { two_factor_code?: string })?.two_factor_code ?? 'Failed to permanently delete employee');
+        },
       });
     },
-    [triggerFetch]
+    [pendingForceDeleteId, triggerFetch]
   );
 
   // Export to CSV function
@@ -1310,6 +1333,28 @@ export default function Index() {
           storageKey="employees_saved_filters"
         />
       )}
+
+      {/* 2FA required (user has no 2FA) */}
+      <Require2FAPromptDialog
+        open={showRequire2FAForceDeleteDialog}
+        onOpenChange={setShowRequire2FAForceDeleteDialog}
+        title="Enable Two-Factor Authentication"
+        description="To permanently delete records you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
+        actionLabel="Let's go"
+      />
+
+      {/* 2FA verification for permanent delete */}
+      <TwoFactorVerifyDialog
+        open={show2FAForceDeleteDialog}
+        onOpenChange={(open) => {
+          setShow2FAForceDeleteDialog(open);
+          if (!open) setPendingForceDeleteId(null);
+        }}
+        onVerify={handle2FAForceDeleteVerify}
+        title="Verify to permanently delete"
+        description="Enter your 6-digit verification code to confirm permanent deletion. This action cannot be undone."
+        verifyButtonLabel="Verify and delete"
+      />
     </AppLayout>
   );
 }

@@ -12,11 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import type { RequestFieldDefinition, RequestTypeResource } from '@/types/requests';
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { ShieldCheck, Sparkles } from 'lucide-react';
-import { useMemo, useCallback, useState } from 'react';
-import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog';
-import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog';
+import { useMemo, useCallback } from 'react';
 
 interface LeaveBalance {
     code: string;
@@ -50,15 +48,9 @@ const buildInitialAnswers = (fields: RequestFieldDefinition[], prefill?: Record<
     }, {});
 
 export default function RequestCreate({ requestType, leaveBalances = {} }: RequestCreateProps) {
-    const page = usePage<{ auth?: { user?: { two_factor_enabled?: boolean } } }>();
-    const twoFactorEnabled = page.props.auth?.user?.two_factor_enabled ?? false;
-
     const { data, setData, post, processing, errors, reset } = useForm<{ answers: Record<string, unknown> }>({
         answers: buildInitialAnswers(requestType.fields, requestType.prefill_answers),
     });
-
-    const [show2FASubmitDialog, setShow2FASubmitDialog] = useState(false);
-    const [showRequire2FASubmitDialog, setShowRequire2FASubmitDialog] = useState(false);
 
     const handleInputChange = (fieldKey: string, value: unknown) => {
         setData('answers', {
@@ -67,47 +59,20 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
         });
     };
 
-    const doSubmit = (twoFactorCode?: string) => {
-        const payload: Record<string, unknown> = { answers: data.answers };
-        if (twoFactorCode) payload.two_factor_code = twoFactorCode;
-        if (twoFactorCode) {
-            router.post(route('requests.store', requestType.id), payload as Record<string, string>, {
-                forceFormData: true,
-                preserveScroll: true,
-                onSuccess: () => {
-                    setShow2FASubmitDialog(false);
-                    toast.success('Request submitted successfully.');
-                    reset();
-                },
-                onError: () => toast.error('Please fix the highlighted errors.'),
-            });
-        } else {
-            post(route('requests.store', requestType.id), {
-                forceFormData: true,
-                preserveScroll: true,
-                onSuccess: () => {
-                    toast.success('Request submitted successfully.');
-                    reset();
-                },
-                onError: () => toast.error('Please fix the highlighted errors.'),
-            });
-        }
-    };
-
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (processing) {
             return;
         }
-        if (!twoFactorEnabled) {
-            setShowRequire2FASubmitDialog(true);
-            return;
-        }
-        setShow2FASubmitDialog(true);
-    };
-
-    const handle2FASubmitVerify = (code: string) => {
-        doSubmit(code);
+        post(route('requests.store', requestType.id), {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Request submitted successfully.');
+                reset();
+            },
+            onError: () => toast.error('Please fix the highlighted errors.'),
+        });
     };
 
     const fieldError = (fieldKey: string) => {
@@ -443,25 +408,6 @@ export default function RequestCreate({ requestType, leaveBalances = {} }: Reque
                 </div>
             </form>
             </div>
-
-            {/* 2FA required (user has no 2FA) */}
-            <Require2FAPromptDialog
-                open={showRequire2FASubmitDialog}
-                onOpenChange={setShowRequire2FASubmitDialog}
-                description="To submit new requests you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
-                actionLabel="Let's go"
-            />
-
-            {/* 2FA verification for new request submit */}
-            <TwoFactorVerifyDialog
-                open={show2FASubmitDialog}
-                onOpenChange={setShow2FASubmitDialog}
-                onVerify={handle2FASubmitVerify}
-                title="Verify to submit request"
-                description="Enter your 6-digit verification code to confirm submission of this request."
-                verifyButtonLabel="Verify and submit"
-                processing={processing}
-            />
         </AppLayout>
     );
 }

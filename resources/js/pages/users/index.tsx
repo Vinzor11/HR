@@ -18,6 +18,8 @@ import { hasPermission } from '@/utils/authorization';
 import { DetailDrawer } from '@/components/DetailDrawer';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog';
+import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -87,6 +89,10 @@ export default function Index({ users, filters }: IndexProps) {
         auth?: { permissions?: string[] };
     }>().props;
     const permissions = auth?.permissions || [];
+    const twoFactorEnabled = (auth as { user?: { two_factor_enabled?: boolean } })?.user?.two_factor_enabled ?? false;
+    const [show2FAForceDeleteDialog, setShow2FAForceDeleteDialog] = useState(false);
+    const [showRequire2FAForceDeleteDialog, setShowRequire2FAForceDeleteDialog] = useState(false);
+    const [pendingForceDeleteId, setPendingForceDeleteId] = useState<string | number | null>(null);
     const flashMessage = flash?.success || flash?.error;
     const [modalOpen, setModalOpen] = useState(false);
     const [mode, setMode] = useState<'create' | 'view' | 'edit'>('create');
@@ -407,14 +413,24 @@ export default function Index({ users, filters }: IndexProps) {
     };
 
     const handleForceDelete = (id: string | number) => {
-        router.delete(route('users.force-delete', id), {
+        if (!twoFactorEnabled) {
+            setShowRequire2FAForceDeleteDialog(true);
+            return;
+        }
+        setPendingForceDeleteId(id);
+        setShow2FAForceDeleteDialog(true);
+    };
+
+    const handle2FAForceDeleteVerify = (code: string) => {
+        if (pendingForceDeleteId == null) return;
+        router.delete(route('users.force-delete', pendingForceDeleteId), {
+            data: { two_factor_code: code },
             preserveScroll: true,
             onSuccess: (response: { props: { flash?: { success?: string } } }) => {
-                // Show toast from flash message if available
+                setShow2FAForceDeleteDialog(false);
+                setPendingForceDeleteId(null);
                 const successMessage = response.props.flash?.success;
-                if (successMessage) {
-                    toast.success(successMessage);
-                }
+                if (successMessage) toast.success(successMessage);
                 triggerFetch({});
             },
             onError: () => toast.error('Failed to permanently delete user'),
@@ -697,6 +713,27 @@ export default function Index({ users, filters }: IndexProps) {
                     extraData={{ roles: roles.map((r) => ({ id: r.id, name: r.name, label: r.name, value: r.id.toString() })) }}
                 />
             )}
+
+            {/* 2FA required (user has no 2FA) */}
+            <Require2FAPromptDialog
+                open={showRequire2FAForceDeleteDialog}
+                onOpenChange={setShowRequire2FAForceDeleteDialog}
+                description="To permanently delete user accounts you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
+                actionLabel="Let's go"
+            />
+
+            {/* 2FA verification for permanent delete */}
+            <TwoFactorVerifyDialog
+                open={show2FAForceDeleteDialog}
+                onOpenChange={(open) => {
+                    setShow2FAForceDeleteDialog(open);
+                    if (!open) setPendingForceDeleteId(null);
+                }}
+                onVerify={handle2FAForceDeleteVerify}
+                title="Verify to permanently delete"
+                description="Enter your 6-digit verification code to confirm permanent deletion. This action cannot be undone."
+                verifyButtonLabel="Verify and delete"
+            />
         </AppLayout>
     );
 }

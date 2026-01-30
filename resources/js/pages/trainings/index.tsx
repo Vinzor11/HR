@@ -16,6 +16,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DetailDrawer } from '@/components/DetailDrawer';
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog';
+import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog';
+import { useForceDeleteWith2FA } from '@/hooks/use-force-delete-with-2fa';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -148,8 +151,24 @@ const normalizeTrainingForView = (training: any) => {
 };
 
 export default function TrainingsIndex({ trainings, formOptions, filters }: IndexProps) {
-    const { flash, auth } = usePage<{ flash?: { success?: string; error?: string }; auth?: { permissions?: string[] } }>().props;
+    const { flash, auth } = usePage<{ flash?: { success?: string; error?: string }; auth?: { permissions?: string[]; user?: { two_factor_enabled?: boolean } } }>().props;
     const permissions = auth?.permissions || [];
+    const twoFactorEnabled = auth?.user?.two_factor_enabled ?? false;
+    const [showRequire2FAForceDeleteDialog, setShowRequire2FAForceDeleteDialog] = useState(false);
+    const {
+        show2FADialog: show2FAForceDeleteDialog,
+        setShow2FADialog: setShow2FAForceDeleteDialog,
+        requestForceDelete,
+        handle2FAVerify: handle2FAForceDeleteVerify,
+        close2FADialog: close2FAForceDeleteDialog,
+    } = useForceDeleteWith2FA('trainings.force-delete', {
+        twoFactorEnabled,
+        onSuccess: () => {
+            triggerFetch({ search: searchTerm, search_mode: searchMode, perPage, show_deleted: showDeleted });
+        },
+        onError: (msg) => toast.error(msg ?? 'Failed to permanently delete training'),
+        on2FARequired: () => setShowRequire2FAForceDeleteDialog(true),
+    });
     const [modalOpen, setModalOpen] = useState(false);
     const [mode, setMode] = useState<'create' | 'view' | 'edit'>('create');
     const [selectedTraining, setSelectedTraining] = useState<Training | null>(null);
@@ -502,21 +521,7 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
         });
     };
 
-    const handleForceDelete = (id: string | number) => {
-        router.delete(route('trainings.force-delete', id), {
-            preserveScroll: true,
-            onSuccess: (response: { props: { flash?: { success?: string } } }) => {
-                const successMessage = response.props.flash?.success;
-                if (successMessage) toast.success(successMessage);
-                // Keep current view (deleted) after force delete
-                triggerFetch({ search: searchTerm, search_mode: searchMode, perPage, show_deleted: showDeleted });
-            },
-            onError: (errors) => {
-                console.error('Force delete error:', errors);
-                toast.error('Failed to permanently delete training');
-            },
-        });
-    };
+    const handleForceDelete = requestForceDelete;
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -741,6 +746,27 @@ export default function TrainingsIndex({ trainings, formOptions, filters }: Inde
                     }}
                 />
             )}
+
+            {/* 2FA required (user has no 2FA) */}
+            <Require2FAPromptDialog
+                open={showRequire2FAForceDeleteDialog}
+                onOpenChange={setShowRequire2FAForceDeleteDialog}
+                description="To permanently delete trainings you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
+                actionLabel="Let's go"
+            />
+
+            {/* 2FA verification for permanent delete */}
+            <TwoFactorVerifyDialog
+                open={show2FAForceDeleteDialog}
+                onOpenChange={(open) => {
+                    setShow2FAForceDeleteDialog(open);
+                    if (!open) close2FAForceDeleteDialog();
+                }}
+                onVerify={handle2FAForceDeleteVerify}
+                title="Verify to permanently delete"
+                description="Enter your 6-digit verification code to confirm permanent deletion. This action cannot be undone."
+                verifyButtonLabel="Verify and delete"
+            />
         </AppLayout>
     );
 }

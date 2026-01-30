@@ -266,6 +266,9 @@ class UnitPositionController extends Controller
     public function forceDelete(Request $request, $id)
     {
         abort_unless($request->user()->can('force-delete-unit-position'), 403, 'Unauthorized action.');
+
+        app(\App\Services\TwoFactorVerificationService::class)->validateForSensitiveAction($request);
+
         $unitPosition = UnitPosition::withTrashed()->findOrFail($id);
         
         if (!$unitPosition->trashed()) {

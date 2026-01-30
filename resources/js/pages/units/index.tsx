@@ -16,6 +16,9 @@ import { CompactPagination } from '@/components/CompactPagination'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DetailDrawer } from '@/components/DetailDrawer'
+import { TwoFactorVerifyDialog } from '@/components/two-factor-verify-dialog'
+import { Require2FAPromptDialog } from '@/components/require-2fa-prompt-dialog'
+import { useForceDeleteWith2FA } from '@/hooks/use-force-delete-with-2fa'
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Manage Units', href: '/units' }]
 
@@ -81,8 +84,22 @@ interface IndexProps {
 }
 
 export default function UnitIndex({ units, sectors, parentUnits, filters }: IndexProps) {
-  const { flash, auth } = usePage<FlashProps & { auth?: { permissions?: string[] } }>().props
+  const { flash, auth } = usePage<FlashProps & { auth?: { permissions?: string[]; user?: { two_factor_enabled?: boolean } } }>().props
   const permissions = auth?.permissions || []
+  const twoFactorEnabled = auth?.user?.two_factor_enabled ?? false
+  const [showRequire2FAForceDeleteDialog, setShowRequire2FAForceDeleteDialog] = useState(false)
+  const {
+    show2FADialog: show2FAForceDeleteDialog,
+    setShow2FADialog: setShow2FAForceDeleteDialog,
+    requestForceDelete,
+    handle2FAVerify: handle2FAForceDeleteVerify,
+    close2FADialog: close2FAForceDeleteDialog,
+  } = useForceDeleteWith2FA('units.force-delete', {
+    twoFactorEnabled,
+    onSuccess: () => triggerFetch({}),
+    onError: (msg) => toast.error(msg ?? 'Failed to permanently delete unit'),
+    on2FARequired: () => setShowRequire2FAForceDeleteDialog(true),
+  })
   const [modalOpen, setModalOpen] = useState(false)
   const [mode, setMode] = useState<'create' | 'view' | 'edit'>('create')
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null)
@@ -201,13 +218,7 @@ export default function UnitIndex({ units, sectors, parentUnits, filters }: Inde
     })
   }
 
-  const handleForceDelete = (id: string | number) => {
-    router.delete(route('units.force-delete', id), {
-      preserveScroll: true,
-      onSuccess: () => triggerFetch({}),
-      onError: () => toast.error('Failed to permanently delete unit'),
-    })
-  }
+  const handleForceDelete = requestForceDelete
 
   const handleDelete = (routePath: string) => {
     router.delete(routePath, {
@@ -503,6 +514,25 @@ export default function UnitIndex({ units, sectors, parentUnits, filters }: Inde
           extraData={{ sectors: sectors.map((s) => ({ id: s.id, name: s.name, label: s.name, value: s.id.toString() })) }}
         />
       )}
+
+      <Require2FAPromptDialog
+        open={showRequire2FAForceDeleteDialog}
+        onOpenChange={setShowRequire2FAForceDeleteDialog}
+        description="To permanently delete units you must enable two-factor authentication (2FA). You can set it up now in just a few steps."
+        actionLabel="Let's go"
+      />
+
+      <TwoFactorVerifyDialog
+        open={show2FAForceDeleteDialog}
+        onOpenChange={(open) => {
+          setShow2FAForceDeleteDialog(open)
+          if (!open) close2FAForceDeleteDialog()
+        }}
+        onVerify={handle2FAForceDeleteVerify}
+        title="Verify to permanently delete"
+        description="Enter your 6-digit verification code to confirm permanent deletion. This action cannot be undone."
+        verifyButtonLabel="Verify and delete"
+      />
     </AppLayout>
   )
 }
