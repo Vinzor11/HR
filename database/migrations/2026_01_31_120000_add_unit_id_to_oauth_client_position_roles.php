@@ -13,10 +13,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('oauth_client_position_roles', function (Blueprint $table) {
-            $table->dropForeign(['oauth_client_id']);
-            $table->dropUnique('oauth_client_pos_roles_unique');
-        });
+        // Skip if already applied (unit_id exists)
+        if (Schema::hasColumn('oauth_client_position_roles', 'unit_id')) {
+            return;
+        }
+
+        // Drop constraints only if they exist (production may have different schema history)
+        $this->dropForeignIfExists('oauth_client_position_roles', 'oauth_client_position_roles_oauth_client_id_foreign');
+        $this->dropUniqueIfExists('oauth_client_position_roles', 'oauth_client_pos_roles_unique');
 
         Schema::table('oauth_client_position_roles', function (Blueprint $table) {
             $table->foreignId('unit_id')->nullable()->after('oauth_client_id')
@@ -62,6 +66,32 @@ return new class extends Migration
                     'updated_at' => now(),
                 ]);
             }
+        }
+    }
+
+    private function dropForeignIfExists(string $table, string $foreignKey): void
+    {
+        $exists = DB::selectOne(
+            "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME = ?",
+            [$table, $foreignKey]
+        );
+        if ($exists) {
+            Schema::table($table, function (Blueprint $t) use ($foreignKey) {
+                $t->dropForeign($foreignKey);
+            });
+        }
+    }
+
+    private function dropUniqueIfExists(string $table, string $index): void
+    {
+        $exists = DB::selectOne(
+            "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'UNIQUE' AND CONSTRAINT_NAME = ?",
+            [$table, $index]
+        );
+        if ($exists) {
+            Schema::table($table, function (Blueprint $t) use ($index) {
+                $t->dropUnique($index);
+            });
         }
     }
 
