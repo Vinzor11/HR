@@ -37,10 +37,18 @@ interface ClientOption {
     name: string;
 }
 
+interface UserOption {
+    id: string;
+    name: string;
+    email: string | null;
+    label: string;
+}
+
 interface CreateClientTestProps {
     units: Unit[];
     positions: Position[];
     clients: ClientOption[];
+    users: UserOption[];
 }
 
 interface PositionRoleRow {
@@ -69,10 +77,13 @@ function groupUnitsByType(units: Unit[]) {
     return { colleges, programs, offices, other };
 }
 
-export default function CreateClientTest({ units, positions, clients }: CreateClientTestProps) {
-    const { flash } = usePage().props as { flash?: { newClient?: { client_id: string; client_secret: string; redirect_uri: string } } };
+export default function CreateClientTest({ units, positions, clients, users }: CreateClientTestProps) {
+    const { flash } = usePage().props as {
+        flash?: { newClient?: { client_id: string; client_secret: string; redirect_uri: string } };
+    };
     const [newClient, setNewClient] = useState<typeof flash.newClient | null>(null);
     const [selectedClientId, setSelectedClientId] = useState<string>('');
+    const [selectedUserId, setSelectedUserId] = useState<string>(''); // '' = current user
     const [userinfoJson, setUserinfoJson] = useState<string | null>(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
 
@@ -180,7 +191,9 @@ export default function CreateClientTest({ units, positions, clients }: CreateCl
         setLoadingPreview(true);
         setUserinfoJson(null);
         try {
-            const res = await fetch(`/oauth/clients/userinfo-preview?client_id=${encodeURIComponent(selectedClientId)}`, {
+            const params = new URLSearchParams({ client_id: selectedClientId });
+            if (selectedUserId) params.set('user_id', selectedUserId);
+            const res = await fetch(`/oauth/clients/userinfo-preview?${params.toString()}`, {
                 headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 credentials: 'include',
             });
@@ -490,7 +503,7 @@ export default function CreateClientTest({ units, positions, clients }: CreateCl
                     <CardHeader>
                         <CardTitle>UserInfo JSON Preview</CardTitle>
                         <CardDescription>
-                            Select a client and load to see the exact JSON sent to the application when a user is authorized via OAuth (including client_role).
+                            Select a client and user, then load to see the exact JSON sent when that user is authorized via OAuth (including client_role).
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -500,6 +513,15 @@ export default function CreateClientTest({ units, positions, clients }: CreateCl
                                 <SelectContent>
                                     {clients.map((c) => (
                                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Select value={selectedUserId || 'me'} onValueChange={(v) => setSelectedUserId(v === 'me' ? '' : v)}>
+                                <SelectTrigger className="w-[280px]"><SelectValue placeholder="Select user" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="me">Me (current user)</SelectItem>
+                                    {users.map((u) => (
+                                        <SelectItem key={u.id} value={u.id}>{u.label}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

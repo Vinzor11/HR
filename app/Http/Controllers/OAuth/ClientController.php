@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\OAuthClientCrossUnitPosition;
 use App\Models\OAuthClientPositionRole;
 use App\Models\Position;
+use App\Models\User;
 use App\Models\Unit;
 use App\Services\OAuthClientAccessService;
 use App\Services\UserInfoClaimsBuilder;
@@ -172,11 +173,21 @@ class ClientController extends Controller
             ->where('revoked', false)
             ->orderBy('name')
             ->get(['id', 'name']);
+        $users = User::with('employee')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->map(fn ($u) => [
+                'id' => (string) $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'label' => $u->name . ($u->email ? ' (' . $u->email . ')' : ''),
+            ]);
 
         return Inertia::render('OAuth/CreateClientTest', [
             'units' => $units->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'code' => $u->code, 'unit_type' => $u->unit_type]),
             'positions' => $positions->map(fn ($p) => ['id' => $p->id, 'pos_name' => $p->pos_name, 'pos_code' => $p->pos_code]),
             'clients' => $clients->map(fn ($c) => ['id' => $c->id, 'name' => $c->name]),
+            'users' => $users->values()->all(),
         ]);
     }
 
@@ -195,15 +206,24 @@ class ClientController extends Controller
             return response()->json(['error' => 'Client not found'], 404);
         }
 
-        $user = $request->user();
+        $userId = $request->query('user_id');
+        $user = $userId
+            ? User::find($userId)
+            : $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
         $claims = UserInfoClaimsBuilder::build($user);
         $access = $this->clientAccess->resolveAccessForUser($user, $client);
 
+        $impersonating = $userId && (string) $user->id !== (string) $request->user()->id;
         if (!$access['allowed']) {
-            $claims['_preview_note'] = 'This user would be denied access (403). Shown below is the base userinfo; client_role would not be present.';
+            $claims['_preview_note'] = 'This user would be denied access (403). Shown below is the base userinfo; client_role would not be present.'
+                . ($impersonating ? ' (Preview as: ' . $user->name . ')' : '');
         } else {
             $claims['client_role'] = $access['client_role'];
-            $claims['_preview_note'] = 'Preview: userinfo when authorized for client "' . $client->name . '".';
+            $claims['_preview_note'] = 'Preview: userinfo when authorized for client "' . $client->name . '"'
+                . ($impersonating ? ' (as ' . $user->name . ')' : '') . '.';
         }
 
         $claims['_client_access_config'] = $this->buildClientAccessConfig($client);
