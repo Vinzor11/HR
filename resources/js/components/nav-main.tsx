@@ -12,15 +12,24 @@ import {
 } from '@/components/ui/sidebar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { type NavItem } from '@/types';
+import { type NavItem, type NavGroup } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-export function NavMain({ items = [], position }: { items: NavItem[]; position: 'left' | 'right' }) {
+export interface NavMainProps {
+    items?: NavItem[];
+    groups?: NavGroup[];
+    position: 'left' | 'right';
+}
+
+export function NavMain(props: NavMainProps) {
+    const { items = [], groups, position } = props;
     const page = usePage();
     const { state } = useSidebar();
     const isCollapsed = state === 'collapsed';
+    // When groups are provided, flatten for auto-open logic; otherwise use items
+    const allItems = groups?.flatMap((g) => g.items) ?? items;
     const [openItems, setOpenItems] = useState<Record<string, boolean>>(() => {
         // Initialize from localStorage if available
         if (typeof window !== 'undefined') {
@@ -52,7 +61,7 @@ export function NavMain({ items = [], position }: { items: NavItem[]; position: 
 
     // Auto-open parent when navigating to a child (only if not explicitly closed)
     useEffect(() => {
-        items.forEach((item) => {
+        allItems.forEach((item) => {
             if (item.children?.length) {
                 const childActive = item.children.some((child) => child.href === page.url);
                 if (childActive) {
@@ -78,7 +87,7 @@ export function NavMain({ items = [], position }: { items: NavItem[]; position: 
             }
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page.url]);
+    }, [page.url, allItems.length]);
 
     const renderLabel = (item: NavItem) => {
         if (position === 'right') {
@@ -98,11 +107,9 @@ export function NavMain({ items = [], position }: { items: NavItem[]; position: 
         );
     };
 
-    return (
-        <SidebarGroup className="px-2 py-0 group-data-[collapsible=icon]:px-1">
-            <SidebarGroupLabel className={`flex w-full ${position === 'right' ? 'justify-end' : 'justify-start'}`}>Platform</SidebarGroupLabel>
-            <SidebarMenu>
-                {items.map((item) => {
+    const renderMenuItems = (menuItems: NavItem[]) => (
+        <>
+            {menuItems.map((item) => {
                     const hasChildren = !!item.children?.length;
                     const childActive = hasChildren ? item.children.some((child) => child.href === page.url) : false;
                     // Use manually set state if available, otherwise default to open if child is active
@@ -241,6 +248,31 @@ export function NavMain({ items = [], position }: { items: NavItem[]; position: 
                         </SidebarMenuItem>
                     );
                 })}
+        </>
+    );
+
+    if (groups && groups.length > 0) {
+        return (
+            <>
+                {groups.map((group) => (
+                    <SidebarGroup key={group.title} className="px-2 py-0 group-data-[collapsible=icon]:px-1">
+                        <SidebarGroupLabel className={`flex w-full text-xs font-medium text-muted-foreground ${position === 'right' ? 'justify-end' : 'justify-start'}`}>
+                            {group.title}
+                        </SidebarGroupLabel>
+                        <SidebarMenu>
+                            {renderMenuItems(group.items)}
+                        </SidebarMenu>
+                    </SidebarGroup>
+                ))}
+            </>
+        );
+    }
+
+    return (
+        <SidebarGroup className="px-2 py-0 group-data-[collapsible=icon]:px-1">
+            <SidebarGroupLabel className={`flex w-full ${position === 'right' ? 'justify-end' : 'justify-start'}`}>Platform</SidebarGroupLabel>
+            <SidebarMenu>
+                {renderMenuItems(items)}
             </SidebarMenu>
         </SidebarGroup>
     );

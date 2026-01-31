@@ -151,11 +151,10 @@ if (typeof window !== 'undefined') {
     
     // Handle Inertia errors - especially for external redirect CORS issues
     router.on('error', (event) => {
-        const error = event.detail.error;
-        // If this looks like a CORS error from an external redirect,
-        // the server should have already handled it with Inertia::location()
-        // But as a fallback, we can check the response for external URLs
-        console.error('Inertia navigation error:', error);
+        const error = event.detail?.error;
+        if (error != null) {
+            console.error('Inertia navigation error:', error);
+        }
     });
     
     // Handle invalid responses (like when server returns a redirect to external URL)

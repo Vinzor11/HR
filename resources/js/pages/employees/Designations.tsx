@@ -408,6 +408,7 @@ export default function DesignationsPage({
             </CardContent>
           </Card>
         ) : (
+          <div className="max-w-4xl mx-auto">
           <div className="grid gap-4">
             {designations.map((designation) => {
               const unit = designation.unit
@@ -585,12 +586,13 @@ export default function DesignationsPage({
               )
             })}
           </div>
+          </div>
         )}
       </PageLayout>
 
       {/* Create/Edit Designation Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[600px] md:max-w-[700px] lg:max-w-[830px] max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingDesignation ? 'Edit Designation' : 'Add Designation'}

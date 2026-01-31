@@ -80,7 +80,8 @@ class TwoFactorVerificationController extends Controller
                 ]);
             }
 
-            $valid = $google2fa->verifyKey($user->two_factor_secret, $code);
+            // Window 4 = ±2 min tolerance for clock drift between server and device
+            $valid = $google2fa->verifyKey($user->two_factor_secret, $code, 4);
 
             if (!$valid) {
                 throw ValidationException::withMessages([

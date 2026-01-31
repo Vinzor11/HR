@@ -176,6 +176,15 @@ class SuperAdminSeeder extends Seeder
             ['name' => 'force-delete-training', 'module' => 'Trainings', 'label' => 'Force Delete Training', 'description' => 'Can permanently delete trainings'],
 
             // =============================================
+            // OAUTH CLIENTS MODULE
+            // =============================================
+            ['name' => 'access-oauth-clients', 'module' => 'OAuth', 'label' => 'Access OAuth Clients', 'description' => 'Can access OAuth client management'],
+            ['name' => 'create-oauth-client', 'module' => 'OAuth', 'label' => 'Create OAuth Client', 'description' => 'Can create new OAuth clients'],
+            ['name' => 'edit-oauth-client', 'module' => 'OAuth', 'label' => 'Edit OAuth Client', 'description' => 'Can edit OAuth client configuration'],
+            ['name' => 'delete-oauth-client', 'module' => 'OAuth', 'label' => 'Delete OAuth Client', 'description' => 'Can delete OAuth clients (requires 2FA)'],
+            ['name' => 'view-oauth-client', 'module' => 'OAuth', 'label' => 'View OAuth Client', 'description' => 'Can view OAuth client details'],
+
+            // =============================================
             // AUDIT LOGS MODULE (Unified logging - replaces all individual log permissions)
             // =============================================
             ['name' => 'view-audit-logs', 'module' => 'Audit Logs', 'label' => 'View Audit Logs', 'description' => 'Can view unified audit logs across all modules'],

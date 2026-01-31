@@ -215,22 +215,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // OAuth Client Management
     Route::get('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'index'])
         ->name('oauth.clients')
-        ->middleware('permission:access-users-module');
+        ->middleware('permission:access-oauth-clients');
+    Route::get('oauth/clients/test', fn () => redirect()->route('oauth.clients'))
+        ->name('oauth.clients.test')
+        ->middleware('permission:access-oauth-clients');
+    Route::get('oauth/clients/userinfo-preview', [App\Http\Controllers\OAuth\ClientController::class, 'userinfoPreview'])
+        ->name('oauth.clients.userinfo-preview')
+        ->middleware('permission:access-oauth-clients');
     Route::post('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'store'])
         ->name('oauth.clients.store')
-        ->middleware('permission:access-users-module');
+        ->middleware('permission:access-oauth-clients');
     Route::get('oauth/clients/{id}/edit', [App\Http\Controllers\OAuth\ClientController::class, 'edit'])
         ->name('oauth.clients.edit')
-        ->middleware('permission:access-users-module');
+        ->middleware('permission:access-oauth-clients');
+    Route::get('oauth/clients/{id}/form-data', [App\Http\Controllers\OAuth\ClientController::class, 'formData'])
+        ->name('oauth.clients.form-data')
+        ->middleware('permission:access-oauth-clients');
     Route::put('oauth/clients/{id}', [App\Http\Controllers\OAuth\ClientController::class, 'update'])
         ->name('oauth.clients.update')
-        ->middleware('permission:access-users-module');
+        ->middleware('permission:access-oauth-clients');
     Route::get('oauth/clients/{id}', [App\Http\Controllers\OAuth\ClientController::class, 'show'])
         ->name('oauth.clients.show')
-        ->middleware('permission:access-users-module');
+        ->middleware('permission:access-oauth-clients');
     Route::delete('oauth/clients/{id}', [App\Http\Controllers\OAuth\ClientController::class, 'destroy'])
         ->name('oauth.clients.destroy')
-        ->middleware('permission:access-users-module');
+        ->middleware('permission:delete-oauth-client');
 
     // Log Viewer Routes (Super Admin only)
     Route::get('admin/logs', [App\Http\Controllers\LogViewController::class, 'index'])

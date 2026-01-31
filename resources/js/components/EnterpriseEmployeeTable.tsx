@@ -13,6 +13,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 import { route } from 'ziggy-js';
 
 // Helper function
@@ -227,6 +237,13 @@ export const EnterpriseEmployeeTable = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [stickyPositions, setStickyPositions] = useState<number[]>([]);
   const [autoDetectedCardMode, setAutoDetectedCardMode] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDeleteRoute, setPendingDeleteRoute] = useState<string | null>(null);
+  const [pendingDeleteMessage, setPendingDeleteMessage] = useState<string>('');
+  const [forceDeleteDialogOpen, setForceDeleteDialogOpen] = useState(false);
+  const [pendingForceDeleteId, setPendingForceDeleteId] = useState<string | number | null>(null);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [pendingRestoreId, setPendingRestoreId] = useState<string | number | null>(null);
   
   // Determine if we should show card mode
   const isCardMode = viewMode === 'card' || (viewMode === 'auto' && autoDetectedCardMode);
@@ -488,9 +505,8 @@ export const EnterpriseEmployeeTable = ({
               tooltip="Restore"
               variant="ghost"
               onClick={() => {
-                if (confirm('Are you sure you want to restore this item?')) {
-                  onRestore(row.id!);
-                }
+                setPendingRestoreId(row.id!);
+                setRestoreDialogOpen(true);
               }}
               aria-label="Restore"
               className="h-9 w-9 rounded-lg"
@@ -502,9 +518,8 @@ export const EnterpriseEmployeeTable = ({
               tooltip="Permanently Delete"
               variant="ghost"
               onClick={() => {
-                if (confirm('Are you sure you want to permanently delete this item? This action cannot be undone.')) {
-                  onForceDelete(row.id!);
-                }
+                setPendingForceDeleteId(row.id!);
+                setForceDeleteDialogOpen(true);
               }}
               aria-label="Permanently Delete"
               className="h-9 w-9 rounded-lg"
@@ -573,13 +588,14 @@ export const EnterpriseEmployeeTable = ({
                 tooltip={actionLabel}
                 variant="ghost"
                 onClick={() => {
-                  if (!confirm(confirmMessage)) return;
                   const rowId = getRowId(row);
                   if (!rowId) {
                     console.error('Delete action: row ID is missing', row);
                     return;
                   }
-                  onDelete(buildRoute(action.route!, rowId));
+                  setPendingDeleteMessage(confirmMessage);
+                  setPendingDeleteRoute(buildRoute(action.route!, rowId));
+                  setDeleteDialogOpen(true);
                 }}
                 aria-label={actionLabel}
                 className="h-9 w-9 rounded-lg"
@@ -657,6 +673,31 @@ export const EnterpriseEmployeeTable = ({
     !secondaryColumns.includes(col) &&
     col.key !== 'status'
   );
+
+  const handleConfirmDelete = () => {
+    if (pendingDeleteRoute && onDelete) {
+      onDelete(pendingDeleteRoute);
+      setDeleteDialogOpen(false);
+      setPendingDeleteRoute(null);
+      setPendingDeleteMessage('');
+    }
+  };
+
+  const handleConfirmForceDelete = () => {
+    if (pendingForceDeleteId != null && onForceDelete) {
+      onForceDelete(pendingForceDeleteId);
+      setForceDeleteDialogOpen(false);
+      setPendingForceDeleteId(null);
+    }
+  };
+
+  const handleConfirmRestore = () => {
+    if (pendingRestoreId != null && onRestore) {
+      onRestore(pendingRestoreId);
+      setRestoreDialogOpen(false);
+      setPendingRestoreId(null);
+    }
+  };
 
   // Render card view
   const renderCardView = () => {
@@ -936,13 +977,74 @@ export const EnterpriseEmployeeTable = ({
   // If in card mode, render cards instead of table
   if (isCardMode) {
     return (
-      <div ref={containerRef} className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
-        {renderCardView()}
-      </div>
+      <>
+        <div ref={containerRef} className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+          {renderCardView()}
+        </div>
+        <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteRoute(null);
+            setPendingDeleteMessage('');
+          }
+          setDeleteDialogOpen(open);
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm delete</AlertDialogTitle>
+              <AlertDialogDescription>{pendingDeleteMessage || 'Are you sure you want to delete this item?'}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={restoreDialogOpen} onOpenChange={(open) => {
+          if (!open) setPendingRestoreId(null);
+          setRestoreDialogOpen(open);
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm restore</AlertDialogTitle>
+              <AlertDialogDescription>Are you sure you want to restore this item?</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmRestore}>Restore</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={forceDeleteDialogOpen} onOpenChange={(open) => {
+          if (!open) setPendingForceDeleteId(null);
+          setForceDeleteDialogOpen(open);
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Permanently delete</AlertDialogTitle>
+              <AlertDialogDescription>Are you sure you want to permanently delete this item? This action cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmForceDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Permanently delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
     );
   }
 
   return (
+    <>
     <div ref={containerRef} className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
       <div ref={scrollContainerRef} className="overflow-x-auto">
         <table ref={tableRef} className="w-full divide-y divide-border/50">
@@ -1150,6 +1252,66 @@ export const EnterpriseEmployeeTable = ({
         </table>
       </div>
     </div>
+
+    <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+      if (!open) {
+        setPendingDeleteRoute(null);
+        setPendingDeleteMessage('');
+      }
+      setDeleteDialogOpen(open);
+    }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm delete</AlertDialogTitle>
+          <AlertDialogDescription>{pendingDeleteMessage || 'Are you sure you want to delete this item?'}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmDelete}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog open={restoreDialogOpen} onOpenChange={(open) => {
+      if (!open) setPendingRestoreId(null);
+      setRestoreDialogOpen(open);
+    }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm restore</AlertDialogTitle>
+          <AlertDialogDescription>Are you sure you want to restore this item?</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmRestore}>Restore</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog open={forceDeleteDialogOpen} onOpenChange={(open) => {
+      if (!open) setPendingForceDeleteId(null);
+      setForceDeleteDialogOpen(open);
+    }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Permanently delete</AlertDialogTitle>
+          <AlertDialogDescription>Are you sure you want to permanently delete this item? This action cannot be undone.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmForceDelete}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Permanently delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 };
 

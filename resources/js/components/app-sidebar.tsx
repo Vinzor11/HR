@@ -3,198 +3,91 @@ import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useLayout } from '@/contexts/LayoutContext';
-import { type NavItem } from '@/types';
+import { type NavItem, type NavGroup } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FileText, Folder, LayoutGrid, Lock, Shield, Users, IdCard, Landmark , Briefcase, GraduationCap, UserCheck, Clock, List, Calendar, CalendarDays, School, Settings, Wallet, FileSearch } from 'lucide-react';
+import { BookOpen, FileText, Folder, Key, LayoutGrid, Lock, Shield, Users, IdCard, Landmark , Briefcase, GraduationCap, UserCheck, Clock, List, Calendar, CalendarDays, School, Settings, Wallet, FileSearch } from 'lucide-react';
 import AppLogo from './app-logo';
 
+const GROUP_ORDER = ['Overview', 'Administration', 'People', 'Organization', 'Operations', 'System'] as const;
+
 const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: '/dashboard',
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Permissions',
-        href: '/permissions',
-        icon: Lock,
-        permission: 'access-permissions-module',
-    },
-    {
-        title: 'Roles',
-        href: '/roles',
-        icon: Shield,
-        permission: 'access-roles-module',
-    },
-    {
-        title: 'Employees',
-        icon: IdCard,
-        permission: 'access-employees-module',
-        children: [
-            {
-                title: 'Employees',
-                href: '/employees',
-                icon: IdCard,
-                permission: 'access-employees-module',
-            },
-        ],
-    },
+    // Overview
+    { title: 'Dashboard', href: '/dashboard', icon: LayoutGrid, group: 'Overview' },
+    // Administration
+    { title: 'Permissions', href: '/permissions', icon: Lock, permission: 'access-permissions-module', group: 'Administration' },
+    { title: 'Roles', href: '/roles', icon: Shield, permission: 'access-roles-module', group: 'Administration' },
     {
         title: 'Users',
         icon: Users,
         permission: 'access-users-module',
+        group: 'Administration',
         children: [
-            {
-                title: 'Manage Users',
-                href: '/users',
-                icon: Users,
-                permission: 'access-users-module',
-            },
-            {
-                title: 'User Activities',
-                href: '/users/activities',
-                icon: Clock,
-                permission: 'view-user-activities',
-            },
+            { title: 'Manage Users', href: '/users', icon: Users, permission: 'access-users-module' },
+            { title: 'User Activities', href: '/users/activities', icon: Clock, permission: 'view-user-activities' },
         ],
     },
+    { title: 'OAuth Clients', href: '/oauth/clients', icon: Key, permission: 'access-oauth-clients', group: 'Administration' },
+    // People
+    {
+        title: 'Employees',
+        icon: IdCard,
+        permission: 'access-employees-module',
+        group: 'People',
+        children: [
+            { title: 'Employees', href: '/employees', icon: IdCard, permission: 'access-employees-module' },
+        ],
+    },
+    // Organization
     {
         title: 'Org Structure',
         icon: Landmark,
+        group: 'Organization',
         children: [
-            {
-                title: 'Sectors',
-                href: '/sectors',
-                icon: Landmark,
-                permission: 'access-sector',
-            },
-            {
-                title: 'Units',
-                href: '/units',
-                icon: School,
-                permission: 'access-unit',
-            },
-            {
-                title: 'Positions',
-                href: '/positions',
-                icon: Briefcase,
-                permission: 'access-position',
-            },
-            {
-                title: 'Position Whitelist',
-                href: '/unit-positions',
-                icon: Briefcase,
-                permission: 'access-unit-position',
-            },
-            {
-                title: 'Academic Ranks',
-                href: '/academic-ranks',
-                icon: GraduationCap,
-                permission: 'access-academic-rank',
-            },
-            {
-                title: 'Staff Grades',
-                href: '/staff-grades',
-                icon: Wallet,
-                permission: 'access-staff-grade',
-            },
-            {
-                // Legacy Faculties removed - use Sectors/Units instead
-                icon: School,
-                permission: 'access-faculty',
-            },
-            {
-                // Legacy Departments removed - use Sectors/Units instead
-                icon: Landmark,
-                permission: 'access-department',
-            },
+            { title: 'Sectors', href: '/sectors', icon: Landmark, permission: 'access-sector' },
+            { title: 'Units', href: '/units', icon: School, permission: 'access-unit' },
+            { title: 'Positions', href: '/positions', icon: Briefcase, permission: 'access-position' },
+            { title: 'Position Whitelist', href: '/unit-positions', icon: Briefcase, permission: 'access-unit-position' },
+            { title: 'Academic Ranks', href: '/academic-ranks', icon: GraduationCap, permission: 'access-academic-rank' },
+            { title: 'Staff Grades', href: '/staff-grades', icon: Wallet, permission: 'access-staff-grade' },
+            { title: '', icon: School, permission: 'access-faculty' },
+            { title: '', icon: Landmark, permission: 'access-department' },
         ],
     },
+    // Operations
     {
         title: 'Trainings',
         icon: GraduationCap,
+        group: 'Operations',
         children: [
-            {
-                title: 'Manage Training',
-                href: '/trainings',
-                icon: FileText,
-                permission: 'access-trainings-module',
-            },
-            {
-                title: 'Join Training',
-                href: '/trainings/join',
-                icon: UserCheck,
-            },
-            {
-                title: 'Training History',
-                href: '/trainings/logs',
-                icon: FileText,
-            },
-            {
-                title: 'Training Logs',
-                href: '/trainings/overview',
-                icon: LayoutGrid,
-                permission: 'access-trainings-module',
-            },
+            { title: 'Manage Training', href: '/trainings', icon: FileText, permission: 'access-trainings-module' },
+            { title: 'Join Training', href: '/trainings/join', icon: UserCheck },
+            { title: 'Training History', href: '/trainings/logs', icon: FileText },
+            { title: 'Training Logs', href: '/trainings/overview', icon: LayoutGrid, permission: 'access-trainings-module' },
         ],
     },
     {
         title: 'Requests',
         icon: List,
+        group: 'Operations',
         children: [
-            {
-                title: 'Request Center',
-                href: '/requests',
-                icon: List,
-            },
-            {
-                title: 'Request Builder',
-                href: '/request-types',
-                icon: FileText,
-                permission: 'access-request-types-module',
-            },
-            {
-                title: 'Certificate Templates',
-                href: '/certificate-templates',
-                icon: FileText,
-                permission: 'access-request-types-module',
-            },
+            { title: 'Request Center', href: '/requests', icon: List },
+            { title: 'Request Builder', href: '/request-types', icon: FileText, permission: 'access-request-types-module' },
+            { title: 'Certificate Templates', href: '/certificate-templates', icon: FileText, permission: 'access-request-types-module' },
         ],
     },
     {
         title: 'Leaves',
         icon: CalendarDays,
+        group: 'Operations',
         children: [
-            {
-                title: 'My Leave Balance',
-                href: '/leaves/balance',
-                icon: Calendar,
-            },
-            {
-                title: 'Leave Calendar',
-                href: '/leaves/calendar',
-                icon: CalendarDays,
-                permission: 'access-leave-calendar',
-            },
-            {
-                title: 'Leave History',
-                href: '/leaves/history',
-                icon: FileText,
-            },
-            {
-                title: 'Manage Balances',
-                href: '/admin/leave-balances',
-                icon: Wallet,
-                permission: 'manage-leave-balances',
-            },
+            { title: 'My Leave Balance', href: '/leaves/balance', icon: Calendar },
+            { title: 'Leave Calendar', href: '/leaves/calendar', icon: CalendarDays, permission: 'access-leave-calendar' },
+            { title: 'Leave History', href: '/leaves/history', icon: FileText },
+            { title: 'Manage Balances', href: '/admin/leave-balances', icon: Wallet, permission: 'manage-leave-balances' },
         ],
     },
-    {
-        title: 'Audit Logs',
-        href: '/audit-logs',
-        icon: FileSearch,
-        permission: 'view-audit-logs',
-    },
+    // System
+    { title: 'Audit Logs', href: '/audit-logs', icon: FileSearch, permission: 'view-audit-logs', group: 'System' },
 ];
 
 const footerNavItems: NavItem[] = [
@@ -243,35 +136,44 @@ export function AppSidebar() {
                 // If only one child is visible, flatten it - return the child as a direct menu item
                 if (item.children.length === 1) {
                     const singleChild = item.children[0];
-                    // Return the child as a direct menu item (no parent)
                     return [{
                         ...singleChild,
-                        // Keep the parent's icon if child doesn't have one, or use child's icon
                         icon: singleChild.icon || item.icon,
+                        group: item.group,
                     }];
                 }
-                // If multiple children are visible, return the parent with children
                 return [item];
             }
-            
+
             // If item has no children, check permission requirement
             if (item.permission) {
-                // Item with permission requirement: only show if user has permission
                 if (!permissions.includes(item.permission)) {
-                    return []; // Hide item
+                    return [];
                 }
             }
-            
-            // Item with no children and no permission requirement (like Dashboard): always show
+
             return [item];
         })
         .filter((item): item is NavItem => {
-            // Final filter: if item has children, ensure at least one is visible
             if (item.children && item.children.length > 0) {
                 return item.children.length > 0;
             }
             return true;
         });
+
+    // Build groups in fixed order; only include groups that have items
+    const byGroup: Record<string, NavItem[]> = {};
+    filteredNavItems.forEach((item) => {
+        const key = item.group || 'Other';
+        if (!byGroup[key]) byGroup[key] = [];
+        byGroup[key].push(item);
+    });
+    const filteredGroups: NavGroup[] = GROUP_ORDER
+        .filter((key) => byGroup[key]?.length)
+        .map((key) => ({ title: key, items: byGroup[key]! }));
+    if (byGroup['Other']?.length) {
+        filteredGroups.push({ title: 'Other', items: byGroup['Other'] });
+    }
 
     return (
         <Sidebar side={position} collapsible="icon" variant="inset">
@@ -288,7 +190,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={filteredNavItems} position={position} />
+                <NavMain groups={filteredGroups} position={position} />
             </SidebarContent>
 
             <SidebarFooter>

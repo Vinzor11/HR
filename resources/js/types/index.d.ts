@@ -22,6 +22,8 @@ export interface NavItem {
     isActive?: boolean;
     permission?: string;
     children?: NavItem[];
+    /** Sidebar group key for grouping menu items (e.g. 'Overview', 'Administration') */
+    group?: string;
 }
 
 export interface SharedData {

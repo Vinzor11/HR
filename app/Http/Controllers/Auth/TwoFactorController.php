@@ -59,8 +59,8 @@ class TwoFactorController extends Controller
         $user = Auth::user();
         $google2fa = new Google2FA();
 
-        // Verify the code
-        $valid = $google2fa->verifyKey($user->two_factor_secret, $request->code);
+        // Verify the code (window 4 = ±2 min tolerance for clock drift)
+        $valid = $google2fa->verifyKey($user->two_factor_secret, $request->code, 4);
 
         if (!$valid) {
             return back()->withErrors(['code' => 'The provided two factor authentication code was invalid.']);
@@ -116,7 +116,8 @@ class TwoFactorController extends Controller
         }
 
         $google2fa = new Google2FA();
-        $valid = $google2fa->verifyKey($user->two_factor_secret, $request->two_factor_code);
+        // Window 4 = ±2 min tolerance for clock drift between server and device
+        $valid = $google2fa->verifyKey($user->two_factor_secret, $request->two_factor_code, 4);
 
         if (!$valid) {
             return back()->withErrors(['two_factor_code' => 'The verification code is invalid or has expired.']);
