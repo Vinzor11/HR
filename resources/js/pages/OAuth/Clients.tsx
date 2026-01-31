@@ -435,6 +435,12 @@ export default function Clients({ clients, units, positions }: ClientsProps) {
                 }}
             >
                 <div className="space-y-6">
+                    <div className="flex justify-end">
+                        <Button variant="outline" size="sm" onClick={() => router.visit(route('oauth.clients.test'))}>
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            OAuth Test Page
+                        </Button>
+                    </div>
                     {newClient && (
                     <Card className="border-green-500 bg-green-50 dark:bg-green-950 rounded-xl shadow-sm">
                         <CardHeader>

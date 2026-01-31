@@ -216,7 +216,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('oauth/clients', [App\Http\Controllers\OAuth\ClientController::class, 'index'])
         ->name('oauth.clients')
         ->middleware('permission:access-oauth-clients');
-    Route::get('oauth/clients/test', fn () => redirect()->route('oauth.clients'))
+    Route::get('oauth/clients/test', [App\Http\Controllers\OAuth\ClientController::class, 'testPage'])
         ->name('oauth.clients.test')
         ->middleware('permission:access-oauth-clients');
     Route::get('oauth/clients/userinfo-preview', [App\Http\Controllers\OAuth\ClientController::class, 'userinfoPreview'])
