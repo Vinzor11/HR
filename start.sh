@@ -50,7 +50,10 @@ fi
 
 # Run migrations on every deploy/rebuild (--force for non-interactive)
 echo "Running database migrations..."
-php artisan migrate --force
+if ! php artisan migrate --force; then
+    echo "ERROR: Database migration failed. Deploy aborted. Run 'php artisan migrate --force' manually and check logs."
+    exit 1
+fi
 
 # Run seeders (e.g. LegacyCleanupSeeder via DatabaseSeeder; skip if none)
 echo "Running database seeders..."
