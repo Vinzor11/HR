@@ -34,6 +34,7 @@ import {
   DollarSign,
   Menu,
   X,
+  FileDown,
 } from 'lucide-react';
 
 interface Employee {
@@ -102,6 +103,8 @@ interface Employee {
   questionnaire?: any[];
   primary_designation?: {
     id: number;
+    start_date?: string | null;
+    end_date?: string | null;
     unit?: { id: number; name: string; unit_type?: string } | null;
     position?: { id: number; pos_name: string } | null;
     academic_rank?: { id: number; name: string } | null;
@@ -237,7 +240,21 @@ export default function EmployeeProfile({
   const hasChildren = Boolean(employee.children && employee.children.length > 0);
   const hasEducation = Boolean(employee.educational_background && employee.educational_background.length > 0);
   const hasEligibility = Boolean(employee.civil_service_eligibility && employee.civil_service_eligibility.length > 0);
-  const hasWorkExperience = Boolean(employee.work_experience && employee.work_experience.length > 0);
+  const currentDesignationAsWork = employee.primary_designation
+    ? {
+        position_title: employee.primary_designation.position?.pos_name ?? 'N/A',
+        company_name: 'Eastern Samar State University (Main Campus)',
+        date_from: employee.primary_designation.start_date ?? employee.date_hired ?? null,
+        date_to: employee.primary_designation.end_date ?? null,
+        monthly_salary: employee.salary ?? null,
+        status_of_appointment: employee.employment_status ?? null,
+      }
+    : null;
+  const displayWorkExperience =
+    currentDesignationAsWork != null
+      ? [currentDesignationAsWork, ...(employee.work_experience ?? [])]
+      : (employee.work_experience ?? []);
+  const hasWorkExperience = displayWorkExperience.length > 0;
   const hasVoluntaryWork = Boolean(employee.voluntary_work && employee.voluntary_work.length > 0);
   const hasLearningDevelopment = Boolean(employee.learning_development && employee.learning_development.length > 0);
   const hasOtherInformation = Boolean(
@@ -356,6 +373,16 @@ export default function EmployeeProfile({
                       <div className="flex flex-wrap items-center gap-3 mb-3">
                         <h1 className="text-4xl font-bold text-foreground tracking-tight">{fullName}</h1>
                         <StatusBadge status={employee.status} />
+                        <a href={`/employees/${employee.id}/export/cs-form-212`} className="inline-flex ml-auto">
+                          <Button
+                            size="sm"
+                            type="button"
+                            className="pointer-events-none bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-500/50"
+                          >
+                            <FileDown className="h-4 w-4 mr-2" />
+                            Export CS Form 212
+                          </Button>
+                        </a>
                       </div>
                       <div className="space-y-1">
                         <p className="text-foreground text-xl font-semibold">
@@ -947,32 +974,45 @@ export default function EmployeeProfile({
                   </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="space-y-5">
+                  <div className="relative">
+                    {/* Vertical line through center of circles */}
+                    <div
+                      className="absolute top-0 bottom-0 w-0.5 bg-border -translate-x-1/2"
+                      style={{ left: '24px' }}
+                      aria-hidden
+                    />
                     {employee.educational_background.map((edu: any, idx: number) => (
-                      <div key={idx} className="border-l-4 border-primary pl-4 py-2">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-lg">{edu.level || 'N/A'}</h4>
-                            {edu.school_name && (
-                              <p className="text-sm text-muted-foreground mt-1">{edu.school_name}</p>
+                      <div key={idx} className="relative flex gap-4 pb-8 last:pb-0">
+                        {/* Green circle centered on line */}
+                        <div className="relative z-10 flex w-12 shrink-0 items-center justify-center">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
+                            <GraduationCap className="h-5 w-5 text-primary-foreground" />
+                          </div>
+                        </div>
+                        {/* Content */}
+                        <div className="flex-1 pt-0.5 min-w-0">
+                          <h4 className="font-semibold text-lg">
+                            {edu.degree_course || edu.level || 'N/A'}
+                          </h4>
+                          {edu.level && edu.degree_course && (
+                            <p className="text-sm text-muted-foreground mt-1">{edu.level}</p>
+                          )}
+                          {edu.school_name && (
+                            <p className="text-sm font-medium text-primary mt-1">{edu.school_name}</p>
+                          )}
+                          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                            {edu.year_graduated && (
+                              <span>Graduated: {edu.year_graduated}</span>
                             )}
-                            {edu.degree_course && (
-                              <p className="text-sm font-medium mt-1">{edu.degree_course}</p>
-                            )}
-                            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                              {edu.year_graduated && (
-                                <span>Graduated: {edu.year_graduated}</span>
-                              )}
-                              {edu.highest_level_units_earned && (
-                                <span>Units: {edu.highest_level_units_earned}</span>
-                              )}
-                            </div>
-                            {edu.scholarship_academic_honors && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Honors: {edu.scholarship_academic_honors}
-                              </p>
+                            {edu.highest_level_units_earned && (
+                              <span>Units: {edu.highest_level_units_earned}</span>
                             )}
                           </div>
+                          {edu.scholarship_academic_honors && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Honors: {edu.scholarship_academic_honors}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1022,7 +1062,7 @@ export default function EmployeeProfile({
             )}
 
             {/* Work Experience */}
-            {employee.work_experience && employee.work_experience.length > 0 && (
+            {hasWorkExperience && (
               <Card className="shadow-sm" id="work-experience">
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
@@ -1033,40 +1073,50 @@ export default function EmployeeProfile({
                   </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="space-y-5">
-                    {employee.work_experience.map((exp: any, idx: number) => (
-                      <div key={idx} className="border-l-4 border-primary pl-4 py-3">
-                        <h4 className="font-semibold text-lg">{exp.position_title || 'N/A'}</h4>
-                        <p className="text-sm font-medium text-primary mt-1">{exp.company_name || 'N/A'}</p>
-                        <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-                          {exp.date_from && (
-                            <span>From: {formatDate(exp.date_from)}</span>
-                          )}
-                          {exp.date_to && (
-                            <span>To: {formatDate(exp.date_to)}</span>
-                          )}
-                          {!exp.date_to && <span className="text-green-600 font-medium">Present</span>}
+                  <div className="relative">
+                    {/* Vertical line through center of circles */}
+                    <div
+                      className="absolute top-0 bottom-0 w-0.5 bg-border -translate-x-1/2"
+                      style={{ left: '24px' }}
+                      aria-hidden
+                    />
+                    {displayWorkExperience.map((exp: any, idx: number) => (
+                      <div key={idx} className="relative flex gap-4 pb-8 last:pb-0">
+                        {/* Green circle centered on line */}
+                        <div className="relative z-10 flex w-12 shrink-0 items-center justify-center">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
+                            <BriefcaseBusiness className="h-5 w-5 text-primary-foreground" />
+                          </div>
                         </div>
-                        {exp.monthly_salary && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Salary: ₱{parseFloat(exp.monthly_salary).toLocaleString()}/month
-                          </p>
-                        )}
-                        {exp.salary_job_pay_grade && (
-                          <p className="text-sm text-muted-foreground">
-                            Pay Grade: {exp.salary_job_pay_grade}
-                          </p>
-                        )}
-                        {exp.status_of_appointment && (
-                          <p className="text-sm text-muted-foreground">
-                            Status: {exp.status_of_appointment}
-                          </p>
-                        )}
-                        {exp.is_government_service !== undefined && (
-                          <Badge variant="outline" className="mt-2">
-                            {exp.is_government_service ? 'Government Service' : 'Private Service'}
-                          </Badge>
-                        )}
+                        {/* Content */}
+                        <div className="flex-1 pt-0.5 min-w-0">
+                          <h4 className="font-semibold text-lg">{exp.position_title || 'N/A'}</h4>
+                          <p className="text-sm font-medium text-primary mt-1">{exp.company_name || 'N/A'}</p>
+                          <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
+                            {exp.date_from && (
+                              <span>From: {formatDate(exp.date_from)}</span>
+                            )}
+                            {exp.date_to && (
+                              <span>To: {formatDate(exp.date_to)}</span>
+                            )}
+                            {!exp.date_to && <span className="text-green-600 font-medium">Present</span>}
+                          </div>
+                          {exp.monthly_salary != null && exp.monthly_salary !== '' && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Salary: ₱{parseFloat(String(exp.monthly_salary)).toLocaleString()}/month
+                            </p>
+                          )}
+                          {exp.salary_job_pay_grade && (
+                            <p className="text-sm text-muted-foreground">
+                              Pay Grade: {exp.salary_job_pay_grade}
+                            </p>
+                          )}
+                          {exp.status_of_appointment && (
+                            <p className="text-sm text-muted-foreground">
+                              Status: {exp.status_of_appointment}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

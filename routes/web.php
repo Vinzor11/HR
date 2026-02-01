@@ -71,6 +71,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/employees/import/cs-form-212', [EmployeeController::class, 'importCsForm212'])
         ->name('employees.import.cs_form_212')
         ->middleware('permission:access-employees-module');
+    Route::get('/employees/{employee}/export/cs-form-212', [EmployeeController::class, 'exportCsForm212'])
+        ->name('employees.export.cs_form_212');
     // Unified Audit Logs (replaces all module-specific logs)
     Route::get('/audit-logs', [App\Http\Controllers\AuditLogController::class, 'index'])->name('audit-logs.index')->middleware('permission:view-audit-logs');
     Route::get('/audit-logs/export', [App\Http\Controllers\AuditLogController::class, 'export'])->name('audit-logs.export')->middleware('permission:view-audit-logs');

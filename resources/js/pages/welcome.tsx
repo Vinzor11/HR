@@ -1,10 +1,7 @@
-import { type SharedData } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { buttonVariants } from '@/components/ui/button';
+import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
 export default function Welcome() {
-    const { auth } = usePage<SharedData>().props;
 
     // Dynamic background based on time
     const [backgroundImage, setBackgroundImage] = useState('/images/landing-page.png');
@@ -41,26 +38,6 @@ export default function Welcome() {
             <div className="flex min-h-screen flex-col items-center bg-cover bg-[center_top] bg-no-repeat text-[#1b1b18] lg:justify-center relative" style={{backgroundImage: `url("${backgroundImage}")`}}>
                 <div className="absolute inset-0 bg-white/15 dark:bg-black/10"></div>
 
-                {/* Top right navigation */}
-                <header className="absolute top-4 right-4 z-20 text-sm">
-                    <nav className="flex items-center gap-4">
-                        {auth.user ? (
-                            <Link href={route('dashboard')} className={buttonVariants({ size: 'sm' })}>
-                                Dashboard
-                            </Link>
-                        ) : (
-                            <>
-                                <Link href={route('login')} className={buttonVariants({ size: 'sm' })}>
-                                    Log in
-                                </Link>
-                                <Link href={route('register')} className={buttonVariants({ size: 'sm' })}>
-                                    Register
-                                </Link>
-                            </>
-                        )}
-                    </nav>
-                </header>
-
                 <div className="relative z-10 flex w-full flex-col items-center">
                 <div className="flex w-full items-center justify-center opacity-100 transition-opacity duration-750 lg:grow pt-12 starting:opacity-0">
                     <main className="w-full max-w-6xl px-6">
@@ -83,8 +60,8 @@ export default function Welcome() {
                             </p>
                         </div>
 
-                        {/* System Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                        {/* System Cards (alphabetical) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <a
                                 href="https://essu-admission.online/login"
                                 target="_blank"
@@ -101,6 +78,21 @@ export default function Welcome() {
                                     <p className="text-white/80 text-sm">Student admission and enrollment</p>
                                 </div>
                             </a>
+
+                            <Link
+                                href={route('login')}
+                                className="group bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:bg-white/20 hover:scale-105 transition-all duration-300"
+                            >
+                                <div className="text-center">
+                                    <div className="w-16 h-16 bg-[#118d0b] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-[#0f7a0a] transition-colors">
+                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                        </svg>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">Human Resource System</h3>
+                                    <p className="text-white/80 text-sm">Employee and HR management</p>
+                                </div>
+                            </Link>
 
                             <a
                                 href="https://infirmary.great-site.net"

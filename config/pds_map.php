@@ -6,10 +6,16 @@
  * All coordinates below reference the officially published CSC Excel template
  * (Revised 2017). If your copy of the form differs, simply update the cell
  * references or column letters—no PHP changes are required.
+ *
+ * For export: template_path is the path to the official form XLSX (relative to
+ * storage_path() or absolute). Export fills this template with employee data.
  */
 
 return [
     'default_sheet' => 'C1',
+
+    /** Path to CS Form 212 template XLSX for export (same form as import; relative to storage_path() or absolute). */
+    'template_path' => 'tmp/Personal-Data-Sheet-CS-Form-No.-212-Revised-2017.xlsx',
 
     'single_fields' => [
         // Identification (Sheet C1)

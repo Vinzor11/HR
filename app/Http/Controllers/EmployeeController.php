@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\CsForm212Exporter;
 use App\Imports\CsForm212Importer;
 use App\Models\Employee;
 use App\Models\EmployeeChildren;
@@ -1132,6 +1133,33 @@ class EmployeeController extends Controller
             ->with('success', 'CS Form 212 data extracted successfully. Review the auto-filled form before saving.');
     }
 
+    /**
+     * Export employee data to CS Form 212 (Personal Data Sheet) XLSX format.
+     * User may export their own profile or have access-employees-module permission.
+     */
+    public function exportCsForm212(Request $request, Employee $employee)
+    {
+        $user = $request->user();
+        $canExportOwn = $user->employee_id && (string) $user->employee_id === (string) $employee->id;
+        $canExportOthers = $user->can('access-employees-module');
+        if (!$canExportOwn && !$canExportOthers) {
+            abort(403, 'You are not authorized to export this employee\'s CS Form 212.');
+        }
+
+        try {
+            $exporter = new CsForm212Exporter();
+            $tempPath = $exporter->export($employee);
+        } catch (\Throwable $e) {
+            \Log::error('CS Form 212 export failed', ['employee_id' => $employee->id, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return back()->with('error', 'Failed to export CS Form 212. Please try again or contact support.');
+        }
+
+        $filename = 'CS-Form-212-' . preg_replace('/[^a-zA-Z0-9_-]/', '-', $employee->surname . '-' . $employee->first_name) . '-' . $employee->id . '.xlsx';
+        return response()->download($tempPath, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
     public function store(Request $request)
     {
         abort_unless($request->user()->can('create-employee'), 403, 'Unauthorized action.');
@@ -1310,6 +1338,8 @@ class EmployeeController extends Controller
             // Legacy department/position removed - use primary_designation instead
             'primary_designation' => $employee->primaryDesignation ? [
                 'id' => $employee->primaryDesignation->id,
+                'start_date' => $employee->primaryDesignation->start_date ? $employee->primaryDesignation->start_date->format('Y-m-d') : null,
+                'end_date' => $employee->primaryDesignation->end_date ? $employee->primaryDesignation->end_date->format('Y-m-d') : null,
                 'unit' => $employee->primaryDesignation->unit ? [
                     'id' => $employee->primaryDesignation->unit->id,
                     'name' => $employee->primaryDesignation->unit->name,
