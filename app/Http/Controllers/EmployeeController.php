@@ -1562,11 +1562,15 @@ class EmployeeController extends Controller
             ->values()
             ->toArray();
 
+        $user = $request->user();
+        $isOwnProfile = $user->employee_id && (string) $user->employee_id === (string) $employee->id;
+
         return Inertia::render('employees/Profile', [
             'employee' => $employeeData,
             'employmentHistory' => $employmentHistory,
-            'canEdit' => $request->user()->can('edit-employee'),
-            'canPromote' => $request->user()->can('promote-employee'),
+            'canEdit' => $user->can('edit-employee'),
+            'canPromote' => $user->can('promote-employee'),
+            'isOwnProfile' => $isOwnProfile,
         ]);
     }
 

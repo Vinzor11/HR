@@ -128,6 +128,7 @@ interface ProfilePageProps {
   employmentHistory?: EmploymentHistoryItem[];
   canEdit?: boolean;
   canPromote?: boolean;
+  isOwnProfile?: boolean;
 }
 
 const formatDate = (dateString: string | null | undefined): string => {
@@ -190,7 +191,8 @@ export default function EmployeeProfile({
   employee, 
   employmentHistory = [], 
   canEdit = false, 
-  canPromote = false
+  canPromote = false,
+  isOwnProfile = false
 }: ProfilePageProps) {
   // Safety check: ensure employee exists and has an ID
   if (!employee || !employee.id) {
@@ -373,16 +375,17 @@ export default function EmployeeProfile({
                       <div className="flex flex-wrap items-center gap-3 mb-3">
                         <h1 className="text-4xl font-bold text-foreground tracking-tight">{fullName}</h1>
                         <StatusBadge status={employee.status} />
-                        <a href={`/employees/${employee.id}/export/cs-form-212`} className="inline-flex ml-auto">
-                          <Button
-                            size="sm"
-                            type="button"
-                            className="pointer-events-none bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-500/50"
-                          >
-                            <FileDown className="h-4 w-4 mr-2" />
-                            Export CS Form 212
-                          </Button>
-                        </a>
+                        {isOwnProfile && (
+                          <a href={`/employees/${employee.id}/export/cs-form-212`} className="inline-flex ml-auto">
+                            <Button
+                              type="button"
+                              className="pointer-events-none bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-500/50 h-12 px-6 py-3 text-base min-w-[180px]"
+                            >
+                              <FileDown className="h-5 w-5 mr-2 shrink-0" />
+                              Export CS Form 212
+                            </Button>
+                          </a>
+                        )}
                       </div>
                       <div className="space-y-1">
                         <p className="text-foreground text-xl font-semibold">
