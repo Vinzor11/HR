@@ -186,6 +186,65 @@ class LeaveService
     }
 
     /**
+     * Add carry-over from previous year (mirrors addAccrual structure).
+     * Updates carried_over and entitled; creates accrual record with accrual_date = Jan 1 of target year.
+     */
+    public function addCarryOver(string $employeeId, int $leaveTypeId, float $amount, int $year, string $notes, ?int $createdBy = null, ?LeaveBalance $balance = null): void
+    {
+        $createdBy = $createdBy ?? auth()->id();
+        $accrualDate = Carbon::create($year, 1, 1);
+
+        DB::beginTransaction();
+        try {
+            LeaveAccrual::create([
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'amount' => $amount,
+                'accrual_date' => $accrualDate,
+                'accrual_type' => LeaveAccrual::TYPE_CARRY_OVER,
+                'notes' => $notes,
+                'effective_date' => $accrualDate,
+                'reference_number' => 'CO-' . strtoupper(uniqid()),
+                'created_by' => $createdBy,
+            ]);
+
+            $balance = $balance ?? LeaveBalance::firstOrCreate(
+                [
+                    'employee_id' => $employeeId,
+                    'leave_type_id' => $leaveTypeId,
+                    'year' => $year,
+                ],
+                [
+                    'entitled' => 0, 'accrued' => 0, 'used' => 0, 'pending' => 0,
+                    'balance' => 0, 'carried_over' => 0, 'initial_balance' => 0, 'is_manually_set' => false,
+                ]
+            );
+
+            $balance->carried_over = $amount;
+            $balance->entitled += $amount;
+            $balance->recalculateBalance();
+
+            DB::commit();
+
+            Log::info('Leave balance carry-over processed', [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'to_year' => $year,
+                'carried_over' => $amount,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to add carry-over', [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'amount' => $amount,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Add leave accrual
      */
     public function addAccrual(string $employeeId, int $leaveTypeId, float $amount, string $accrualType = 'manual', string $notes = null, int $year = null, int $createdBy = null): void
@@ -362,11 +421,12 @@ class LeaveService
     /**
      * Process monthly leave accrual for an employee
      * CSC Rule: VL and SL accrue at 1.25 days per month (with proration/cutoff and caps)
+     * Eligibility: Employees only earn credits when designated. Accrual starts from designation start_date.
      */
     public function processMonthlyAccrual(string $employeeId, Carbon $month): void
     {
-        $employee = Employee::findOrFail($employeeId);
-        
+        $employee = Employee::with('designations')->findOrFail($employeeId);
+
         // Only active employees accrue leave
         if ($employee->status !== 'active') {
             return;
@@ -374,21 +434,32 @@ class LeaveService
 
         $year = $month->year;
         $accrualDate = $month->copy()->endOfMonth();
+        $firstDayOfMonth = $month->copy()->startOfMonth();
 
-        // Skip if hired after this month
-        if ($employee->date_hired && $employee->date_hired->gt($accrualDate)) {
+        // Get designation active during this month (start_date <= month end, end_date null or >= month start)
+        $activeDesignation = $employee->designations()
+            ->where('start_date', '<=', $accrualDate)
+            ->where(function ($q) use ($firstDayOfMonth) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $firstDayOfMonth);
+            })
+            ->orderBy('start_date', 'desc')
+            ->first();
+
+        // No designation active in this month - no accrual (credits start when designation starts)
+        if (!$activeDesignation) {
             return;
         }
 
-        $hireDate = $employee->date_hired ? $employee->date_hired->copy() : null;
-        $isHireMonth = $hireDate && $hireDate->isSameMonth($accrualDate) && $hireDate->isSameYear($accrualDate);
-        $eligibleThisMonth = !$hireDate || !$isHireMonth || $hireDate->day < self::ACCRUAL_CUTOFF_DAY;
+        $designationStart = $activeDesignation->start_date->copy();
+        $isDesignationStartMonth = $designationStart->isSameMonth($accrualDate) && $designationStart->isSameYear($accrualDate);
+        $eligibleThisMonth = !$isDesignationStartMonth || $designationStart->day <= self::ACCRUAL_CUTOFF_DAY;
+
         $daysInMonth = $accrualDate->daysInMonth;
-        $daysEmployed = $hireDate
-            ? ($isHireMonth ? $hireDate->diffInDays($accrualDate) + 1 : $daysInMonth)
+        $daysDesignated = $isDesignationStartMonth
+            ? $designationStart->diffInDays($accrualDate) + 1
             : $daysInMonth;
         $proratedRate = $eligibleThisMonth
-            ? round(($daysEmployed / $daysInMonth) * self::MONTHLY_ACCRUAL_RATE, 2)
+            ? round(($daysDesignated / $daysInMonth) * self::MONTHLY_ACCRUAL_RATE, 2)
             : 0.0;
 
         // Accrue VL and SL
@@ -401,12 +472,15 @@ class LeaveService
             }
 
             if ($proratedRate > 0) {
+                $note = $daysDesignated < $daysInMonth
+                    ? "Monthly accrual for {$month->format('F Y')} (prorated from designation start)"
+                    : "Monthly accrual for {$month->format('F Y')}";
                 $this->addAccrual(
                     $employeeId,
                     $leaveType->id,
                     $proratedRate,
                     'monthly',
-                    "Monthly accrual for {$month->format('F Y')} (prorated)",
+                    $note,
                     $year,
                     null
                 );
@@ -921,9 +995,9 @@ class LeaveService
     }
 
     /**
-     * Process carry-over from previous year for a specific employee and year
-     * This can be called to fix balances that were created before carry-over logic was implemented
-     * 
+     * Process carry-over from previous year for a specific employee and year.
+     * Mirrors processMonthlyAccrual structure - uses addCarryOver for consistent accrual records.
+     *
      * @param string $employeeId
      * @param int $year Target year to carry over to
      * @return array Results of carry-over processing
@@ -932,31 +1006,27 @@ class LeaveService
     {
         $results = [];
         $previousYear = $year - 1;
-        
+
         $leaveTypes = LeaveType::active()->where('can_carry_over', true)->get();
-        
+
         foreach ($leaveTypes as $leaveType) {
-            // Get previous year's balance
             $previousBalance = LeaveBalance::where('employee_id', $employeeId)
                 ->where('leave_type_id', $leaveType->id)
                 ->where('year', $previousYear)
                 ->first();
-            
+
             if (!$previousBalance || $previousBalance->balance <= 0) {
                 continue;
             }
-            
-            // Get current year's balance
+
             $currentBalance = LeaveBalance::getOrCreateBalance($employeeId, $leaveType->id, $year);
-            
-            // Check if carry-over has already been processed for this year
+
             $alreadyCarriedOver = LeaveAccrual::forEmployee($employeeId)
                 ->forLeaveType($leaveType->id)
                 ->whereYear('accrual_date', $year)
                 ->ofType(LeaveAccrual::TYPE_CARRY_OVER)
                 ->exists();
-            
-            // Skip if already has carry-over
+
             if ($alreadyCarriedOver || $currentBalance->carried_over > 0) {
                 $results[] = [
                     'leave_type' => $leaveType->code,
@@ -965,53 +1035,33 @@ class LeaveService
                 ];
                 continue;
             }
-            
-            // Calculate carry-over amount with cap
-            $carryOverCap = $leaveType->max_carry_over_days 
+
+            $carryOverCap = $leaveType->max_carry_over_days
                 ? min($leaveType->max_carry_over_days, self::CARRY_OVER_CAP_DAYS)
                 : self::CARRY_OVER_CAP_DAYS;
-            
+
             $carryOverAmount = min($previousBalance->balance, $carryOverCap);
-            
+
             if ($carryOverAmount > 0) {
-                DB::beginTransaction();
                 try {
-                    // Update current year's balance
-                    $currentBalance->carried_over = $carryOverAmount;
-                    $currentBalance->entitled += $carryOverAmount;
-                    $currentBalance->recalculateBalance();
-                    
-                    // Create accrual record
-                    LeaveAccrual::create([
-                        'employee_id' => $employeeId,
-                        'leave_type_id' => $leaveType->id,
-                        'amount' => $carryOverAmount,
-                        'accrual_date' => now(),
-                        'accrual_type' => LeaveAccrual::TYPE_CARRY_OVER,
-                        'notes' => "Carried over from {$previousYear} (balance: {$previousBalance->balance} days, capped at {$carryOverAmount} days)",
-                        'effective_date' => Carbon::create($year, 1, 1),
-                        'reference_number' => 'CO-' . strtoupper(uniqid()),
-                        'created_by' => auth()->id(),
-                    ]);
-                    
-                    DB::commit();
-                    
+                    $notes = "Carry over from {$previousYear} (balance: {$previousBalance->balance} days, capped at {$carryOverAmount} days)";
+                    $this->addCarryOver(
+                        $employeeId,
+                        $leaveType->id,
+                        $carryOverAmount,
+                        $year,
+                        $notes,
+                        null, // System/scheduled - no user
+                        $currentBalance
+                    );
+
                     $results[] = [
                         'leave_type' => $leaveType->code,
                         'status' => 'success',
                         'previous_balance' => $previousBalance->balance,
                         'carried_over' => $carryOverAmount,
                     ];
-                    
-                    Log::info('Leave balance carry-over processed', [
-                        'employee_id' => $employeeId,
-                        'leave_type_id' => $leaveType->id,
-                        'from_year' => $previousYear,
-                        'to_year' => $year,
-                        'carried_over' => $carryOverAmount,
-                    ]);
                 } catch (\Exception $e) {
-                    DB::rollBack();
                     $results[] = [
                         'leave_type' => $leaveType->code,
                         'status' => 'error',
@@ -1025,7 +1075,7 @@ class LeaveService
                 }
             }
         }
-        
+
         return $results;
     }
 }

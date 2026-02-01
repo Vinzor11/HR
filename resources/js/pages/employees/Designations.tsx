@@ -13,13 +13,14 @@ import { CustomTextarea } from '@/components/ui/custom-textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { 
   Briefcase, Building2, GraduationCap, Plus, Star, Trash2, Pencil, 
-  TrendingUp, AlertTriangle, ArrowLeft, Calendar,
+  TrendingUp, AlertTriangle, ArrowLeft, Calendar, Info,
   ChevronRight, History
 } from 'lucide-react'
 import { toast } from '@/components/custom-toast'
 import axios from 'axios'
 import { PromotionModal } from '@/components/employee/PromotionModal'
 import { CorrectionModal } from '@/components/employee/CorrectionModal'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { type BreadcrumbItem } from '@/types'
 
 interface Sector {
@@ -380,6 +381,13 @@ export default function DesignationsPage({
           onClick: openCreateModal,
         } : undefined}
       >
+        <Alert className="mb-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertDescription className="text-blue-800 dark:text-blue-200">
+            <strong>Leave credits:</strong> Employees only start earning vacation and sick leave credits when they have an active designation. Credits begin accruing from the designation start date. When you add a designation here, ensure the start date is set correctly—that is when monthly accrual (1.25 days VL/SL) will begin.
+          </AlertDescription>
+        </Alert>
+
         {/* Designations List */}
         {loading ? (
           <Card>

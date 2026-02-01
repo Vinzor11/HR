@@ -2,9 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Models\User;
+use App\Models\Employee;
 use App\Services\LeaveService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ProcessLeaveCarryOver extends Command
 {
@@ -16,14 +17,14 @@ class ProcessLeaveCarryOver extends Command
     protected $signature = 'leave:carry-over 
                             {--employee= : Specific employee ID to process}
                             {--year= : Year to carry over to (defaults to current year)}
-                            {--all : Process all employees}';
+                            {--all : Process all active employees}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Process leave balance carry-over from previous year';
+    protected $description = 'Process leave balance carry-over from previous year (VL/SL, up to 30 days)';
 
     /**
      * Execute the console command.
@@ -40,28 +41,56 @@ class ProcessLeaveCarryOver extends Command
         }
 
         if ($processAll) {
-            $this->info("Processing carry-over for all employees for year {$year}...");
-            $employees = \App\Models\Employee::where('status', 'active')->get();
-            
-            $bar = $this->output->createProgressBar($employees->count());
+            $this->info("Processing carry-over for year {$year}...");
+
+            $employees = Employee::where('status', 'active')->get();
+            $totalEmployees = $employees->count();
+
+            if ($totalEmployees === 0) {
+                $this->warn('No active employees found.');
+                return 0;
+            }
+
+            $bar = $this->output->createProgressBar($totalEmployees);
             $bar->start();
-            
-            $totalProcessed = 0;
+
+            $processed = 0;
+            $errors = 0;
+
             foreach ($employees as $employee) {
-                $results = $leaveService->processCarryOver($employee->id, $year);
-                if (!empty($results)) {
-                    $totalProcessed++;
+                try {
+                    $results = $leaveService->processCarryOver($employee->id, $year);
+                    if (!empty(array_filter($results, fn ($r) => ($r['status'] ?? '') === 'success'))) {
+                        $processed++;
+                    }
+                } catch (\Exception $e) {
+                    $errors++;
+                    Log::error('Failed to process carry-over', [
+                        'employee_id' => $employee->id,
+                        'year' => $year,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
                 $bar->advance();
             }
-            
+
             $bar->finish();
-            $this->newLine();
-            $this->info("Processed carry-over for {$totalProcessed} employees.");
+            $this->newLine(2);
+
+            $this->info("✓ Processed: {$processed} employees with carry-over");
+            if ($errors > 0) {
+                $this->warn("✗ Errors: {$errors} employees");
+            }
+
+            Log::info('Leave carry-over processed', [
+                'year' => $year,
+                'processed' => $processed,
+                'errors' => $errors,
+            ]);
         } else {
             $this->info("Processing carry-over for employee {$employeeId} for year {$year}...");
             $results = $leaveService->processCarryOver($employeeId, $year);
-            
+
             if (empty($results)) {
                 $this->warn('No carry-over processed. Check if:');
                 $this->warn('  - Previous year has unused balance');

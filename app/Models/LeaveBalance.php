@@ -126,7 +126,7 @@ class LeaveBalance extends Model
             ]
         );
 
-        // If this is a newly created balance, check for carry-over from previous year
+        // If this is a newly created balance, check for carry-over from previous year (uses LeaveService like monthly accruals)
         if ($balance->wasRecentlyCreated) {
             $previousYear = $year - 1;
             $previousBalance = self::where('employee_id', $employeeId)
@@ -136,43 +136,25 @@ class LeaveBalance extends Model
 
             if ($previousBalance && $previousBalance->balance > 0) {
                 $leaveType = \App\Models\LeaveType::find($leaveTypeId);
-                
-                // Check if this leave type allows carry-over
+
                 if ($leaveType && $leaveType->can_carry_over) {
-                    // Apply carry-over cap (30 days per CSC rules, or leave type specific limit)
-                    $carryOverCap = $leaveType->max_carry_over_days 
+                    $carryOverCap = $leaveType->max_carry_over_days
                         ? min($leaveType->max_carry_over_days, \App\Services\LeaveService::CARRY_OVER_CAP_DAYS)
                         : \App\Services\LeaveService::CARRY_OVER_CAP_DAYS;
-                    
+
                     $carryOverAmount = min($previousBalance->balance, $carryOverCap);
-                    
+
                     if ($carryOverAmount > 0) {
-                        // Update the new year's balance with carry-over
-                        $balance->carried_over = $carryOverAmount;
-                        $balance->entitled = $carryOverAmount;
-                        $balance->recalculateBalance();
-
-                        // Create accrual record for audit trail
-                        \App\Models\LeaveAccrual::create([
-                            'employee_id' => $employeeId,
-                            'leave_type_id' => $leaveTypeId,
-                            'amount' => $carryOverAmount,
-                            'accrual_date' => now(),
-                            'accrual_type' => \App\Models\LeaveAccrual::TYPE_CARRY_OVER,
-                            'notes' => "Carried over from {$previousYear} (balance: {$previousBalance->balance} days, capped at {$carryOverAmount} days)",
-                            'effective_date' => \Carbon\Carbon::create($year, 1, 1),
-                            'reference_number' => 'CO-' . strtoupper(uniqid()),
-                            'created_by' => auth()->id(),
-                        ]);
-
-                        \Illuminate\Support\Facades\Log::info('Leave balance carried over', [
-                            'employee_id' => $employeeId,
-                            'leave_type_id' => $leaveTypeId,
-                            'from_year' => $previousYear,
-                            'to_year' => $year,
-                            'previous_balance' => $previousBalance->balance,
-                            'carried_over' => $carryOverAmount,
-                        ]);
+                        $notes = "Carry over from {$previousYear} (balance: {$previousBalance->balance} days, capped at {$carryOverAmount} days)";
+                        app(\App\Services\LeaveService::class)->addCarryOver(
+                            $employeeId,
+                            $leaveTypeId,
+                            $carryOverAmount,
+                            $year,
+                            $notes,
+                            null,
+                            $balance
+                        );
                     }
                 }
             }

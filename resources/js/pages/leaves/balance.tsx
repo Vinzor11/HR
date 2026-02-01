@@ -20,7 +20,8 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { router } from '@inertiajs/react';
-import { Calendar, TrendingUp, TrendingDown, Clock, History } from 'lucide-react';
+import { Calendar, TrendingUp, TrendingDown, Clock, History, Info } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -51,11 +52,18 @@ interface LeaveBalance {
     accrued: number;
 }
 
+interface AccrualEligibility {
+    status: 'earning' | 'starts_future' | 'no_designation';
+    start_date: string | null;
+    message: string | null;
+}
+
 interface BalancePageProps {
     balances: LeaveBalance[];
     year: number;
     availableYears: number[];
     error?: string;
+    accrualEligibility?: AccrualEligibility;
 }
 
 interface HistoryItem {
@@ -69,7 +77,7 @@ interface HistoryItem {
     created_by: string;
 }
 
-export default function LeaveBalancePage({ balances, year, availableYears, error }: BalancePageProps) {
+export default function LeaveBalancePage({ balances, year, availableYears, error, accrualEligibility }: BalancePageProps) {
     const [selectedLeaveType, setSelectedLeaveType] = useState<LeaveBalance | null>(null);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -139,6 +147,39 @@ export default function LeaveBalancePage({ balances, year, availableYears, error
                         </SelectContent>
                     </Select>
                 </div>
+
+                {accrualEligibility?.message && accrualEligibility.status !== 'earning' && (
+                    <Alert
+                        className={
+                            accrualEligibility.status === 'no_designation'
+                                ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950'
+                                : accrualEligibility.status === 'starts_future'
+                                ? 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950'
+                                : 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950'
+                        }
+                    >
+                        <Info
+                            className={
+                                accrualEligibility.status === 'no_designation'
+                                    ? 'h-4 w-4 text-amber-600 dark:text-amber-400'
+                                    : accrualEligibility.status === 'starts_future'
+                                    ? 'h-4 w-4 text-blue-600 dark:text-blue-400'
+                                    : 'h-4 w-4 text-green-600 dark:text-green-400'
+                            }
+                        />
+                        <AlertDescription
+                            className={
+                                accrualEligibility.status === 'no_designation'
+                                    ? 'text-amber-800 dark:text-amber-200'
+                                    : accrualEligibility.status === 'starts_future'
+                                    ? 'text-blue-800 dark:text-blue-200'
+                                    : 'text-green-800 dark:text-green-200'
+                            }
+                        >
+                            {accrualEligibility.message}
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {balances.map((item) => (

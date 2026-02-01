@@ -44,12 +44,15 @@ class LeaveController extends Controller
 
         $year = $request->integer('year', now()->year);
         $balances = $this->leaveService->getEmployeeBalance($employeeId, $year);
-        
+
         // Get forced leave status (CSC requirement)
         $forcedLeaveStatus = $this->leaveService->getForcedLeaveStatus($employeeId, $year);
-        
+
         // Get leave credits as of today for CS Form No. 6 Section 7
         $leaveCredits = $this->leaveService->getLeaveCreditsAsOfDate($employeeId);
+
+        // When will employee start earning leave credits? (based on designation start date)
+        $accrualEligibility = $this->getAccrualEligibility($employeeId);
 
         return Inertia::render('leaves/balance', [
             'balances' => $balances,
@@ -57,6 +60,7 @@ class LeaveController extends Controller
             'availableYears' => $this->getAvailableYears(),
             'forcedLeaveStatus' => $forcedLeaveStatus,
             'leaveCredits' => $leaveCredits,
+            'accrualEligibility' => $accrualEligibility,
         ]);
     }
 
@@ -299,6 +303,52 @@ class LeaveController extends Controller
         return response()->json([
             'leaveTypes' => $leaveTypes,
         ]);
+    }
+
+    /**
+     * Get accrual eligibility info for display on leave balance page.
+     * Employees only earn VL/SL when designated; credits start from designation start_date.
+     */
+    protected function getAccrualEligibility(string $employeeId): array
+    {
+        $employee = Employee::with('designations')->find($employeeId);
+        if (!$employee) {
+            return ['status' => 'no_designation', 'start_date' => null, 'message' => null];
+        }
+
+        $designations = $employee->designations;
+        if ($designations->isEmpty()) {
+            return [
+                'status' => 'no_designation',
+                'start_date' => null,
+                'message' => 'You will start earning leave credits when a designation is added. Ask your admin to add your unit/position in Manage Designations.',
+            ];
+        }
+
+        // Get earliest designation start_date (when they first became/Will become eligible)
+        $earliestStart = $designations->min('start_date');
+        if (!$earliestStart) {
+            return ['status' => 'no_designation', 'start_date' => null, 'message' => null];
+        }
+
+        $startDate = $earliestStart instanceof \Carbon\Carbon
+            ? $earliestStart
+            : Carbon::parse($earliestStart);
+        $today = now()->startOfDay();
+
+        if ($startDate->gt($today)) {
+            return [
+                'status' => 'starts_future',
+                'start_date' => $startDate->format('Y-m-d'),
+                'message' => 'You will start earning leave credits from ' . $startDate->format('F j, Y') . ' when your designation begins.',
+            ];
+        }
+
+        return [
+            'status' => 'earning',
+            'start_date' => $startDate->format('Y-m-d'),
+            'message' => 'You started earning leave credits from ' . $startDate->format('F j, Y') . '.',
+        ];
     }
 
     /**

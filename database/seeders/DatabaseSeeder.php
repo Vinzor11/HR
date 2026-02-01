@@ -42,9 +42,5 @@ class DatabaseSeeder extends Seeder
 
         // 10. Clean up legacy roles and permissions (after Super Admin and default roles exist)
         $this->call(LegacyCleanupSeeder::class);
-
-        // 11. Initialize leave balances for existing employees (optional - only if employees exist)
-        // This will skip gracefully if no employees are found
-        $this->call(InitializeLeaveBalancesSeeder::class);
     }
 }
