@@ -121,6 +121,30 @@ class EmployeeScopeService
     }
 
     /**
+     * Get scope for "same parent unit" - used by Research Coordinators.
+     * If requester is in a Program (e.g. Computer Science), returns employees
+     * in the parent College + all Programs under that College.
+     *
+     * @param Employee $employee
+     * @return Builder
+     */
+    public function getParentUnitScope(Employee $employee): Builder
+    {
+        $unit = $employee->primaryDesignation?->unit;
+
+        if (!$unit) {
+            return Employee::whereRaw('1 = 0');
+        }
+
+        $rootUnitId = $unit->parent_unit_id ?? $unit->id;
+        $unitIds = $this->getUnitAndChildIds($rootUnitId);
+
+        return Employee::whereHas('designations', function ($query) use ($unitIds) {
+            $query->whereIn('unit_id', $unitIds);
+        });
+    }
+
+    /**
      * Get a unit and all its child unit IDs recursively.
      */
     protected function getUnitAndChildIds(int $unitId): array
